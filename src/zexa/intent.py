@@ -50,6 +50,6 @@ def route_utterance(
     if not isinstance(payload, dict):
         return {"intent": "conversation", "reply": raw.strip()}
     intent, reply = payload.get("intent"), payload.get("reply")
-    if intent not in ALLOWED_INTENTS or not isinstance(reply, str):
+    if not isinstance(intent, str) or intent not in ALLOWED_INTENTS or not isinstance(reply, str):
         return {"intent": "conversation", "reply": raw.strip()}
     return {"intent": intent, "reply": reply.strip()}
