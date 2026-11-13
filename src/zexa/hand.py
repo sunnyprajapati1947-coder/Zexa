@@ -8,7 +8,6 @@ approval callback; screen reads are read-only.
 from __future__ import annotations
 
 import json
-import ipaddress
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
