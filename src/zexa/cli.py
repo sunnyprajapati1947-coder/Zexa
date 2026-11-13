@@ -28,7 +28,7 @@ SYSTEM_PROMPT = (
 
 def _explicit_torch_request(transcript: str) -> str | None:
     """Recognize only direct, unambiguous flashlight on/off commands."""
-    words = set(re.findall(r"[a-z]+|[\\u0900-\\u097f]+", transcript.casefold()))
+    words = set(re.findall(r"[a-z]+|[\u0900-\u097f]+", transcript.casefold()))
     device_words = {"flash", "flashlight", "torch", "टॉर्च", "फ्लैश"}
     on_words = {"on", "start", "chalu", "chaalu", "jala", "जला", "चालू"}
     off_words = {"off", "stop", "band", "बंद"}
