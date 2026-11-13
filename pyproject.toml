@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zexa-assistant"
+version = "0.1.0"
+description = "Phone-first modular assistant with Groq as its only AI provider"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+dependencies = []
+
+[project.scripts]
+zexa = "zexa.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
