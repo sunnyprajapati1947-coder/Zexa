@@ -5,7 +5,7 @@ import argparse
 import json
 import sys
 
-from .android import AndroidCapabilityProbe
+from .android import AndroidCapabilityProbe, TermuxAndroidHand
 from .config import get_config, load_env_file
 from .groq import chat
 from .memory import MemoryStore
@@ -35,6 +35,9 @@ def main() -> None:
     subparsers.add_parser("skills", help="List registered skills")
     subparsers.add_parser("tools", help="List safe local tools")
     subparsers.add_parser("android", help="Inspect optional Android/Termux capabilities")
+    notify_parser = subparsers.add_parser("notify", help="Send one notification after an explicit CLI request")
+    notify_parser.add_argument("title")
+    notify_parser.add_argument("message", nargs="+")
 
     mem_parser = subparsers.add_parser("memory", help="Manage explicitly saved local memories")
     mem_sub = mem_parser.add_subparsers(dest="memory_command", required=True)
@@ -73,6 +76,14 @@ def main() -> None:
         return
     if args.command == "android":
         print(json.dumps(AndroidCapabilityProbe().as_dict(), ensure_ascii=False, indent=2))
+        return
+    if args.command == "notify":
+        try:
+            TermuxAndroidHand().notify(args.title, " ".join(args.message))
+            print("Notification sent.")
+        except (ValueError, RuntimeError, OSError) as exc:
+            print(f"zexa: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
         return
     if args.command == "memory":
         store = MemoryStore()
