@@ -25,7 +25,7 @@ src/zexa/
   approvals.py Human approval primitives
 ```
 
-Planned modules: skill registry, memory store, task planner, permission-aware tool router, Android bridge adapter, and coding workflow.
+Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. Device-action adapters and the Android accessibility bridge remain future work.
 
 ## Requirements
 
@@ -49,6 +49,7 @@ Ask Zexa:
 
 ```bash
 zexa ask "Explain what you can do"
+zexa android
 ``
 
 Or run without installing the console script:
