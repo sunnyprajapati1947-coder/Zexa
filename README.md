@@ -25,7 +25,7 @@ src/zexa/
   approvals.py Human approval primitives
 ```
 
-Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. The Android hand supports explicit CLI notification and speech input/output commands. `zexa voice` captures one utterance, sends its transcript to the configured Groq model, and speaks the reply. Microphone capture starts only when `zexa listen` or `zexa voice` is run; the transcript is sent to Groq only in `zexa voice`. Continuous listening, other device actions, and the Android accessibility bridge remain future work.
+Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. The Android hand supports explicit CLI notification and speech input/output commands. `zexa voice` captures one utterance, sends its transcript to the configured Groq model, and speaks the reply. `zexa converse` starts a user-controlled loop: it listens for one utterance at a time, sends each transcript to Groq with a bounded recent conversation history, and speaks each reply. Say `stop`, `exit`, `quit`, `band karo`, or `बंद करो`, or press Ctrl+C to end the session. Microphone capture starts only after the user manually runs a voice command; there is no background or always-on microphone access.
 
 ## Requirements
 
