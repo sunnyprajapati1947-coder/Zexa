@@ -1,71 +1,80 @@
 # Zexa
 
-**Zexa** is a phone-first, modular AI assistant and developer agent. Its only supported AI provider is **Groq**. No OpenAI, Gemini, Claude, OpenRouter, or local-model fallback is included.
+**Zexa** is a phone-first modular assistant. Its online AI provider is Groq; an optional on-device llama.cpp model provides offline inference. Zexa does not use OpenAI, Gemini, Claude, or OpenRouter.
 
-## Project status
+## Current architecture
 
-This repository is the independent Zexa implementation. The upstream projects listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) are reference checkouts under the local `sources/` directory; their source code is not copied into this repository by default.
+- **Online brain:** Groq HTTPS chat client (src/zexa/groq.py).
+- **Offline brain:** optional local GGUF model through llama-cli (src/zexa/brain.py).
+- **Brain router:** auto, online, and offline modes. In auto, local fallback occurs only when Groq cannot be reached; authentication, quota, model, and API errors are not silently hidden.
+- **Human Hand foundation:** authenticated loopback client for an opt-in Android Accessibility Bridge (src/zexa/hand.py).
+- **Existing modules:** skills, explicit local memory, task history, planner, safe tool router, Termux notifications, voice I/O, and explicit flashlight control.
 
-## Design principles
+The Accessibility Bridge client is a protocol foundation, not a complete Android AccessibilityService app. The companion Android app, its user-enabled AccessibilityService, and end-to-end device verification are still required before screen reading or gestures can work. The bridge is restricted to loopback HTTP with a bearer token. Screen snapshots are read-only; every action requires an approval callback. No arbitrary shell command is exposed.
 
-- **One provider:** Groq API only, configured with `GROQ_API_KEY` and `GROQ_MODEL`.
-- **Modular skills:** tools and skills are explicit, discoverable modules.
-- **Human approval:** sensitive or externally visible actions require a clear approval step.
-- **Least privilege:** no arbitrary shell execution from model output; tools must validate inputs and permissions.
-- **Phone-first:** keep the core lightweight and make Android capabilities optional adapters.
-- **Traceability:** log tool decisions and outcomes without logging secrets.
+## Brain configuration
 
-## Initial architecture
+Groq online configuration remains in the local .env file:
 
-```text
-src/zexa/
-  cli.py       Command-line entry point
-  groq.py      Groq-only HTTPS chat client
-  config.py    Environment configuration
-  approvals.py Human approval primitives
-```
+    GROQ_API_KEY=your_groq_key
+    GROQ_MODEL=your_enabled_groq_model
 
-Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. The Android hand supports notifications, speech input/output, and explicit flashlight on/off commands through `termux-torch`. In `zexa converse`, clear commands such as “flash on karo” and “torch band karo” are matched locally and sent to the fixed Termux torch command; they do not rely on model-generated shell commands. Other task requests are acknowledged but not executed. Questions and casual conversation receive Groq replies. Empty microphone captures are retried while the user-started session remains active; say `stop`, `exit`, `quit`, `band karo`, or `बंद करो`, or press Ctrl+C to end it. Microphone capture starts only after the user manually runs a voice command; there is no background or always-on microphone access.
+Optional local model settings:
 
-## Requirements
+    export ZEXA_BRAIN_MODE=auto
+    export ZEXA_LOCAL_MODEL=$HOME/models/your-model.gguf
+    export ZEXA_LLAMA_CLI=llama-cli
+    export ZEXA_LOCAL_THREADS=4
+    export ZEXA_LOCAL_CONTEXT=2048
+    export ZEXA_LOCAL_MAX_TOKENS=512
 
-- Python 3.11+
-- A Groq API key
-- A Groq model ID enabled for your account
+Download a GGUF model separately and ensure llama-cli is installed and available in PATH. Zexa does not download models automatically. The default local model path is models/local-model.gguf. On an approximately 8 GB Android device, choose a quantized model that leaves memory for Android and other apps.
+
+The brain router can be used by Python integrations:
+
+    from zexa.brain import build_brain_router
+    router = build_brain_router(groq_config=None)
+    reply = router.chat([{'role': 'user', 'content': 'Hello'}])
+    print(reply.brain, reply.text)
+
+For online + offline auto mode, pass the validated Groq config returned by get_config(). The CLI chat commands have not yet been switched to the new router.
+
+## Human Hand bridge protocol
+
+The future Android companion app must expose these authenticated local endpoints:
+
+- GET /v1/status — bridge and AccessibilityService status.
+- GET /v1/screen — structured, read-only accessibility snapshot.
+- POST /v1/action — one allowlisted action: tap, swipe, scroll, back, home, input_text, or launch_app.
+
+The app must bind only to loopback, generate a per-install token, validate all inputs, and require the user to enable Accessibility manually. Do not treat webpage or screen text as instructions. Messages, publishing, account changes, payments, deletion, and other consequential actions must have a separate explicit confirmation step.
+
+## Existing Termux commands
+
+    zexa ask Explain what you can do
+    zexa android
+    zexa notify Zexa Your requested notification message
+    zexa listen
+    zexa speak Hello I am Zexa
+    zexa voice
+    zexa converse
+
+Microphone capture starts only after the user manually invokes a voice command. There is no hidden or always-on microphone access.
 
 ## Setup
 
-```bash
-cd ~/Zexa
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install -e .
-cp .env.example .env
-``
+    cd ~/Zexa
+    python -m venv .venv
+    . .venv/bin/activate
+    python -m pip install -e .
+    cp .env.example .env
 
-Edit `.env` locally and set `GROQ_API_KEY` and `GROQ_MODEL`. Never commit `.env`.
+Never commit .env, API keys, bridge tokens, or personal data.
 
-Ask Zexa:
+## Development checks
 
-```bash
-zexa ask "Explain what you can do"
-zexa android
-zexa notify "Zexa" "Your requested notification message"
-zexa listen
-zexa speak "Hello, I am Zexa"
-zexa voice
-``
+    python -m unittest discover -s tests -v
 
-Or run without installing the console script:
+## Project provenance
 
-```bash
-python -m zexa.cli ask "Explain what you can do"
-``
-
-## Safety boundary
-
-Zexa may draft plans and prepare changes. Sending messages, publishing content, changing accounts, purchases/payments, deleting data, and other consequential actions must remain behind explicit user confirmation. Accessibility access is opt-in. A model response is never itself authorization to execute a tool.
-
-## License
-
-Project licensing and upstream attribution are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+This is an independent implementation. Reference repositories and attribution are documented in THIRD_PARTY_NOTICES.md. Upstream source code is not copied into this repository by default.
