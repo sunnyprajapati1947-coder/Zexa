@@ -5,7 +5,7 @@ import argparse
 import json
 import sys
 
-from .android import AndroidCapabilityProbe, TermuxAndroidHand
+from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .config import get_config, load_env_file
 from .groq import chat
 from .memory import MemoryStore
@@ -38,6 +38,9 @@ def main() -> None:
     notify_parser = subparsers.add_parser("notify", help="Send one notification after an explicit CLI request")
     notify_parser.add_argument("title")
     notify_parser.add_argument("message", nargs="+")
+    subparsers.add_parser("listen", help="Capture one speech transcript (microphone starts only when invoked)")
+    speak_parser = subparsers.add_parser("speak", help="Speak text using Android text-to-speech")
+    speak_parser.add_argument("text", nargs="+")
 
     mem_parser = subparsers.add_parser("memory", help="Manage explicitly saved local memories")
     mem_sub = mem_parser.add_subparsers(dest="memory_command", required=True)
@@ -76,6 +79,21 @@ def main() -> None:
         return
     if args.command == "android":
         print(json.dumps(AndroidCapabilityProbe().as_dict(), ensure_ascii=False, indent=2))
+        return
+    if args.command == "listen":
+        try:
+            print(TermuxVoice().listen())
+        except (RuntimeError, OSError) as exc:
+            print(f"zexa: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        return
+    if args.command == "speak":
+        try:
+            TermuxVoice().speak(" ".join(args.text))
+            print("Speech completed.")
+        except (ValueError, RuntimeError, OSError) as exc:
+            print(f"zexa: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
         return
     if args.command == "notify":
         try:
