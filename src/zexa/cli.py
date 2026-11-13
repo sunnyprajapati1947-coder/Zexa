@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 
+from .android import AndroidCapabilityProbe
 from .config import get_config, load_env_file
 from .groq import chat
 from .memory import MemoryStore
@@ -33,6 +34,7 @@ def main() -> None:
 
     subparsers.add_parser("skills", help="List registered skills")
     subparsers.add_parser("tools", help="List safe local tools")
+    subparsers.add_parser("android", help="Inspect optional Android/Termux capabilities")
 
     mem_parser = subparsers.add_parser("memory", help="Manage explicitly saved local memories")
     mem_sub = mem_parser.add_subparsers(dest="memory_command", required=True)
@@ -68,6 +70,9 @@ def main() -> None:
     if args.command == "tools":
         for tool in router.list():
             print(f"{tool.name}: {tool.description}")
+        return
+    if args.command == "android":
+        print(json.dumps(AndroidCapabilityProbe().as_dict(), ensure_ascii=False, indent=2))
         return
     if args.command == "memory":
         store = MemoryStore()
