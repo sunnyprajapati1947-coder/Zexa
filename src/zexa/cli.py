@@ -7,8 +7,10 @@ import sys
 
 from .config import get_config, load_env_file
 from .groq import chat
+from .memory import MemoryStore
 from .planner import create_plan
 from .skills import default_registry
+from .tasks import TaskStore
 from .tools import default_router
 
 
@@ -32,6 +34,29 @@ def main() -> None:
     subparsers.add_parser("skills", help="List registered skills")
     subparsers.add_parser("tools", help="List safe local tools")
 
+    mem_parser = subparsers.add_parser("memory", help="Manage explicitly saved local memories")
+    mem_sub = mem_parser.add_subparsers(dest="memory_command", required=True)
+    mem_save = mem_sub.add_parser("save", help="Save or update a memory")
+    mem_save.add_argument("key")
+    mem_save.add_argument("value", nargs="+")
+    mem_get = mem_sub.add_parser("get", help="Recall one memory")
+    mem_get.add_argument("key")
+    mem_sub.add_parser("list", help="List saved memory keys and values")
+    mem_forget = mem_sub.add_parser("forget", help="Delete one memory")
+    mem_forget.add_argument("key")
+    mem_sub.add_parser("clear", help="Delete all saved memories")
+
+    task_parser = subparsers.add_parser("tasks", help="Manage local task history")
+    task_sub = task_parser.add_subparsers(dest="task_command", required=True)
+    task_add = task_sub.add_parser("add", help="Record a task")
+    task_add.add_argument("title", nargs="+")
+    task_list = task_sub.add_parser("list", help="List recent tasks")
+    task_list.add_argument("--limit", type=int, default=50)
+    task_update = task_sub.add_parser("status", help="Update a task status")
+    task_update.add_argument("task_id", type=int)
+    task_update.add_argument("status")
+    task_update.add_argument("--notes", default=None)
+
     args = parser.parse_args()
     registry = default_registry()
     router = default_router()
@@ -43,6 +68,30 @@ def main() -> None:
     if args.command == "tools":
         for tool in router.list():
             print(f"{tool.name}: {tool.description}")
+        return
+    if args.command == "memory":
+        store = MemoryStore()
+        if args.memory_command == "save":
+            print(f"Saved memory ID: {store.remember(args.key, ' '.join(args.value))}")
+        elif args.memory_command == "get":
+            item = store.recall(args.key)
+            print(json.dumps(item, ensure_ascii=False, indent=2) if item else "Memory not found.")
+        elif args.memory_command == "list":
+            print(json.dumps(store.list_memories(), ensure_ascii=False, indent=2))
+        elif args.memory_command == "forget":
+            print("Memory deleted." if store.forget(args.key) else "Memory not found.")
+        elif args.memory_command == "clear":
+            print(f"Deleted {store.clear()} memories.")
+        return
+    if args.command == "tasks":
+        store = TaskStore()
+        if args.task_command == "add":
+            print(f"Task created: #{store.create(' '.join(args.title))}")
+        elif args.task_command == "list":
+            print(json.dumps(store.list_tasks(args.limit), ensure_ascii=False, indent=2))
+        elif args.task_command == "status":
+            changed = store.update_status(args.task_id, args.status, args.notes)
+            print("Task updated." if changed else "Task not found.")
         return
 
     load_env_file()
