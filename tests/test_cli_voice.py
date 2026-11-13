@@ -77,5 +77,38 @@ class CliVoiceTests(unittest.TestCase):
         self.assertIn("Voice conversation ended.", output.getvalue())
 
 
+    def test_converse_recovers_after_empty_captures(self):
+        events = []
+        captures = iter(["hello", RuntimeError("No speech transcript was returned."), RuntimeError("No speech transcript was returned."), "I am back", "stop"])
+
+        class FakeVoice:
+            def listen(self):
+                value = next(captures)
+                if isinstance(value, Exception):
+                    raise value
+                return value
+
+            def speak(self, text):
+                events.append(text)
+
+        def fake_route(config, history, transcript):
+            return {"intent": "question", "reply": "I am listening."}
+
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["zexa", "converse"]), \
+             patch.object(cli, "load_env_file"), \
+             patch.object(cli, "get_config", return_value={"model": "test-model"}), \
+             patch.object(cli, "TermuxVoice", FakeVoice), \
+             patch.object(cli, "route_utterance", side_effect=fake_route), \
+             patch.object(cli.time, "sleep"), \
+             redirect_stdout(output):
+            cli.main()
+
+        self.assertEqual(events, ["I am listening.", "I am listening."])
+        self.assertIn("You: I am back", output.getvalue())
+        self.assertIn("Voice conversation ended.", output.getvalue())
+        self.assertNotIn("paused after 3 empty captures", output.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
