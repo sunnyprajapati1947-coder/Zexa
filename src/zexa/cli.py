@@ -169,7 +169,7 @@ def main() -> None:
                     # Keep the system prompt and the latest six exchanges to bound context.
                     messages = [messages[0]] + messages[-12:]
             except KeyboardInterrupt:
-                print("\\nZexa: Voice conversation ended.")
+                print("\nZexa: Voice conversation ended.")
             return
         if args.command == "plan":
             print(json.dumps(create_plan(config, registry, " ".join(args.goal)), indent=2))
