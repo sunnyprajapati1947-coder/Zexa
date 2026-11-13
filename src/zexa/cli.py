@@ -42,6 +42,7 @@ def main() -> None:
     speak_parser = subparsers.add_parser("speak", help="Speak text using Android text-to-speech")
     speak_parser.add_argument("text", nargs="+")
     subparsers.add_parser("voice", help="Capture one utterance, send its transcript to Groq, and speak the reply")
+    subparsers.add_parser("converse", help="Start a user-controlled continuous voice conversation with Groq")
 
     mem_parser = subparsers.add_parser("memory", help="Manage explicitly saved local memories")
     mem_sub = mem_parser.add_subparsers(dest="memory_command", required=True)
@@ -145,6 +146,30 @@ def main() -> None:
             )
             print(f"Zexa: {answer}")
             voice.speak(answer[:3000])
+            return
+        if args.command == "converse":
+            voice = TermuxVoice()
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT + " In this ongoing voice conversation, answer naturally and concisely in the user's language."}
+            ]
+            stop_phrases = {"stop", "exit", "quit", "band karo", "bas karo", "बंद करो", "रुको"}
+            print("Zexa continuous voice mode started. Say 'stop' or press Ctrl+C to exit.")
+            try:
+                while True:
+                    transcript = voice.listen().strip()
+                    print(f"You: {transcript}")
+                    if transcript.casefold().strip(" .!?") in stop_phrases:
+                        print("Zexa: Voice conversation ended.")
+                        break
+                    messages.append({"role": "user", "content": transcript})
+                    answer = chat(config, messages)
+                    print(f"Zexa: {answer}")
+                    voice.speak(answer[:3000])
+                    messages.append({"role": "assistant", "content": answer})
+                    # Keep the system prompt and the latest six exchanges to bound context.
+                    messages = [messages[0]] + messages[-12:]
+            except KeyboardInterrupt:
+                print("\\nZexa: Voice conversation ended.")
             return
         if args.command == "plan":
             print(json.dumps(create_plan(config, registry, " ".join(args.goal)), indent=2))
