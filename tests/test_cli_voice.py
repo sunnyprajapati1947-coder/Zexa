@@ -110,5 +110,14 @@ class CliVoiceTests(unittest.TestCase):
         self.assertNotIn("paused after 3 empty captures", output.getvalue())
 
 
+    def test_explicit_flashlight_commands_are_recognized(self):
+        self.assertEqual(cli._explicit_torch_request("flash on karo"), "on")
+        self.assertEqual(cli._explicit_torch_request("torch band karo"), "off")
+        self.assertEqual(cli._explicit_torch_request("फ्लैश चालू करो"), "on")
+        self.assertEqual(cli._explicit_torch_request("फ्लैश बंद करो"), "off")
+        self.assertIsNone(cli._explicit_torch_request("flash kaise kaam karta hai"))
+        self.assertIsNone(cli._explicit_torch_request("phone on karo"))
+
+
 if __name__ == "__main__":
     unittest.main()
