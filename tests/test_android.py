@@ -22,7 +22,7 @@ class AndroidCapabilityTests(unittest.TestCase):
 
     def test_probe_checks_all_capabilities(self):
         with patch("zexa.android.shutil.which", return_value=None) as which:
-            report = AndroidCapabilityProbe().as_dict()
+            report = AndroidCapabilityProbe(which=which).as_dict()
         self.assertEqual(report["available_count"], 0)
         self.assertEqual(which.call_count, 7)
 
