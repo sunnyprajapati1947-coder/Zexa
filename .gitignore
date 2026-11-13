@@ -12,3 +12,9 @@ venv/
 dist/
 build/
 *.log
+
+# Local user data and SQLite databases
+data/
+*.db
+*.sqlite
+*.sqlite3
