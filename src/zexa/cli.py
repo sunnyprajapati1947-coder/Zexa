@@ -41,6 +41,7 @@ def main() -> None:
     subparsers.add_parser("listen", help="Capture one speech transcript (microphone starts only when invoked)")
     speak_parser = subparsers.add_parser("speak", help="Speak text using Android text-to-speech")
     speak_parser.add_argument("text", nargs="+")
+    subparsers.add_parser("voice", help="Capture one utterance, send its transcript to Groq, and speak the reply")
 
     mem_parser = subparsers.add_parser("memory", help="Manage explicitly saved local memories")
     mem_sub = mem_parser.add_subparsers(dest="memory_command", required=True)
@@ -131,6 +132,20 @@ def main() -> None:
     load_env_file()
     try:
         config = get_config()
+        if args.command == "voice":
+            voice = TermuxVoice()
+            transcript = voice.listen()
+            print(f"You: {transcript}")
+            answer = chat(
+                config,
+                [
+                    {"role": "system", "content": SYSTEM_PROMPT + " For voice replies, answer naturally and concisely in the user's language."},
+                    {"role": "user", "content": transcript},
+                ],
+            )
+            print(f"Zexa: {answer}")
+            voice.speak(answer[:3000])
+            return
         if args.command == "plan":
             print(json.dumps(create_plan(config, registry, " ".join(args.goal)), indent=2))
             print("\nPlan only: no tools or external actions were executed.")
