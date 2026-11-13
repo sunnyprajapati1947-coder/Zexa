@@ -53,26 +53,25 @@ class CliVoiceTests(unittest.TestCase):
             def speak(self, text):
                 events.append(("speak", text))
 
-        def fake_chat(config, messages):
-            events.append(("chat", [dict(item) for item in messages]))
-            return "Namaste, main sun raha hoon."
+        def fake_route(config, history, transcript):
+            events.append(("route", [dict(item) for item in history], transcript))
+            return {"intent": "question", "reply": "Namaste, main sun raha hoon."}
 
         output = io.StringIO()
         with patch.object(sys, "argv", ["zexa", "converse"]), \
              patch.object(cli, "load_env_file"), \
              patch.object(cli, "get_config", return_value={"model": "test-model"}), \
              patch.object(cli, "TermuxVoice", FakeVoice), \
-             patch.object(cli, "chat", side_effect=fake_chat), \
+             patch.object(cli, "route_utterance", side_effect=fake_route), \
              redirect_stdout(output):
             cli.main()
 
-        chats = [event for event in events if event[0] == "chat"]
-        self.assertEqual(len(chats), 2)
-        self.assertEqual(chats[0][1][-1], {"role": "user", "content": "hello Zexa"})
-        self.assertEqual(chats[1][1][-3:], [
+        routes = [event for event in events if event[0] == "route"]
+        self.assertEqual(len(routes), 2)
+        self.assertEqual(routes[0][2], "hello Zexa")
+        self.assertEqual(routes[1][1][-2:], [
             {"role": "user", "content": "hello Zexa"},
             {"role": "assistant", "content": "Namaste, main sun raha hoon."},
-            {"role": "user", "content": "what did I just say?"},
         ])
         self.assertEqual(len([event for event in events if event[0] == "speak"]), 2)
         self.assertIn("Voice conversation ended.", output.getvalue())
