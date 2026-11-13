@@ -15,6 +15,7 @@ class AndroidCapability:
 
 CAPABILITIES = (
     ("notification", "termux-notification", "Post an Android notification"),
+    ("torch", "termux-torch", "Explicitly turn the phone flashlight on or off"),
     ("toast", "termux-toast", "Show a short Android toast"),
     ("clipboard_read", "termux-clipboard-get", "Read clipboard text"),
     ("clipboard_write", "termux-clipboard-set", "Write clipboard text"),
