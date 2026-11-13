@@ -27,7 +27,7 @@ def route_utterance(
             "content": (
                 "You are Zexa's voice intent router. Return ONLY a JSON object with exactly "
                 'two string fields: {"intent":"question|conversation|task_request|noise",'
-                '"reply":"short natural reply in the user's language"}. '.replace("user's", "user language")
+                '"reply":"short natural reply in the user language"}. '
                 "A question asks for information. Conversation is a greeting, opinion, "
                 "comment, or casual statement. task_request means the user clearly asks Zexa "
                 "to perform, create, change, send, search, or manage something. A vague or "
