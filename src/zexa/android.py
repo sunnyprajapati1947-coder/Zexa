@@ -85,3 +85,46 @@ class TermuxAndroidHand:
             text=True,
             timeout=10,
         )
+
+
+class TermuxVoice:
+    """Explicitly invoked Termux speech input/output adapter."""
+
+    def __init__(self, which=shutil.which, run=None):
+        import subprocess
+
+        self._which = which
+        self._run = run or subprocess.run
+
+    def listen(self) -> str:
+        executable = self._which("termux-speech-to-text")
+        if not executable:
+            raise RuntimeError("termux-speech-to-text is unavailable.")
+        result = self._run(
+            [executable],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        transcript = (result.stdout or "").strip()
+        if not transcript:
+            raise RuntimeError("No speech transcript was returned.")
+        return transcript
+
+    def speak(self, text: str) -> None:
+        text = text.strip()
+        if not text:
+            raise ValueError("Speech text must not be empty.")
+        if len(text) > 3000:
+            raise ValueError("Speech text exceeds the 3000-character limit.")
+        executable = self._which("termux-tts-speak")
+        if not executable:
+            raise RuntimeError("termux-tts-speak is unavailable.")
+        self._run(
+            [executable, text],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
