@@ -8,6 +8,7 @@ import sys
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .config import get_config, load_env_file
 from .groq import chat
+from .intent import route_utterance
 from .memory import MemoryStore
 from .planner import create_plan
 from .skills import default_registry
@@ -155,16 +156,35 @@ def main() -> None:
             stop_phrases = {"stop", "exit", "quit", "band karo", "bas karo", "बंद करो", "रुको"}
             print("Zexa continuous voice mode started. Say 'stop' or press Ctrl+C to exit.")
             try:
+                empty_transcripts = 0
                 while True:
-                    transcript = voice.listen().strip()
+                    try:
+                        transcript = voice.listen().strip()
+                    except RuntimeError as exc:
+                        if "No speech transcript was returned" not in str(exc):
+                            raise
+                        empty_transcripts += 1
+                        print("Zexa: Awaaz clear nahi mili. Dobara boliye.")
+                        if empty_transcripts >= 3:
+                            print("Zexa: Voice mode paused after 3 empty captures.")
+                            break
+                        continue
+                    empty_transcripts = 0
                     print(f"You: {transcript}")
                     if transcript.casefold().strip(" .!?") in stop_phrases:
                         print("Zexa: Voice conversation ended.")
                         break
-                    messages.append({"role": "user", "content": transcript})
-                    answer = chat(config, messages)
+                    routed = route_utterance(config, messages[1:], transcript)
+                    intent = routed["intent"]
+                    answer = routed["reply"]
+                    if intent == "noise" or not answer:
+                        print("Zexa: Speech clear nahi thi; is turn ko skip kar raha hoon.")
+                        continue
+                    if intent == "task_request":
+                        print("Zexa: Task request detected. Abhi koi action execute nahi hua.")
                     print(f"Zexa: {answer}")
                     voice.speak(answer[:3000])
+                    messages.append({"role": "user", "content": transcript})
                     messages.append({"role": "assistant", "content": answer})
                     # Keep the system prompt and the latest six exchanges to bound context.
                     messages = [messages[0]] + messages[-12:]
