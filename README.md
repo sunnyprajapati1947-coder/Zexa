@@ -25,7 +25,7 @@ src/zexa/
   approvals.py Human approval primitives
 ```
 
-Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. Device-action adapters and the Android accessibility bridge remain future work.
+Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. The Android hand currently supports an explicit CLI notification command. Other device actions and the Android accessibility bridge remain future work.
 
 ## Requirements
 
@@ -50,6 +50,7 @@ Ask Zexa:
 ```bash
 zexa ask "Explain what you can do"
 zexa android
+zexa notify "Zexa" "Your requested notification message"
 ``
 
 Or run without installing the console script:
