@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 
@@ -22,6 +23,22 @@ SYSTEM_PROMPT = (
     "You may explain and draft plans, but never claim to have performed an external action. "
     "Consequential actions require explicit user approval through a separate trusted tool."
 )
+
+
+
+def _explicit_torch_request(transcript: str) -> str | None:
+    """Recognize only direct, unambiguous flashlight on/off commands."""
+    words = set(re.findall(r"[a-z]+|[\\u0900-\\u097f]+", transcript.casefold()))
+    device_words = {"flash", "flashlight", "torch", "टॉर्च", "फ्लैश"}
+    on_words = {"on", "start", "chalu", "chaalu", "jala", "जला", "चालू"}
+    off_words = {"off", "stop", "band", "बंद"}
+    if not (words & device_words):
+        return None
+    if words & on_words:
+        return "on"
+    if words & off_words:
+        return "off"
+    return None
 
 
 def main() -> None:
@@ -178,6 +195,16 @@ def main() -> None:
                     if transcript.casefold().strip(" .!?") in stop_phrases:
                         print("Zexa: Voice conversation ended.")
                         break
+                    torch_state = _explicit_torch_request(transcript)
+                    if torch_state:
+                        try:
+                            TermuxAndroidHand().set_torch(torch_state)
+                            answer = "Flashlight on kar di." if torch_state == "on" else "Flashlight band kar di."
+                        except (RuntimeError, OSError, ValueError) as exc:
+                            answer = f"Flashlight control available nahi hai: {exc}"
+                        print(f"Zexa: {answer}")
+                        voice.speak(answer)
+                        continue
                     routed = route_utterance(config, messages[1:], transcript)
                     intent = routed["intent"]
                     answer = routed["reply"]
