@@ -25,7 +25,7 @@ src/zexa/
   approvals.py Human approval primitives
 ```
 
-Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. The Android hand supports explicit CLI notification and speech input/output commands. Microphone capture starts only when `zexa listen` is run. Continuous listening, conversational voice mode, other device actions, and the Android accessibility bridge remain future work.
+Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. The Android hand supports explicit CLI notification and speech input/output commands. `zexa voice` captures one utterance, sends its transcript to the configured Groq model, and speaks the reply. Microphone capture starts only when `zexa listen` or `zexa voice` is run; the transcript is sent to Groq only in `zexa voice`. Continuous listening, other device actions, and the Android accessibility bridge remain future work.
 
 ## Requirements
 
@@ -53,6 +53,7 @@ zexa android
 zexa notify "Zexa" "Your requested notification message"
 zexa listen
 zexa speak "Hello, I am Zexa"
+zexa voice
 ``
 
 Or run without installing the console script:
