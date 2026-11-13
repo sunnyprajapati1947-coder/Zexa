@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from zexa.android import AndroidCapabilityProbe
+from zexa.android import AndroidCapabilityProbe, CAPABILITIES
 
 
 class AndroidCapabilityTests(unittest.TestCase):
@@ -24,7 +24,7 @@ class AndroidCapabilityTests(unittest.TestCase):
         with patch("zexa.android.shutil.which", return_value=None) as which:
             report = AndroidCapabilityProbe(which=which).as_dict()
         self.assertEqual(report["available_count"], 0)
-        self.assertEqual(which.call_count, 7)
+        self.assertEqual(which.call_count, len(CAPABILITIES))
 
 
 if __name__ == "__main__":
