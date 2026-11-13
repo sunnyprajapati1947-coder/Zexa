@@ -87,6 +87,26 @@ class TermuxAndroidHand:
         )
 
 
+    def set_torch(self, state: str) -> None:
+        """Set the phone torch only for an explicit on/off request."""
+        import subprocess
+
+        state = state.strip().lower()
+        if state not in {"on", "off"}:
+            raise ValueError("Torch state must be 'on' or 'off'.")
+        executable = self._which("termux-torch")
+        if not executable:
+            raise RuntimeError(
+                "termux-torch is unavailable. Install Termux:API and the Android Termux:API app."
+            )
+        self._run(
+            [executable, state],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
 class TermuxVoice:
     """Explicitly invoked Termux speech input/output adapter."""
 
