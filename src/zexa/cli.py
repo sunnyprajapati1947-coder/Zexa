@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .config import get_config, load_env_file
@@ -164,10 +165,13 @@ def main() -> None:
                         if "No speech transcript was returned" not in str(exc):
                             raise
                         empty_transcripts += 1
-                        print("Zexa: Awaaz clear nahi mili. Dobara boliye.")
-                        if empty_transcripts >= 3:
-                            print("Zexa: Voice mode paused after 3 empty captures.")
-                            break
+                        if empty_transcripts == 1:
+                            print("Zexa: Awaaz clear nahi mili. Dobara boliye.")
+                        elif empty_transcripts % 3 == 0:
+                            print("Zexa: Main listening mode mein hoon. Jab ready ho, boliye.")
+                        # Empty captures do not end a user-started session.
+                        # Ctrl+C or a spoken stop phrase remains the exit path.
+                        time.sleep(1)
                         continue
                     empty_transcripts = 0
                     print(f"You: {transcript}")
