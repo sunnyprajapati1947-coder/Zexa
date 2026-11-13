@@ -69,9 +69,10 @@ class CliVoiceTests(unittest.TestCase):
         chats = [event for event in events if event[0] == "chat"]
         self.assertEqual(len(chats), 2)
         self.assertEqual(chats[0][1][-1], {"role": "user", "content": "hello Zexa"})
-        self.assertEqual(chats[1][1][-2:], [
+        self.assertEqual(chats[1][1][-3:], [
             {"role": "user", "content": "hello Zexa"},
             {"role": "assistant", "content": "Namaste, main sun raha hoon."},
+            {"role": "user", "content": "what did I just say?"},
         ])
         self.assertEqual(len([event for event in events if event[0] == "speak"]), 2)
         self.assertIn("Voice conversation ended.", output.getvalue())
