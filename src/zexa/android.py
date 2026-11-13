@@ -53,3 +53,35 @@ class AndroidCapabilityProbe:
                 for item in capabilities
             ],
         }
+
+
+class TermuxAndroidHand:
+    """Explicitly invoked, narrowly scoped Android notification adapter."""
+
+    def __init__(self, which=shutil.which, run=None):
+        import subprocess
+
+        self._which = which
+        self._run = run or subprocess.run
+
+    def notify(self, title: str, content: str) -> None:
+        import subprocess
+
+        title = title.strip()
+        content = content.strip()
+        if not title or not content:
+            raise ValueError("Notification title and content must not be empty.")
+        if len(title) > 100 or len(content) > 1000:
+            raise ValueError("Notification title/content exceeds the allowed length.")
+        executable = self._which("termux-notification")
+        if not executable:
+            raise RuntimeError(
+                "termux-notification is unavailable. Install Termux:API and its Termux package."
+            )
+        self._run(
+            [executable, "--title", title, "--content", content],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
