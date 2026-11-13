@@ -25,7 +25,7 @@ src/zexa/
   approvals.py Human approval primitives
 ```
 
-Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. The Android hand currently supports an explicit CLI notification command. Other device actions and the Android accessibility bridge remain future work.
+Current modules include a skill registry, memory store, task history, task planner, permission-aware tool router, and a read-only Termux capability probe. The Android hand supports explicit CLI notification and speech input/output commands. Microphone capture starts only when `zexa listen` is run. Continuous listening, conversational voice mode, other device actions, and the Android accessibility bridge remain future work.
 
 ## Requirements
 
@@ -51,6 +51,8 @@ Ask Zexa:
 zexa ask "Explain what you can do"
 zexa android
 zexa notify "Zexa" "Your requested notification message"
+zexa listen
+zexa speak "Hello, I am Zexa"
 ``
 
 Or run without installing the console script:
