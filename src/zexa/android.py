@@ -1,0 +1,55 @@
+"""Read-only discovery of optional Termux Android capabilities."""
+from __future__ import annotations
+
+import shutil
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class AndroidCapability:
+    name: str
+    command: str
+    available: bool
+    description: str
+
+
+CAPABILITIES = (
+    ("notification", "termux-notification", "Post an Android notification"),
+    ("toast", "termux-toast", "Show a short Android toast"),
+    ("clipboard_read", "termux-clipboard-get", "Read clipboard text"),
+    ("clipboard_write", "termux-clipboard-set", "Write clipboard text"),
+    ("speech_to_text", "termux-speech-to-text", "Capture speech as text"),
+    ("text_to_speech", "termux-tts-speak", "Speak text aloud"),
+    ("open_url", "termux-open-url", "Open a URL with an Android app"),
+)
+
+
+class AndroidCapabilityProbe:
+    """Detect optional Termux commands; never invoke them."""
+
+    def __init__(self, which=shutil.which):
+        self._which = which
+
+    def scan(self) -> list[AndroidCapability]:
+        return [
+            AndroidCapability(name, command, self._which(command) is not None, description)
+            for name, command, description in CAPABILITIES
+        ]
+
+    def as_dict(self) -> dict:
+        capabilities = self.scan()
+        return {
+            "platform": "android-termux",
+            "mode": "read_only_detection",
+            "actions_executed": False,
+            "available_count": sum(item.available for item in capabilities),
+            "capabilities": [
+                {
+                    "name": item.name,
+                    "command": item.command,
+                    "available": item.available,
+                    "description": item.description,
+                }
+                for item in capabilities
+            ],
+        }
