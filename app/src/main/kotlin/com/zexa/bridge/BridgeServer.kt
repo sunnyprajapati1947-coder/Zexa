@@ -7,7 +7,6 @@ import java.io.BufferedInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.security.MessageDigest
 import java.util.concurrent.Semaphore
 import java.nio.charset.StandardCharsets
 
@@ -87,7 +86,7 @@ class BridgeServer(
                     line.substring(separator + 1).trim()
             }
             val provided = headers["authorization"]?.removePrefix("Bearer ") ?: ""
-            if (!MessageDigest.isEqual(token.toByteArray(), provided.toByteArray())) {
+            if (!BridgeSecurityRules.tokenMatches(token, provided)) {
                 return respond(client, 401, JSONObject().put("error", "Unauthorized"))
             }
             val response = try {
@@ -95,8 +94,8 @@ class BridgeServer(
                     method == "GET" && path == "/v1/status" -> service.statusJson()
                     method == "GET" && path == "/v1/screen" -> service.screenJson()
                     method == "POST" && path == "/v1/action" -> {
-                        val length = headers["content-length"]?.toIntOrNull() ?: 0
-                        require(length in 1..16000)
+                        val length = BridgeSecurityRules.contentLength(headers["content-length"])
+                            ?: error("Invalid request body length.")
                         val body = ByteArray(length)
                         var offset = 0
                         while (offset < length) {
