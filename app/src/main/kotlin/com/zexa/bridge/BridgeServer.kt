@@ -15,7 +15,7 @@ class BridgeServer(
     private val service: ZexaAccessibilityService,
 ) {
     @Volatile private var running = false
-    private var server: ServerSocket? = null
+    @Volatile private var server: ServerSocket? = null
     private var thread: Thread? = null
 
     fun start() {
@@ -25,6 +25,10 @@ class BridgeServer(
             try {
                 val socketServer = ServerSocket(8765, 8, InetAddress.getByName("127.0.0.1"))
                 server = socketServer
+                if (!running) {
+                    socketServer.close()
+                    return@Thread
+                }
                 while (running) {
                     val socket = socketServer.accept()
                     Thread({ handle(socket) }, "zexa-bridge-client").start()
