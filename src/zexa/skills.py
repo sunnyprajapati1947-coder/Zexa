@@ -6,9 +6,12 @@ network, filesystem, or Android permission by itself.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+import json
+import math
 
 
 RISK_LEVELS = {"low", "medium", "high", "critical"}
+SCHEMA_TYPES = {"string", "integer", "number", "boolean", "object", "array", "null"}
 
 
 @dataclass(frozen=True)
@@ -44,10 +47,13 @@ class Skill:
                 raise ValueError(f"{schema_name} must be an object with at most 50 fields.")
             if any(
                 not isinstance(key, str) or not key.strip()
-                or not isinstance(value, str) or not value.strip()
+                or not isinstance(value, str) or value not in SCHEMA_TYPES
                 for key, value in schema.items()
             ):
-                raise ValueError(f"{schema_name} keys and values must be non-empty strings.")
+                raise ValueError(
+                    f"{schema_name} must map field names to supported types: "
+                    + ", ".join(sorted(SCHEMA_TYPES))
+                )
         for field_name, values in (
             ("required_permissions", self.required_permissions),
             ("dependencies", self.dependencies),
@@ -104,6 +110,39 @@ class SkillRegistry:
             return False
         self._skills[key] = replace(skill, enabled=bool(enabled))
         return True
+
+    def validate_payload(self, name: str, payload: dict, output: bool = False) -> dict:
+        """Validate a skill input/output object against its declared type contract."""
+        skill = self.get(name)
+        if not isinstance(payload, dict):
+            raise ValueError("Skill payload must be a JSON object.")
+        schema = skill.output_schema if output else skill.input_schema
+        missing = set(schema) - set(payload)
+        extra = set(payload) - set(schema)
+        if missing:
+            raise ValueError("Missing skill fields: " + ", ".join(sorted(missing)))
+        if extra:
+            raise ValueError("Unexpected skill fields: " + ", ".join(sorted(extra)))
+        checkers = {
+            "string": lambda item: isinstance(item, str),
+            "integer": lambda item: type(item) is int,
+            "number": lambda item: type(item) in (int, float) and math.isfinite(item),
+            "boolean": lambda item: type(item) is bool,
+            "object": lambda item: isinstance(item, dict),
+            "array": lambda item: isinstance(item, list),
+            "null": lambda item: item is None,
+        }
+        for field_name, expected in schema.items():
+            if not checkers[expected](payload[field_name]):
+                raise ValueError(f"Skill field '{field_name}' must be {expected}.")
+        try:
+            encoded = json.dumps(payload, ensure_ascii=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Skill payload must contain JSON-compatible values.") from exc
+        max_chars = skill.resource_budget.get("max_input_chars", 20000)
+        if not output and len(encoded) > max_chars:
+            raise ValueError("Skill input exceeds its configured character budget.")
+        return dict(payload)
 
     def metadata(self) -> list[dict]:
         return [
