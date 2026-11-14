@@ -423,6 +423,7 @@ def main() -> None:
             mode,
             xai_config=xai_config,
         )
+        config = groq_config  # Keep legacy planner/voice call signatures compatible.
         if args.command == "skill" and args.skill_command == "run":
             try:
                 payload = json.loads(args.payload)
