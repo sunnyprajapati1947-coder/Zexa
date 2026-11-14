@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -25,10 +26,16 @@ class FakeBridge:
 
 class BridgeCliTests(unittest.TestCase):
     def invoke(self, argv, confirmation=None):
+        audit_dir = tempfile.TemporaryDirectory()
         patches = [
             patch.object(sys, "argv", ["zexa", "bridge", *argv]),
             patch.object(cli, "load_env_file"),
-            patch.dict(os.environ, {"ZEXA_BRIDGE_TOKEN": "t" * 32, "ZEXA_BRIDGE_URL": "http://127.0.0.1:8765"}),
+            patch.dict(os.environ, {
+                "ZEXA_BRIDGE_TOKEN": "t" * 32,
+                "ZEXA_BRIDGE_URL": "http://127.0.0.1:8765",
+                "ZEXA_ALLOWED_ANDROID_ACTIONS": "back",
+                "ZEXA_AUDIT_DB": os.path.join(audit_dir.name, "audit.sqlite3"),
+            }),
             patch.object(cli, "AccessibilityBridge", FakeBridge),
         ]
         for item in patches:
@@ -42,6 +49,7 @@ class BridgeCliTests(unittest.TestCase):
         finally:
             for item in reversed(patches):
                 item.stop()
+            audit_dir.cleanup()
 
     def test_status_and_screen_are_read_only(self):
         with patch("builtins.print") as output:
