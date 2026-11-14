@@ -26,7 +26,7 @@ An action omitted from the allowlist is denied. Remove it from `ZEXA_ALLOWED_AND
 
 ## Important limitations
 
-This is a first integration, not a claim that every Zexa execution path is protected. The gateway is not yet wired into all skill dispatch, agent orchestration, notification/background workers, browser automation, or future external integrations. Do not connect a new side-effecting tool until it has a trusted capability definition and routes through the gateway.
+This is a first guarded execution layer, not a claim that every Zexa execution path is protected. The `zexa skill run` path, low-risk background skill jobs, and Android bridge actions are routed through the gateway. The legacy text-only specialist-agent orchestration and generic read-only tools are not yet all routed through it; they currently have no general-purpose side-effecting handlers. Browser automation and future external integrations must not be connected until they have trusted capability definitions and route through the gateway.
 
 The permission allowlist currently comes from local environment configuration; a dedicated settings UI, persistent grant/revocation workflow, and per-capability management are future work. The audit log intentionally avoids raw action payloads and exception text, but it is not a complete data-loss-prevention system.
 
@@ -44,9 +44,9 @@ No claim of successful tests or Android runtime verification should be made unti
 
 ## Remaining integration work
 
-- Route every skill/tool dispatch through the same gateway.
-- Add denial/approval tests for the CLI bridge and background workers.
-- Add cancellation, timeout, idempotency and recovery semantics to long-running tasks.
+- Route any future side-effecting specialist-agent/tool adapter through the same gateway; the existing specialist agents remain text-only.
+- Add real-device denial/approval tests for the CLI bridge and Termux worker lifecycle.
+- Add timeout enforcement, idempotency and stronger cancellation semantics to long-running tasks.
 - Verify Android behavior on the actual supported handset and OS build.
 - Review third-party skills for provenance, license, dependencies, schemas and security before enabling them. Imported content is untrusted and never executable by default.
 
@@ -85,3 +85,16 @@ zexa worker --poll-seconds 5
 ```
 
 The worker routes the job through `SkillExecutionEngine` and `ExecutionGateway`, writes the normal audit events, and sends a Termux notification when the result is ready. Only low-risk skills are accepted by the background queue. Medium/high/critical skills must be run interactively and, where required, receive a fresh approval; approval tokens are intentionally not persisted in the job database. Failed jobs use the existing bounded retry policy. The worker is a foreground process until installed/configured as an Android service; this change does not claim automatic boot persistence or guaranteed Android background survival.
+
+
+## Job queue reliability and Termux service configuration
+
+The job queue now defaults to `~/.zexa/jobs.sqlite3` and accepts `ZEXA_JOB_DB` to override the path. This avoids separate queues when the CLI and runit service start from different working directories. `ZEXA_ENV_FILE` selects the environment file; it is loaded before queue scheduling and worker startup.
+
+- `zexa job cancel ID` cancels pending jobs only; running work is not falsely reported as cancelled.
+- `zexa job retry ID` requeues failed jobs with a fresh bounded attempt budget.
+- Worker exceptions persist only the exception class, not exception messages that could contain customer text, provider output, or credentials.
+- `scripts/install-termux-worker.sh` generates a runit service entrypoint for the exact checkout, configures stable queue/audit paths, and enables the service through Termux:Services.
+- Android reboot startup still depends on Termux:Boot being installed and configured. Android Doze, battery optimization, process death, and real-device lifecycle behavior are not verified from GitHub CI.
+
+The current CI validates Python behavior on Linux; it does not validate Termux, Android notifications, AccessibilityService, or physical device lifecycle.
