@@ -111,6 +111,10 @@ def main() -> None:
     task_update.add_argument("status")
     task_update.add_argument("--notes", default=None)
 
+    skill_schedule = subparsers.add_parser("schedule-skill", help="Queue a low-risk skill for background processing")
+    skill_schedule.add_argument("name")
+    skill_schedule.add_argument("payload", help="Input JSON object matching the skill schema")
+
     schedule = subparsers.add_parser("schedule-notification", help="Queue a local Android notification")
     schedule.add_argument("--after-seconds", type=int, default=0)
     schedule.add_argument("title")
@@ -134,6 +138,24 @@ def main() -> None:
     registry = default_registry()
     router = default_router()
 
+    if args.command == "schedule-skill":
+        try:
+            payload = json.loads(args.payload)
+        except json.JSONDecodeError as exc:
+            raise SystemExit("zexa: skill payload must be valid JSON.") from exc
+        if not isinstance(payload, dict):
+            raise SystemExit("zexa: skill payload must be a JSON object.")
+        selected = registry.get(args.name)
+        if selected.risk_level != "low":
+            raise SystemExit(
+                "zexa: only low-risk skills can be queued. Run higher-risk skills interactively for fresh approval."
+            )
+        registry.validate_payload(selected.name, payload)
+        job_id = JobQueue().enqueue(
+            "skill_draft", {"name": selected.name, "input": payload},
+        )
+        print(f"Background skill job queued: #{job_id}")
+        return
     if args.command == "schedule-notification":
         if not 0 <= args.after_seconds <= 31_536_000:
             raise SystemExit("zexa: --after-seconds must be between 0 and 31536000.")
@@ -153,11 +175,47 @@ def main() -> None:
             raise SystemExit("zexa: --poll-seconds must be between 1 and 300.")
         queue = JobQueue()
         queue.recover_stale()
+        mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
+        config = get_config() if mode == "online" or (
+            mode != "offline" and os.getenv("GROQ_API_KEY", "").strip()
+        ) else None
+        brain = build_brain_router(config, mode)
+        explicit_permissions = {
+            item.strip().lower()
+            for item in os.getenv("ZEXA_SKILL_PERMISSIONS", "").split(",")
+            if item.strip()
+        }
+        policy = PermissionPolicy({
+            f"skill.execute:{skill.name}" for skill in registry.list()
+        } | explicit_permissions)
+        audit_path = Path(
+            os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+        ).expanduser()
+        gateway = ExecutionGateway(
+            policy, ApprovalManager(ttl_seconds=60), AuditLog(audit_path),
+            capabilities=skill_capabilities(registry),
+        )
+        skill_engine = SkillExecutionEngine(
+            registry, gateway, brain_skill_handlers(registry, brain),
+        )
+        def run_background_skill(payload):
+            selected = registry.get(payload["name"])
+            if selected.risk_level != "low":
+                raise PermissionError("Only low-risk skills are allowed in background jobs.")
+            result = skill_engine.execute(
+                selected.name, payload["input"], actor="background_worker",
+            )
+            rendered = json.dumps(result, ensure_ascii=False)
+            TermuxAndroidHand().notify(
+                "Zexa task completed", f"{selected.name}: {rendered[:700]}",
+            )
+            return rendered
         worker = JobWorker(queue, {
             "notification": lambda payload: (
                 TermuxAndroidHand().notify(payload["title"], payload["content"])
                 or "Notification delivered."
             ),
+            "skill_draft": run_background_skill,
         })
         if args.once:
             print(worker.run_once())
