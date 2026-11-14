@@ -66,6 +66,14 @@ def default_agent_registry() -> AgentRegistry:
         ),
         {"coding_review"},
     )
+    registry.register(
+        AgentSpec(
+            "business",
+            "Draft business documents and customer communications using only user-provided "
+            "facts and approved policy. Never invent commercial terms or send, issue, or publish anything.",
+        ),
+        {"customer_support_drafter", "proposal_writer", "invoice_drafter", "faq_builder"},
+    )
     return registry
 
 
