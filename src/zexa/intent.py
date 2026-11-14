@@ -16,6 +16,7 @@ def route_utterance(
     config: dict[str, str],
     history: list[dict[str, str]],
     transcript: str,
+    brain=None,
 ) -> dict[str, str]:
     """Classify one transcript and produce a safe voice reply in one Groq call."""
     transcript = transcript.strip()
@@ -41,7 +42,7 @@ def route_utterance(
         *history[-12:],
         {"role": "user", "content": transcript},
     ]
-    raw = chat(config, messages)
+    raw = brain.chat(messages).text if brain is not None else chat(config, messages)
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
