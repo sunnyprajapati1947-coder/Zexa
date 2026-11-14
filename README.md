@@ -1,43 +1,67 @@
 # Zexa
 
-**Zexa** is a phone-first modular assistant. Its online AI provider is Groq; an optional on-device llama.cpp model provides offline inference. Zexa does not use OpenAI, Gemini, Claude, or OpenRouter.
+**Zexa** is a phone-first modular assistant with a configurable multi-provider AI brain: xAI Grok, Groq, and an optional on-device GGUF model through llama.cpp. Zexa does not require OpenAI, Gemini, Claude, or OpenRouter.
 
 ## Current architecture
 
-- **Online brain:** Groq HTTPS chat client (src/zexa/groq.py).
-- **Offline brain:** optional local GGUF model through llama-cli (src/zexa/brain.py).
-- **Brain router:** auto, online, and offline modes. In auto, local fallback occurs only when Groq cannot be reached; authentication, quota, model, and API errors are not silently hidden.
+- **Cloud brain providers:** xAI Grok through the Responses API and Groq through its chat-completions API.
+- **Local brain:** optional GGUF model through llama.cpp; the model's embedded chat template is used in conversation mode.
+- **Brain router:** auto, online, Grok-only, Groq-only, and Qwen/local-only modes. Auto follows the configured provider order and falls back only on connectivity failures; authentication, quota, model, and API errors remain visible.
 - **Human Hand foundation:** authenticated loopback client for an opt-in Android Accessibility Bridge (src/zexa/hand.py).
 - **Existing modules:** skills, explicit local memory, task history, planner, safe tool router, Termux notifications, voice I/O, and explicit flashlight control.
 
-The native Android companion app and its user-enabled AccessibilityService are now included in `app/`, with an Android debug-build workflow. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token; screen snapshots are read-only and each action requires explicit CLI approval. Real-device installation, permission, lifecycle, and gesture verification are still required before describing the Human Hand as fully validated. No arbitrary shell command is exposed.
+The native Android companion app and its user-enabled AccessibilityService are included in `app/`, with an Android debug-build workflow. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token; screen snapshots are read-only and each action requires explicit CLI approval. Real-device installation, permission, lifecycle, and gesture verification are still required before describing the Human Hand as fully validated. No arbitrary shell command is exposed.
 
 ## Brain configuration
 
-Groq online configuration remains in the local .env file:
+Copy `.env.example` to your private local `.env`. Keep API credentials private and never commit them. API calls to cloud providers may incur charges; configure and monitor any account usage with an adult account holder.
 
-    GROQ_API_KEY=your_groq_key
+### xAI / Grok
+
+The xAI adapter uses the recommended Responses API at `https://api.x.ai/v1/responses`. The default model is `grok-4.7`; select a model ID available to your xAI API account.
+
+    XAI_API_KEY=your_private_key
+    XAI_MODEL=grok-4.7
+    XAI_BASE_URL=https://api.x.ai/v1
+    XAI_REASONING_EFFORT=low
+    XAI_TIMEOUT=120
+
+The request uses `store: false` and extracts only visible assistant text. Zexa does not store or replay xAI encrypted reasoning items. This keeps the adapter stateless; the caller supplies the conversation history.
+
+### Groq
+
+    GROQ_API_KEY=your_private_key
     GROQ_MODEL=your_enabled_groq_model
+    GROQ_BASE_URL=https://api.groq.com/openai/v1
 
-Optional local model settings:
+### Local Qwen / llama.cpp
 
-    export ZEXA_BRAIN_MODE=auto
-    export ZEXA_LOCAL_MODEL=$HOME/models/your-model.gguf
-    export ZEXA_LLAMA_CLI=llama-cli
-    export ZEXA_LOCAL_THREADS=4
-    export ZEXA_LOCAL_CONTEXT=2048
-    export ZEXA_LOCAL_MAX_TOKENS=512
+Set the actual GGUF path on the device; Zexa does not download models automatically.
 
-Download a GGUF model separately and ensure llama-cli is installed and available in PATH. Zexa does not download models automatically. The default local model path is models/local-model.gguf. On an approximately 8 GB Android device, choose a quantized model that leaves memory for Android and other apps.
+    ZEXA_LOCAL_MODEL=$HOME/spiderman/model.gguf
+    ZEXA_LLAMA_CLI=llama-cli
+    ZEXA_LOCAL_THREADS=4
+    ZEXA_LOCAL_CONTEXT=2048
+    ZEXA_LOCAL_MAX_TOKENS=512
 
-The brain router can be used by Python integrations:
+The local adapter invokes llama.cpp conversation mode (`-cnv -st`) so a compatible GGUF's embedded chat template can be used. The Qwen2.5-3B GGUF identified on one device is not automatically assumed to exist on another device. Keep enough RAM available for Android and other apps.
 
-    from zexa.brain import build_brain_router
-    router = build_brain_router(groq_config=None)
-    reply = router.chat([{'role': 'user', 'content': 'Hello'}])
-    print(reply.brain, reply.text)
+### Provider routing
 
-The CLI `ask`, `voice`, `converse`, and `plan` commands now use the same brain router. Set `ZEXA_BRAIN_MODE=auto` (default), `online`, or `offline`. In `auto`, Groq is preferred when configured and local inference is used only when the network cannot reach Groq. If no Groq key is configured, `auto` can use a ready local model. Authentication, quota, and model errors are surfaced rather than silently hidden. `plan` and voice intent classification also use the selected brain.
+    ZEXA_BRAIN_MODE=auto
+    ZEXA_PROVIDER_ORDER=grok,groq,qwen
+
+Supported modes:
+
+- `auto`: tries configured providers in `ZEXA_PROVIDER_ORDER`; default order is Grok, Groq, then local Qwen.
+- `grok`: Grok only.
+- `groq`: Groq only.
+- `qwen` or `offline`: local model only.
+- `online`: first configured cloud provider only; no local fallback.
+
+Auto mode falls back only when a provider cannot be reached. HTTP authentication, quota, invalid-model, and server errors are surfaced instead of silently switching providers. Set `ZEXA_PROVIDER_ORDER=qwen,grok,groq` to prefer local inference. Provider order changes latency, privacy, and possible cloud usage; it does not guarantee that one provider is always faster.
+
+The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use the same router.
 
 ## Android Accessibility Bridge app
 
@@ -76,7 +100,7 @@ Inspect skill contracts:
     zexa skillpacks status
     zexa skillpacks list --limit 20
 
-The imported community reference pack contains 320 validated entries, all disabled. `skillpacks` commands are read-only metadata inspection; imported content is not routed to the planner and is never executed.
+The imported community reference pack contains 320 validated entries, all disabled. `skillpacks` commands are read-only metadata inspection; imported content is not routed to the planner and is never executed automatically.
 
 ## Business drafting skills
 
@@ -99,11 +123,11 @@ See [`docs/GITHUB_COMPLETION_CHECKLIST.md`](docs/GITHUB_COMPLETION_CHECKLIST.md)
 
 ## Master skills and GitHub reference catalog
 
-See [`docs/SKILL_CATALOG.md`](docs/SKILL_CATALOG.md) for the canonical 170-skill roadmap and [`docs/COMMUNITY_SKILL_PACKS.md`](docs/COMMUNITY_SKILL_PACKS.md) for the pinned 512-candidate GitHub skill reference import; the latest successful run stored 320 validated references, all disabled by default. The import script validates at least 300 unique skills before copying them; imported skills remain disabled and are never executed automatically. See [`docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md`](docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md) for the earlier condensed skill list, capability map, categorized upstream GitHub references, and integration/safety criteria. See [`docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md`](docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md) for verified current-state findings, missing capabilities, engineering risks, and acceptance gates. A catalogue entry or upstream repository link does not mean a feature is installed or integrated.
+See [`docs/SKILL_CATALOG.md`](docs/SKILL_CATALOG.md) for the canonical 170-skill roadmap and [`docs/COMMUNITY_SKILL_PACKS.md`](docs/COMMUNITY_SKILL_PACKS.md) for the pinned 512-candidate GitHub skill reference import; the latest successful run stored 320 validated references, all disabled by default. The import script validates at least 300 unique skills before copying them; imported skills remain disabled and are never executed automatically. See [`docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md`](docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md) for the earlier condensed skill list, categorized upstream GitHub references, and integration/safety criteria. See [`docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md`](docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md) for verified current-state findings, missing capabilities, engineering risks, and acceptance gates. A catalogue entry or upstream repository link does not mean a feature is installed or integrated.
 
 ## Specialist-agent orchestration
 
-Zexa includes a bounded multi-agent workflow over the selected online/offline brain. The planner chooses only registered skills, then specialist roles (general, analyst, developer, business) handle each step sequentially. The workflow is capped at six steps and each result has an output budget. This is an LLM orchestration layer, not a general-purpose autonomous executor: it does not run shell commands, browse websites, send messages, or modify files.
+Zexa includes a bounded multi-agent workflow over the selected brain. The planner chooses only registered skills, then specialist roles (general, analyst, developer, business) handle each step sequentially. The workflow is capped at six steps and each result has an output budget. This is an LLM orchestration layer, not a general-purpose autonomous executor: it does not run shell commands, browse websites, send messages, or modify files.
 
 Run:
 
@@ -159,11 +183,11 @@ Microphone capture starts only after the user manually invokes a voice command. 
     python -m pip install -e .
     cp .env.example .env
 
-Never commit .env, API keys, bridge tokens, or personal data.
+Never commit `.env`, API keys, bridge tokens, or personal data.
 
 ## Automated checks
 
-GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and the unit-test suite on Python 3.11, 3.12, and 3.13. The Android workflow runs bridge JVM unit tests and assembles a debug APK. A separate scheduled CodeQL workflow scans Python security queries. Dependabot checks Python and GitHub Actions updates. These CI checks do not replace Android device testing or repository-level secret-scanning settings.
+GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and the unit-test suite on Python 3.11, 3.12, 3.13, and 3.14. The Android workflow runs bridge JVM unit tests and assembles a debug APK. A separate scheduled CodeQL workflow scans Python security queries. Dependabot checks Python and GitHub Actions updates. These CI checks do not replace Android device testing or repository-level secret-scanning settings.
 
 ## Development checks
 
@@ -171,4 +195,4 @@ GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and 
 
 ## Project provenance
 
-This is an independent implementation. Reference repositories and attribution are documented in THIRD_PARTY_NOTICES.md. Upstream source code is not copied into this repository by default.
+This is an independent implementation. Reference repositories and attribution are documented in `THIRD_PARTY_NOTICES.md`. Upstream source code is not copied into this repository by default.
