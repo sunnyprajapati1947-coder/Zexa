@@ -81,11 +81,15 @@ def main() -> int:
     output = ROOT / "skillpacks" / "imported"
     if output.exists():
         raise SystemExit(f"{output} already exists; move it aside before importing again.")
+
     records: list[dict] = []
     rejected: list[dict] = []
     pending_copies: list[tuple[Path, Path]] = []
     license_copies: list[tuple[Path, Path]] = []
     seen: set[str] = set()
+
+    # Keep temporary checkouts alive until all validated skill directories and
+    # their license files have been copied into the final reference pack.
     with tempfile.TemporaryDirectory(prefix="zexa-skill-import-") as temp:
         temp_root = Path(temp)
         for source in SOURCES:
@@ -102,7 +106,11 @@ def main() -> int:
                         path, checkout, source["repo"], source["commit"], source["license"]
                     )
                     if item.name in seen:
-                        rejected.append({"source": source["repo"], "path": relative, "reason": "duplicate skill name"})
+                        rejected.append({
+                            "source": source["repo"],
+                            "path": relative,
+                            "reason": "duplicate skill name",
+                        })
                         continue
                     seen.add(item.name)
                     destination = output / repo_slug / Path(relative).parent
@@ -121,33 +129,56 @@ def main() -> int:
                         "enabled": False,
                     })
                 except Exception as exc:
-                    rejected.append({"source": source["repo"], "path": relative, "reason": str(exc)})
-            license_copies.append((license_file, Path(repo_slug + "-LICENSE")) )
-    if len(records) < MINIMUM_SKILLS:
-        raise SystemExit(
-            f"Import stopped: only {len(records)} valid unique skills passed checks; "
-            f"at least {MINIMUM_SKILLS} are required. No skills were activated."
-        )
-    report = {
-        "schema_version": 1,
-        "imported_count": len(records),
-        "enabled_count": 0,
-        "sources": SOURCES,
-        "skills": records,
-        "rejected": rejected,
-        "execution_policy": "metadata and reference files only; never execute imported scripts or hooks",
-    }
-    if not args.dry_run:
-        output.mkdir(parents=True, exist_ok=False)
-        for source_dir, destination in pending_copies:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(source_dir, destination, dirs_exist_ok=True, symlinks=False, ignore=lambda directory, names: [name for name in names if (Path(directory) / name).is_symlink()])
-        license_dir = output / "licenses"
-        license_dir.mkdir(parents=True, exist_ok=True)
-        for source_file, filename in license_copies:
-            shutil.copy2(source_file, license_dir / filename)
-        (output / "index.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(f"Validated {len(records)} unique skills from {len(SOURCES)} pinned GitHub repositories.")
+                    rejected.append({
+                        "source": source["repo"],
+                        "path": relative,
+                        "reason": str(exc)[:240],
+                    })
+            license_copies.append((license_file, Path(repo_slug + "-LICENSE")))
+
+        if len(records) < MINIMUM_SKILLS:
+            raise SystemExit(
+                f"Import stopped: only {len(records)} safe, valid unique skills passed checks; "
+                f"at least {MINIMUM_SKILLS} are required. No skills were activated."
+            )
+
+        report = {
+            "schema_version": 1,
+            "imported_count": len(records),
+            "enabled_count": 0,
+            "sources": SOURCES,
+            "skills": records,
+            "rejected": rejected,
+            "execution_policy": (
+                "metadata and reference files only; imported skills are disabled; "
+                "never execute imported scripts or hooks"
+            ),
+        }
+
+        if not args.dry_run:
+            output.mkdir(parents=True, exist_ok=False)
+            for source_dir, destination in pending_copies:
+                if not source_dir.is_dir():
+                    raise RuntimeError("A validated skill directory was missing before copy.")
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(
+                    source_dir,
+                    destination,
+                    dirs_exist_ok=True,
+                    symlinks=False,
+                    ignore=lambda directory, names: [
+                        name for name in names if (Path(directory) / name).is_symlink()
+                    ],
+                )
+            license_dir = output / "licenses"
+            license_dir.mkdir(parents=True, exist_ok=True)
+            for source_file, filename in license_copies:
+                shutil.copy2(source_file, license_dir / filename)
+            (output / "index.json").write_text(
+                json.dumps(report, indent=2) + "\n", encoding="utf-8"
+            )
+
+    print(f"Validated and imported {len(records)} safe unique skills from {len(SOURCES)} pinned GitHub repositories.")
     print(f"Rejected or duplicate entries: {len(rejected)}")
     print("Imported skills remain disabled until individually reviewed.")
     return 0
