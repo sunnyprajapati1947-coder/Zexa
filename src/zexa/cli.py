@@ -265,7 +265,7 @@ def main() -> None:
                     capabilities=capabilities,
                 )
                 action_name = f"android.{args.action}"
-                print(f"Requested Android action: {args.action}")
+                print(f"Requested Android action: {args.action}")\n                print("Exact payload:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
                 if args.action not in allowed_actions:
                     raise PermissionError(
                         f"{args.action} is not enabled. Add it to ZEXA_ALLOWED_ANDROID_ACTIONS "
