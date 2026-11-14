@@ -32,6 +32,12 @@ SOURCES = (
         "license": "CC-BY-4.0",
         "expected_skill_files": 201,
     },
+    {
+        "repo": "ellmos-ai/skills",
+        "commit": "8cc83ee0e79499c45ea28219a0b0eadaea57ffe7",
+        "license": "MIT",
+        "expected_skill_files": 166,
+    },
 )
 MINIMUM_SKILLS = 300
 
@@ -63,7 +69,7 @@ def clone_sparse(source: dict, destination: Path) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import a pinned 450+ skill reference pack.")
+    parser = argparse.ArgumentParser(description="Import a pinned 600+ skill reference pack.")
     parser.add_argument("--dry-run", action="store_true", help="scan and report without copying skill folders")
     args = parser.parse_args()
     output = ROOT / "skillpacks" / "imported"
