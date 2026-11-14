@@ -1,21 +1,21 @@
 """Guarded synchronous execution gateway for registered Zexa capabilities.
 
-The gateway composes permission decisions, one-time action-bound approvals, and
-persistent audit events. Tool handlers must be supplied by trusted application
-code; model output must never supply a Python callable.
+Capability identity, permission, and risk are supplied by trusted application
+configuration, never by model output or a caller-selected risk label. Tool
+handlers must be trusted callables; models may only request registered names.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from .approvals import ApprovalManager
 from .audit import AuditLog
-from .policy import PermissionPolicy
+from .policy import PermissionPolicy, RISK_LEVELS
 
 
 class ExecutionDenied(PermissionError):
-    """Raised when policy or approval checks reject an action."""
+    """Raised when policy, capability, or approval checks reject an action."""
 
 
 class ExecutionGateway:
@@ -24,10 +24,32 @@ class ExecutionGateway:
         policy: PermissionPolicy,
         approvals: ApprovalManager,
         audit: AuditLog,
+        *,
+        capabilities: Mapping[str, tuple[str, str]],
     ) -> None:
         self.policy = policy
         self.approvals = approvals
         self.audit = audit
+        self._capabilities: dict[str, tuple[str, str]] = {}
+        for action, definition in capabilities.items():
+            if (
+                not isinstance(action, str) or not action.strip() or len(action) > 120
+                or not isinstance(definition, tuple) or len(definition) != 2
+            ):
+                raise ValueError("Each capability must map an action name to (permission, risk_level).")
+            permission, risk_level = definition
+            if (
+                not isinstance(permission, str) or not permission.strip()
+                or risk_level not in RISK_LEVELS
+            ):
+                raise ValueError("Capability permission or risk level is invalid.")
+            self._capabilities[action] = (permission.strip().lower(), risk_level)
+
+    def _capability(self, action: str) -> tuple[str, str]:
+        capability = self._capabilities.get(action)
+        if capability is None:
+            raise ExecutionDenied("Action is not registered as a trusted capability.")
+        return capability
 
     def issue_approval(
         self,
@@ -36,7 +58,11 @@ class ExecutionGateway:
         payload: dict[str, Any],
         user_confirmed: bool,
     ):
-        """Issue a short-lived grant only after a trusted UI confirms the exact payload."""
+        """Issue a short-lived grant for a registered consequential action."""
+        permission, risk_level = self._capability(action)
+        decision = self.policy.decide(permission, risk_level=risk_level, approved=True)
+        if not decision.allowed or not decision.approval_required:
+            raise ExecutionDenied("Approval can only be issued for a granted capability that requires approval.")
         return self.approvals.issue(action, payload, user_confirmed)
 
     def execute(
@@ -56,38 +82,44 @@ class ExecutionGateway:
         if not isinstance(payload, dict):
             raise ValueError("Execution payload must be an object.")
 
-        decision = self.policy.decide(
-            permission,
-            risk_level=risk_level,
-            approved=bool(approval_token),
-        )
-        if not decision.allowed:
+        try:
+            registered_permission, registered_risk = self._capability(action)
+            if (
+                not isinstance(permission, str)
+                or permission.strip().lower() != registered_permission
+                or risk_level != registered_risk
+            ):
+                raise ExecutionDenied("Caller-supplied permission or risk does not match trusted capability metadata.")
+
+            decision = self.policy.decide(
+                registered_permission,
+                risk_level=registered_risk,
+                approved=bool(approval_token),
+            )
+            if not decision.allowed:
+                raise ExecutionDenied(decision.reason)
+
+            if decision.approval_required:
+                if not approval_token or not self.approvals.consume(approval_token, action, payload):
+                    raise ExecutionDenied("A valid, unexpired, action-bound approval is required.")
+        except ExecutionDenied as exc:
             self.audit.record(
                 "execution_denied", actor=actor, action=action,
-                decision="denied",
-                details={"permission": permission, "risk_level": risk_level, "reason": decision.reason},
+                decision="denied", details={"reason": str(exc)[:300]},
             )
-            raise ExecutionDenied(decision.reason)
-
-        if decision.approval_required:
-            if not approval_token or not self.approvals.consume(approval_token, action, payload):
-                self.audit.record(
-                    "execution_denied", actor=actor, action=action,
-                    decision="invalid_or_replayed_approval",
-                    details={"permission": permission, "risk_level": risk_level},
-                )
-                raise ExecutionDenied("A valid, unexpired, action-bound approval is required.")
+            raise
 
         self.audit.record(
             "execution_started", actor=actor, action=action, decision="allowed",
-            details={"permission": permission, "risk_level": risk_level},
+            details={"permission": registered_permission, "risk_level": registered_risk},
         )
         try:
             result = handler(dict(payload))
         except Exception as exc:
+            # Do not persist exception text: it may contain customer data or secrets.
             self.audit.record(
                 "execution_failed", actor=actor, action=action, decision="failed",
-                details={"error_type": type(exc).__name__, "error": str(exc)[:500]},
+                details={"error_type": type(exc).__name__},
             )
             raise
         self.audit.record(
