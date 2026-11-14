@@ -50,6 +50,13 @@ class SkillPackTests(unittest.TestCase):
             self.assertFalse(item.review_required)
             self.assertEqual(len(item.sha256), 64)
 
+    def test_nested_metadata_is_ignored_safely(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = self._write(root, "---\\nname: cloud-guide\\ndescription: Explain a cloud workflow.\\nmetadata:\\n  generated_at: today\\n---\\nUse supplied documentation.")
+            item = inspect_skill_file(path, root, "owner/repo", "c" * 40, "CC-BY-4.0")
+            self.assertEqual(item.name, "cloud-guide")
+
     def test_rejects_unlicensed_sources(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
