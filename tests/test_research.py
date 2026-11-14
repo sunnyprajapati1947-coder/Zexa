@@ -27,7 +27,7 @@ class FakeResponse:
         return False
 
     def read(self, size):
-        return self.body[:size]
+        return self.body[:size] if isinstance(self.body, bytes) else self.body[:size].encode('utf-8')
 
 
 class FakeReply:
@@ -43,7 +43,7 @@ class FakeBrain:
 
 class ResearchTests(unittest.TestCase):
     def test_search_parses_results_and_unwraps_redirects(self):
-        with patch("zexa.research.urlopen", return_value=FakeResponse(SAMPLE_HTML)):
+        with patch("zexa.research.urlopen", return_value=FakeResponse(SAMPLE_HTML.encode('utf-8'))):
             results = DuckDuckGoSearch().search("Zexa assistant")
         self.assertEqual(len(results), 2)
         self.assertEqual(results[0].title, "Example Result")
