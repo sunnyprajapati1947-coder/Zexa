@@ -493,13 +493,11 @@ Sources:")
                     # Keep the system prompt and the latest six exchanges to bound context.
                     messages = [messages[0]] + messages[-12:]
             except KeyboardInterrupt:
-                print("
-Zexa: Voice conversation ended.")
+                print("\nZexa: Voice conversation ended.")
             return
         if args.command == "plan":
             print(json.dumps(create_plan(config, registry, " ".join(args.goal), brain=brain), indent=2))
-            print("
-Plan only: no tools or external actions were executed.")
+            print("\nPlan only: no tools or external actions were executed.")
             return
         answer = brain.chat(
             [
