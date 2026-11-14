@@ -45,7 +45,7 @@ class ImportedManifestTests(unittest.TestCase):
     def test_rejects_enabled_entry_and_path_traversal(self):
         enabled = dict(self.entry, enabled=True)
         self.write_manifest(enabled)
-        with self.assertRaisesRegex(ValueError, "disabled"):
+        with self.assertRaisesRegex(ValueError, "cannot be enabled"):
             load_imported_manifest(self.path)
         traversal = dict(self.entry, source_path="../outside/SKILL.md")
         self.write_manifest(traversal)
