@@ -14,6 +14,7 @@ from .config import get_config, load_env_file
 from .brain import build_brain_router
 from .intent import route_utterance
 from .jobs import JobQueue, JobWorker
+from .hand import AccessibilityBridge
 from .memory import MemoryStore
 from .planner import create_plan
 from .skills import default_registry
@@ -99,6 +100,14 @@ def main() -> None:
     worker_parser.add_argument("--once", action="store_true")
     jobs_parser = subparsers.add_parser("jobs", help="List queued background jobs")
     jobs_parser.add_argument("--limit", type=int, default=50)
+
+    bridge_parser = subparsers.add_parser("bridge", help="Inspect or control the opt-in local Android bridge")
+    bridge_sub = bridge_parser.add_subparsers(dest="bridge_command", required=True)
+    bridge_sub.add_parser("status", help="Read bridge status")
+    bridge_sub.add_parser("screen", help="Read the current accessibility snapshot")
+    bridge_action = bridge_sub.add_parser("action", help="Perform one approved Android action")
+    bridge_action.add_argument("action", choices=["tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"])
+    bridge_action.add_argument("payload", help="Action payload as a JSON object")
 
     args = parser.parse_args()
     registry = default_registry()
@@ -202,6 +211,30 @@ def main() -> None:
 
     load_env_file()
     try:
+        if args.command == "bridge":
+            token = os.getenv("ZEXA_BRIDGE_TOKEN", "").strip()
+            base_url = os.getenv("ZEXA_BRIDGE_URL", "http://127.0.0.1:8765").strip()
+            bridge = AccessibilityBridge(token, base_url)
+            if args.bridge_command == "status":
+                result = bridge.status()
+            elif args.bridge_command == "screen":
+                result = bridge.screen()
+            else:
+                try:
+                    payload = json.loads(args.payload)
+                except json.JSONDecodeError as exc:
+                    raise ValueError("Bridge action payload must be valid JSON.") from exc
+                if not isinstance(payload, dict):
+                    raise ValueError("Bridge action payload must be a JSON object.")
+                print(f"Requested Android action: {args.action}")
+                confirmation = input("Type APPROVE to perform this action: ")
+                if confirmation != "APPROVE":
+                    print("Android action cancelled.")
+                    return
+                result = bridge.perform(args.action, payload, approve=lambda *_: True)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
+
         mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
         config = None
         if mode != "offline" and os.getenv("GROQ_API_KEY", "").strip():
