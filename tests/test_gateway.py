@@ -74,7 +74,7 @@ class ExecutionGatewayTests(unittest.TestCase):
                 action="files.read", permission="files.read", risk_level="low",
                 payload={}, handler=fail,
             )
-        self.assertEqual(self.audit.recent(1)[0]["event_type"], "execution_failed")
+        self.assertEqual(self.audit.recent(1)[0]["event_type"], "execution_failed")\n        self.assertNotIn("expected failure", str(self.audit.recent(1)[0]["details"]))
 
 
 if __name__ == "__main__":
