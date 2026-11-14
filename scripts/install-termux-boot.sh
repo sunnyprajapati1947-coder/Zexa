@@ -24,6 +24,7 @@ cat > "$BOOT_DIR/00-start-zexa-worker" <<'EOF'
 export PREFIX=/data/data/com.termux/files/usr
 export SVDIR="$PREFIX/var/service"
 export LOGDIR="$PREFIX/var/log"
+export PATH="$PREFIX/bin:$PATH"
 
 if ! pgrep -f "runsvdir $SVDIR" >/dev/null 2>&1; then
   service-daemon start
