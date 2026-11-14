@@ -1,10 +1,10 @@
 # Community skill pack import
 
-Zexa's optional community pack targets **619 candidate Agent Skills** from three pinned upstream repositories:
+Zexa's optional community pack targets **512 candidate Agent Skills** from three pinned upstream repositories:
 
 - `anthropics/knowledge-work-plugins`: 252 `SKILL.md` files at commit `e91a134584eb798bac7fb0379358006a2b63b965`, Apache-2.0.
 - `MicrosoftDocs/Agent-Skills`: 201 `SKILL.md` files at commit `9b16b5c7c7716949c83fc4bbdc448e0ada7f93a3`, CC-BY-4.0.
-- `ellmos-ai/skills`: 166 `SKILL.md` files at commit `8cc83ee0e79499c45ea28219a0b0eadaea57ffe7`, MIT.
+- `Nikoxkx/Agent-Skills`: 59 `SKILL.md` files at commit `d4fd9165fa786d12c3d836273ac8346f5f3275ab`, Apache-2.0.
 
 These are source-tree counts, not a claim that all 453 will pass Zexa's import checks. The importer requires at least 300 unique, valid skills after frontmatter, license, source-pin, path, and duplicate checks. It stores the exact source commit and SHA-256 for each imported file.
 
