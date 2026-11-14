@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -48,6 +49,33 @@ class JobQueueTests(unittest.TestCase):
             self.queue.enqueue("test", {}, run_at=datetime.now())
         with self.assertRaises(ValueError):
             self.queue.enqueue("Run-Shell", {})
+
+    def test_pending_job_can_be_cancelled_but_running_job_cannot(self):
+        pending_id = self.queue.enqueue("test_echo", {"message": "later"})
+        self.assertTrue(self.queue.cancel(pending_id))
+        self.assertEqual(self.queue.list_jobs()[0]["status"], "cancelled")
+        running_id = self.queue.enqueue("test_echo", {"message": "now"})
+        claimed = self.queue.claim_due()
+        self.assertEqual(claimed["id"], running_id)
+        self.assertFalse(self.queue.cancel(running_id))
+
+    def test_failed_job_can_be_retried_with_fresh_attempt_budget(self):
+        job_id = self.queue.enqueue("test_fail", {}, max_attempts=1)
+        worker = JobWorker(self.queue, {"test_fail": lambda _: (_ for _ in ()).throw(RuntimeError("private customer data"))})
+        self.assertEqual(worker.run_once(), "failed")
+        failed = self.queue.list_jobs()[0]
+        self.assertEqual(failed["last_error"], "RuntimeError")
+        self.assertTrue(self.queue.retry(job_id))
+        retried = self.queue.list_jobs()[0]
+        self.assertEqual(retried["status"], "pending")
+        self.assertEqual(retried["attempts"], 0)
+        self.assertEqual(retried["last_error"], "")
+
+    def test_default_database_path_is_stable_and_configurable(self):
+        import os
+        with patch.dict(os.environ, {"ZEXA_JOB_DB": str(Path(self.temp.name) / "configured.db")}):
+            configured = JobQueue()
+        self.assertEqual(configured.path, Path(self.temp.name) / "configured.db")
 
 
 if __name__ == "__main__":
