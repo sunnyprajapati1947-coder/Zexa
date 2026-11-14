@@ -1,20 +1,34 @@
 # Secure Agent Foundation — implementation status
 
-This branch adds two standard-library-only building blocks:
+This branch adds a deny-by-default execution foundation and a first end-to-end integration point.
 
-- `zexa.policy.PermissionPolicy`: explicit permission allowlist, deny-by-default decisions, and approval gates for high/critical risk.
-- `zexa.audit.AuditLog`: local SQLite event persistence with recursive sensitive-key and bearer-token redaction.
+## Implemented
 
-## Current limitations
+- `zexa.policy.PermissionPolicy`: explicit permission allowlist and risk-based approval decisions.
+- `zexa.approvals.ApprovalManager`: short-lived, one-time grants bound to the exact action and canonical payload.
+- `zexa.audit.AuditLog`: local SQLite audit events with sensitive-key and bearer-token redaction.
+- `zexa.gateway.ExecutionGateway`: trusted capability registry; permission, risk and approval validation; execution outcome auditing. Capability risk comes from trusted application configuration, not model output.
+- `zexa bridge action`: Android bridge action requests now pass through the gateway, after the operator enables the action in a local allowlist and confirms the exact displayed action and JSON payload.
 
-These modules are deliberately standalone. They are **not yet wired into every CLI, Android bridge, skill handler, background worker, or external integration**. Do not treat their presence as proof that all Zexa actions are centrally protected.
+## Android action opt-in
 
-The existing `ApprovalManager` remains a separate one-time, action/payload-bound primitive. A production execution gateway still needs to combine:
-1. validated skill/tool schemas;
-2. the permission decision;
-3. an action-bound approval grant for consequential actions;
-4. audit records for allow/deny/start/result/failure;
-5. cancellation, timeout, and idempotency controls.
+Add only the capabilities you intend to allow to the local, untracked `.env` file:
+
+```dotenv
+ZEXA_ALLOWED_ANDROID_ACTIONS=back,home,tap
+# Optional; defaults to ~/.zexa/audit.sqlite3
+ZEXA_AUDIT_DB=/data/data/com.termux/files/home/.zexa/audit.sqlite3
+```
+
+The supported values are `tap,swipe,scroll,back,home,input_text,launch_app`. Each enabled action is classified as high risk and requires a fresh typed confirmation every time. The bridge's local token and Android Accessibility permission are still required. Do not put the bridge token in a command, screenshot, issue, or audit record.
+
+An action omitted from the allowlist is denied. Remove it from `ZEXA_ALLOWED_ANDROID_ACTIONS` to disable it. Audit records are local; inspect the SQLite database only on the user's device.
+
+## Important limitations
+
+This is a first integration, not a claim that every Zexa execution path is protected. The gateway is not yet wired into all skill dispatch, agent orchestration, notification/background workers, browser automation, or future external integrations. Do not connect a new side-effecting tool until it has a trusted capability definition and routes through the gateway.
+
+The permission allowlist currently comes from local environment configuration; a dedicated settings UI, persistent grant/revocation workflow, and per-capability management are future work. The audit log intentionally avoids raw action payloads and exception text, but it is not a complete data-loss-prevention system.
 
 ## Local verification
 
@@ -22,18 +36,16 @@ Run from the repository root:
 
 ```bash
 python -m pip install -e .
-python -m unittest tests.test_policy_audit -v
+python -m compileall -q src tests
 python -m unittest discover -s tests -v
 ```
 
-## Required next integration work
+No claim of successful tests or Android runtime verification should be made until those commands and a real device check have actually completed.
 
-- Route all tool dispatch through one execution gateway.
-- Derive required permissions and risk from trusted registered tool metadata, never from model output.
-- Persist grants and revocations only through an explicit user-controlled settings path.
-- Require fresh confirmation bound to the exact action and canonical arguments.
-- Record audit metadata without storing raw screen contents, credentials, OTPs, or private message bodies.
-- Add integration tests for CLI, worker, and Android bridge denial paths.
+## Remaining integration work
+
+- Route every skill/tool dispatch through the same gateway.
+- Add denial/approval tests for the CLI bridge and background workers.
+- Add cancellation, timeout, idempotency and recovery semantics to long-running tasks.
 - Verify Android behavior on the actual supported handset and OS build.
-
-No imported third-party skill is executable by default. Imported content remains untrusted and must pass provenance, license, dependency, schema, and security review before an operator enables it.
+- Review third-party skills for provenance, license, dependencies, schemas and security before enabling them. Imported content is untrusted and never executable by default.
