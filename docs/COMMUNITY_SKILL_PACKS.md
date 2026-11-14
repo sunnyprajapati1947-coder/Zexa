@@ -1,13 +1,16 @@
 # Community skill pack import
 
-Zexa's optional community pack targets **453 candidate Agent Skills** from two pinned upstream repositories:
+Zexa's optional community pack targets **619 candidate Agent Skills** from three pinned upstream repositories:
 
 - `anthropics/knowledge-work-plugins`: 252 `SKILL.md` files at commit `e91a134584eb798bac7fb0379358006a2b63b965`, Apache-2.0.
 - `MicrosoftDocs/Agent-Skills`: 201 `SKILL.md` files at commit `9b16b5c7c7716949c83fc4bbdc448e0ada7f93a3`, CC-BY-4.0.
+- `ellmos-ai/skills`: 166 `SKILL.md` files at commit `8cc83ee0e79499c45ea28219a0b0eadaea57ffe7`, MIT.
 
 These are source-tree counts, not a claim that all 453 will pass Zexa's import checks. The importer requires at least 300 unique, valid skills after frontmatter, license, source-pin, path, and duplicate checks. It stores the exact source commit and SHA-256 for each imported file.
 
-## Import on Termux
+## Import on GitHub or Termux
+
+The feature branch includes a GitHub Actions workflow that validates the pinned sources, imports only if at least 300 unique skills pass, verifies that all imported entries remain disabled, runs the regression suite, and commits the reference pack to the feature branch. It runs when the importer or importer workflow changes, or by manual workflow dispatch. A failed threshold check creates no imported pack.
 
 From the Zexa repository root:
 
@@ -18,7 +21,7 @@ python scripts/import_community_skills.py --dry-run
 python scripts/import_community_skills.py
 ```
 
-The script uses shallow, blob-filtered clones and sparse checkout. It copies the selected skill directories and upstream license files into `skillpacks/imported/`. The pack is optional and can use substantial storage depending on the upstream reference files.
+The local script uses shallow, blob-filtered clones and sparse checkout. It copies the selected skill directories and upstream license files into `skillpacks/imported/`. The pack is optional and can use substantial storage depending on the upstream reference files.
 
 ## Security and compatibility boundary
 
