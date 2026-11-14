@@ -8,10 +8,16 @@ approval callback; screen reads are read-only.
 from __future__ import annotations
 
 import json
+import re
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 _ALLOWED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
@@ -24,13 +30,15 @@ class AccessibilityBridge:
         base_url: str = "http://127.0.0.1:8765",
         timeout: int = 8,
     ) -> None:
-        if not token or len(token) < 16:
-            raise ValueError("Bridge token must contain at least 16 characters.")
+        if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9._~-]{16,256}", token):
+            raise ValueError("Bridge token must be 16–256 URL-safe characters.")
         parsed = urlparse(base_url)
         if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("Accessibility bridge must use local HTTP loopback only.")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("Bridge URL must not contain credentials, query, or fragment.")
+        if parsed.port != 8765 or parsed.path not in {"", "/"}:
+            raise ValueError("Bridge URL must use port 8765 and have no path.")
         self.token = token
         self.base_url = base_url.rstrip("/")
         self.timeout = max(1, min(int(timeout), 20))
@@ -48,8 +56,12 @@ class AccessibilityBridge:
             method=method,
         )
         try:
-            with urlopen(request, timeout=self.timeout) as response:
-                result = json.loads(response.read(256_000).decode("utf-8"))
+            opener = build_opener(_NoRedirectHandler())
+            with opener.open(request, timeout=self.timeout) as response:
+                raw = response.read(256_001)
+                if len(raw) > 256_000:
+                    raise RuntimeError("Accessibility bridge response exceeded the size limit.")
+                result = json.loads(raw.decode("utf-8"))
         except HTTPError as exc:
             raise RuntimeError(f"Accessibility bridge returned HTTP {exc.code}.") from exc
         except URLError as exc:

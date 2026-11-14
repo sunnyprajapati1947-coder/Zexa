@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Zexa Bridge</string>
+    <string name="accessibility_description">Provides an opt-in, local-only bridge for Zexa. Screen content is read only when requested by the user’s local assistant.</string>
+</resources>

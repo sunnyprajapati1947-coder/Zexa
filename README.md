@@ -39,6 +39,22 @@ The brain router can be used by Python integrations:
 
 The CLI `ask`, `voice`, `converse`, and `plan` commands now use the same brain router. Set `ZEXA_BRAIN_MODE=auto` (default), `online`, or `offline`. In `auto`, Groq is preferred when configured and local inference is used only when the network cannot reach Groq. If no Groq key is configured, `auto` can use a ready local model. Authentication, quota, and model errors are surfaced rather than silently hidden. `plan` and voice intent classification also use the selected brain.
 
+## Android Accessibility Bridge app
+
+The optional companion app is in `app/`. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. Install it manually on the device, open it, enable **Zexa Accessibility Bridge** in Android Accessibility Settings, then return to the app and explicitly start the local bridge. It is OFF by default.
+
+The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is displayed in the app and must be copied into the local `.env` file as `ZEXA_BRIDGE_TOKEN`. Keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots. Accessibility events are not collected or transmitted; screen data is read only when `zexa bridge screen` is explicitly run.
+
+Commands:
+
+    zexa bridge status
+    zexa bridge screen
+    zexa bridge action tap '{"x":300,"y":600}'
+    zexa bridge action back '{}'
+    zexa bridge action input_text '{"text":"Hello"}'
+
+Every action requires typing the exact word `APPROVE` in the CLI. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
+
 ## Human Hand bridge protocol
 
 The future Android companion app must expose these authenticated local endpoints:
