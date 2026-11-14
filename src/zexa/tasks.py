@@ -1,6 +1,8 @@
 """Persistent task history. Tasks are records only; no background execution."""
 from __future__ import annotations
 
+from contextlib import closing
+
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +23,7 @@ class TaskStore:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +42,7 @@ class TaskStore:
         if len(notes) > 4000:
             raise ValueError("Task notes are too long.")
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             cursor = db.execute(
                 "INSERT INTO tasks(title,status,notes,created_at,updated_at) VALUES(?,?,?,?,?)",
                 (title, "pending", notes, now, now),
@@ -51,7 +53,7 @@ class TaskStore:
         if status not in VALID_STATUSES:
             raise ValueError(f"Invalid status. Choose: {', '.join(sorted(VALID_STATUSES))}")
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             if notes is None:
                 cursor = db.execute(
                     "UPDATE tasks SET status=?,updated_at=? WHERE id=?",
@@ -69,7 +71,7 @@ class TaskStore:
     def list_tasks(self, limit: int = 50) -> list[dict[str, object]]:
         if not 1 <= limit <= 200:
             raise ValueError("Task list limit must be between 1 and 200.")
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             rows = db.execute(
                 "SELECT id,title,status,notes,created_at,updated_at "
                 "FROM tasks ORDER BY id DESC LIMIT ?", (limit,)

@@ -1,6 +1,8 @@
 """Central least-privilege policy and privacy-conscious audit log."""
 from __future__ import annotations
 
+from contextlib import closing
+
 import hashlib
 import json
 import os
@@ -54,7 +56,7 @@ class AuditLog:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._clock = clock
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute(
                 """CREATE TABLE IF NOT EXISTS audit_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,7 +94,7 @@ class AuditLog:
             if len(encoded) > 32_000:
                 raise ValueError("Audit payload exceeds the 32 KiB limit.")
             digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             cursor = db.execute(
                 "INSERT INTO audit_events(timestamp, actor, action, status, payload_sha256, detail) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
@@ -103,7 +105,7 @@ class AuditLog:
     def recent(self, limit: int = 20) -> list[dict]:
         if type(limit) is not int or not 1 <= limit <= 100:
             raise ValueError("Audit limit must be between 1 and 100.")
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             rows = db.execute(
                 "SELECT id, timestamp, actor, action, status, payload_sha256, detail "
                 "FROM audit_events ORDER BY id DESC LIMIT ?", (limit,)

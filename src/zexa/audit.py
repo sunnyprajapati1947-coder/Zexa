@@ -5,6 +5,8 @@ stdlib-only and stores data locally in SQLite.
 """
 from __future__ import annotations
 
+from contextlib import closing
+
 import json
 import re
 import sqlite3
@@ -55,7 +57,7 @@ class AuditLog:
     def __init__(self, database: str | Path) -> None:
         self.database = str(Path(database).expanduser())
         Path(self.database).parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """CREATE TABLE IF NOT EXISTS audit_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +93,7 @@ class AuditLog:
             raise ValueError("Audit event labels must be non-empty strings of at most 120 characters.")
         safe_details = redact(details or {})
         encoded = json.dumps(safe_details, ensure_ascii=False, separators=(",", ":"))
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             cursor = connection.execute(
                 """INSERT INTO audit_events
                    (created_at, event_type, actor, action, decision, details_json)
@@ -103,7 +105,7 @@ class AuditLog:
     def recent(self, limit: int = 50) -> list[dict[str, Any]]:
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("limit must be an integer between 1 and 500.")
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             rows = connection.execute(
                 """SELECT id, created_at, event_type, actor, action, decision, details_json
                    FROM audit_events ORDER BY id DESC LIMIT ?""",

@@ -5,6 +5,8 @@ shell command, Python expression, or model-generated code is ever executed.
 """
 from __future__ import annotations
 
+from contextlib import closing
+
 import json
 import os
 import re
@@ -33,7 +35,7 @@ class JobQueue:
         return db
 
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,7 +79,7 @@ class JobQueue:
             raise ValueError("run_at must include a timezone.")
         scheduled = scheduled.astimezone(timezone.utc).isoformat()
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             cursor = db.execute(
                 """INSERT INTO jobs(kind,payload,status,attempts,max_attempts,
                    run_at,created_at,updated_at) VALUES(?,?, 'pending',0,?,?,?,?)""",
@@ -87,7 +89,7 @@ class JobQueue:
 
     def claim_due(self) -> dict | None:
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
                 """SELECT * FROM jobs WHERE status='pending' AND run_at<=?
@@ -114,7 +116,7 @@ class JobQueue:
         if len(result) > 4000:
             result = result[:4000]
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             changed = db.execute(
                 """UPDATE jobs SET status='completed',result=?,last_error='',
                    updated_at=? WHERE id=? AND status='running'""",
@@ -128,7 +130,7 @@ class JobQueue:
         retry = retryable and job["attempts"] < job["max_attempts"]
         status = "pending" if retry else "failed"
         safe_error = error if isinstance(error, str) and _SAFE_ERROR.fullmatch(error) else "JobError"
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute(
                 """UPDATE jobs SET status=?,last_error=?,updated_at=?
                    WHERE id=? AND status='running'""",
@@ -141,7 +143,7 @@ class JobQueue:
             raise ValueError("lease_seconds must be between 30 and 86400.")
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=lease_seconds)).isoformat()
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             cursor = db.execute(
                 """UPDATE jobs SET status=CASE WHEN attempts<max_attempts
                        THEN 'pending' ELSE 'failed' END, updated_at=?
@@ -155,7 +157,7 @@ class JobQueue:
         if type(job_id) is not int or job_id < 1:
             raise ValueError("job_id must be a positive integer.")
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             changed = db.execute(
                 "UPDATE jobs SET status='cancelled',updated_at=? WHERE id=? AND status='pending'",
                 (now, job_id),
@@ -167,7 +169,7 @@ class JobQueue:
         if type(job_id) is not int or job_id < 1:
             raise ValueError("job_id must be a positive integer.")
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             changed = db.execute(
                 """UPDATE jobs SET status='pending',attempts=0,last_error='',
                    run_at=?,updated_at=? WHERE id=? AND status='failed'""",
@@ -178,7 +180,7 @@ class JobQueue:
     def list_jobs(self, limit: int = 50) -> list[dict]:
         if not 1 <= limit <= 200:
             raise ValueError("Job list limit must be between 1 and 200.")
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             rows = db.execute(
                 """SELECT id,kind,status,attempts,max_attempts,run_at,result,
                    last_error,created_at,updated_at FROM jobs ORDER BY id DESC LIMIT ?""",

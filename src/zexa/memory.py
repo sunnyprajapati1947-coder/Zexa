@@ -5,6 +5,8 @@ not scrape chats, contacts, files, or device data.
 """
 from __future__ import annotations
 
+from contextlib import closing
+
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,7 +24,7 @@ class MemoryStore:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS memories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +42,7 @@ class MemoryStore:
         if not value or len(value) > 4000:
             raise ValueError("Memory value must contain 1–4000 characters.")
         now = datetime.now(timezone.utc).isoformat()
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.execute("""
                 INSERT INTO memories(key, value, created_at, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -51,7 +53,7 @@ class MemoryStore:
             return int(row["id"])
 
     def recall(self, key: str) -> dict[str, str] | None:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             row = db.execute(
                 "SELECT key, value, created_at, updated_at FROM memories WHERE key=?",
                 (key.strip(),),
@@ -59,18 +61,18 @@ class MemoryStore:
         return dict(row) if row else None
 
     def list_memories(self) -> list[dict[str, str]]:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             rows = db.execute(
                 "SELECT key, value, created_at, updated_at FROM memories ORDER BY key"
             ).fetchall()
         return [dict(row) for row in rows]
 
     def forget(self, key: str) -> bool:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             cursor = db.execute("DELETE FROM memories WHERE key=?", (key.strip(),))
             return cursor.rowcount > 0
 
     def clear(self) -> int:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             cursor = db.execute("DELETE FROM memories")
             return cursor.rowcount

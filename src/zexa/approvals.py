@@ -10,6 +10,7 @@ import hashlib
 import json
 import secrets
 import time
+import threading
 
 
 @dataclass(frozen=True)
@@ -52,29 +53,32 @@ class ApprovalManager:
         self.ttl_seconds = ttl_seconds
         self._clock = clock
         self._grants: dict[str, ApprovalGrant] = {}
+        self._lock = threading.Lock()
 
     def issue(self, action: str, payload: dict, user_confirmed: bool) -> ApprovalGrant:
         if user_confirmed is not True:
             raise PermissionError("Explicit user confirmation is required.")
         fingerprint = _fingerprint(action, payload)
-        now = self._clock()
-        self._purge(now)
-        token = secrets.token_urlsafe(32)
-        grant = ApprovalGrant(token, action, fingerprint, now + self.ttl_seconds)
-        self._grants[token] = grant
-        return grant
+        with self._lock:
+            now = self._clock()
+            self._purge(now)
+            token = secrets.token_urlsafe(32)
+            grant = ApprovalGrant(token, action, fingerprint, now + self.ttl_seconds)
+            self._grants[token] = grant
+            return grant
 
     def consume(self, token: str, action: str, payload: dict) -> bool:
         if not isinstance(token, str):
-            return False
-        grant = self._grants.pop(token, None)
-        if grant is None or grant.expires_at <= self._clock():
             return False
         try:
             fingerprint = _fingerprint(action, payload)
         except (TypeError, ValueError):
             return False
-        return grant.action == action and secrets.compare_digest(grant.payload_sha256, fingerprint)
+        with self._lock:
+            grant = self._grants.pop(token, None)
+            if grant is None or grant.expires_at <= self._clock():
+                return False
+            return grant.action == action and secrets.compare_digest(grant.payload_sha256, fingerprint)
 
     def _purge(self, now: float) -> None:
         self._grants = {

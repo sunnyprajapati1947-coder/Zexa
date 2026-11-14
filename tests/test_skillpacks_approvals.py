@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -19,6 +20,27 @@ class ApprovalManagerTests(unittest.TestCase):
         grant = manager.issue("write_file", payload, True)
         self.assertTrue(manager.consume(grant.token, "write_file", payload))
         self.assertFalse(manager.consume(grant.token, "write_file", payload))
+
+    def test_concurrent_consumption_allows_only_one_request(self):
+        manager = ApprovalManager()
+        payload = {"action": "tap", "x": 10, "y": 20}
+        grant = manager.issue("android.tap", payload, True)
+        barrier = threading.Barrier(3)
+        results = []
+
+        def consume():
+            barrier.wait()
+            results.append(manager.consume(grant.token, "android.tap", payload))
+
+        threads = [threading.Thread(target=consume) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        barrier.wait()
+        for thread in threads:
+            thread.join()
+
+        self.assertEqual(results.count(True), 1)
+        self.assertEqual(results.count(False), 1)
 
     def test_confirmation_is_required(self):
         with self.assertRaises(PermissionError):
