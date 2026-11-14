@@ -407,12 +407,17 @@ def main() -> None:
             return
 
         mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
-        groq_config = (
-            get_groq_config() if os.getenv("GROQ_API_KEY", "").strip() else None
-        )
-        xai_config = (
-            get_xai_config() if os.getenv("XAI_API_KEY", "").strip() else None
-        )
+        groq_config = None
+        xai_config = None
+        if mode in {"auto", "online"}:
+            if os.getenv("GROQ_API_KEY", "").strip():
+                groq_config = get_groq_config()
+            if os.getenv("XAI_API_KEY", "").strip():
+                xai_config = get_xai_config()
+        elif mode == "grok" and os.getenv("XAI_API_KEY", "").strip():
+            xai_config = get_xai_config()
+        elif mode == "groq" and os.getenv("GROQ_API_KEY", "").strip():
+            groq_config = get_groq_config()
         brain = build_brain_router(
             groq_config,
             mode,
