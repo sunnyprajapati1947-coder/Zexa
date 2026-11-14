@@ -17,6 +17,7 @@ from .approvals import ApprovalManager
 from .audit import AuditLog
 from .gateway import ExecutionGateway
 from .policy import PermissionPolicy
+from .execution import SkillExecutionEngine, brain_skill_handlers, skill_capabilities
 from .brain import build_brain_router
 from .intent import route_utterance
 from .jobs import JobQueue, JobWorker
@@ -66,6 +67,13 @@ def main() -> None:
     research_parser = subparsers.add_parser("research", help="Search public web snippets and summarize with source references")
     research_parser.add_argument("--limit", type=int, default=5)
     research_parser.add_argument("query", nargs="+", help="Research question")
+
+    skill_parser = subparsers.add_parser("skill", help="Run one registered skill through the execution gateway")
+    skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
+    skill_sub.add_parser("list", help="List available skill contracts")
+    skill_run = skill_sub.add_parser("run", help="Run one skill with a JSON input object")
+    skill_run.add_argument("name")
+    skill_run.add_argument("payload", help="Input JSON object matching the skill schema")
 
     skills_parser = subparsers.add_parser("skills", help="List registered skills")
     skills_parser.add_argument("--json", action="store_true", help="Show skill schemas, permissions, risk and budgets")
@@ -163,6 +171,9 @@ def main() -> None:
             print("\nZexa background worker stopped.")
         return
 
+    if args.command == "skill" and args.skill_command == "list":
+        print(json.dumps(registry.metadata(), ensure_ascii=False, indent=2))
+        return
     if args.command == "skills":
         if args.json:
             print(json.dumps(registry.metadata(), ensure_ascii=False, indent=2))
@@ -299,6 +310,52 @@ def main() -> None:
         elif mode == "online":
             config = get_config()
         brain = build_brain_router(config, mode)
+        if args.command == "skill" and args.skill_command == "run":
+            try:
+                payload = json.loads(args.payload)
+            except json.JSONDecodeError as exc:
+                raise ValueError("Skill payload must be valid JSON.") from exc
+            if not isinstance(payload, dict):
+                raise ValueError("Skill payload must be a JSON object.")
+            selected = registry.get(args.name)
+            explicit_permissions = {
+                item.strip().lower()
+                for item in os.getenv("ZEXA_SKILL_PERMISSIONS", "").split(",")
+                if item.strip()
+            }
+            grants = {
+                f"skill.execute:{skill.name}"
+                for skill in registry.list()
+            } | explicit_permissions
+            policy = PermissionPolicy(grants)
+            audit_path = Path(
+                os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+            ).expanduser()
+            gateway = ExecutionGateway(
+                policy,
+                ApprovalManager(ttl_seconds=60),
+                AuditLog(audit_path),
+                capabilities=skill_capabilities(registry),
+            )
+            engine = SkillExecutionEngine(
+                registry, gateway, brain_skill_handlers(registry, brain),
+            )
+            approval_token = None
+            if selected.risk_level in {"high", "critical"}:
+                print(f"Skill: {selected.name} (risk: {selected.risk_level})")
+                print("Exact input:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
+                confirmation = input("Review the exact input. Type APPROVE to continue: ")
+                if confirmation != "APPROVE":
+                    print("Skill execution cancelled.")
+                    return
+                approval_token = engine.issue_approval(
+                    selected.name, payload, user_confirmed=True,
+                ).token
+            result = engine.execute(
+                selected.name, payload, approval_token=approval_token,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
         if args.command == "research":
             query = " ".join(args.query)
             results = DuckDuckGoSearch().search(query, limit=args.limit)
