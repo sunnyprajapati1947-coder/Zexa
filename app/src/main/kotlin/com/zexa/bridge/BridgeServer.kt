@@ -1,0 +1,116 @@
+package com.zexa.bridge
+
+import android.util.Base64
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.security.MessageDigest
+import java.nio.charset.StandardCharsets
+
+class BridgeServer(
+    private val token: String,
+    private val service: ZexaAccessibilityService,
+) {
+    @Volatile private var running = false
+    private var server: ServerSocket? = null
+    private var thread: Thread? = null
+
+    fun start() {
+        if (running) return
+        running = true
+        thread = Thread({
+            try {
+                val socketServer = ServerSocket(8765, 8, InetAddress.getByName("127.0.0.1"))
+                server = socketServer
+                while (running) {
+                    val socket = socketServer.accept()
+                    Thread({ handle(socket) }, "zexa-bridge-client").start()
+                }
+            } catch (_: Exception) {
+                // Server is intentionally silent; status is visible in the app.
+            } finally {
+                running = false
+                try { server?.close() } catch (_: Exception) {}
+                server = null
+            }
+        }, "zexa-bridge-server").apply { isDaemon = true; start() }
+    }
+
+    fun stop() {
+        running = false
+        try { server?.close() } catch (_: Exception) {}
+        server = null
+    }
+
+    private fun handle(socket: Socket) {
+        socket.use { client ->
+            client.soTimeout = 5000
+            val input = client.getInputStream()
+            val reader = BufferedReader(InputStreamReader(input, StandardCharsets.US_ASCII))
+            val requestLine = reader.readLine() ?: return
+            val parts = requestLine.split(" ")
+            if (parts.size != 3) return respond(client, 400, JSONObject().put("error", "Bad request"))
+            val method = parts[0]
+            val path = parts[1]
+            val headers = mutableMapOf<String, String>()
+            while (true) {
+                val line = reader.readLine() ?: return
+                if (line.isEmpty()) break
+                val separator = line.indexOf(':')
+                if (separator > 0) headers[line.substring(0, separator).trim().lowercase()] =
+                    line.substring(separator + 1).trim()
+            }
+            val provided = headers["authorization"]?.removePrefix("Bearer ") ?: ""
+            if (!MessageDigest.isEqual(token.toByteArray(), provided.toByteArray())) {
+                return respond(client, 401, JSONObject().put("error", "Unauthorized"))
+            }
+            val response = try {
+                when {
+                    method == "GET" && path == "/v1/status" -> service.statusJson()
+                    method == "GET" && path == "/v1/screen" -> service.screenJson()
+                    method == "POST" && path == "/v1/action" -> {
+                        val length = headers["content-length"]?.toIntOrNull() ?: 0
+                        require(length in 1..16000)
+                        val body = ByteArray(length)
+                        var offset = 0
+                        while (offset < length) {
+                            val read = input.read(body, offset, length - offset)
+                            if (read < 0) error("Incomplete request body.")
+                            offset += read
+                        }
+                        val json = JSONObject(String(body, StandardCharsets.UTF_8))
+                        val action = json.optString("action", "")
+                        val payload = json.optJSONObject("payload") ?: JSONObject()
+                        service.perform(action, payload)
+                    }
+                    else -> return respond(client, 404, JSONObject().put("error", "Not found"))
+                }
+            } catch (error: Exception) {
+                return respond(client, 400, JSONObject().put("error", error.message ?: "Invalid request"))
+            }
+            respond(client, 200, response)
+        }
+    }
+
+    private fun respond(socket: Socket, status: Int, body: JSONObject) {
+        val bytes = body.toString().toByteArray(StandardCharsets.UTF_8)
+        val reason = when (status) {
+            200 -> "OK"
+            400 -> "Bad Request"
+            401 -> "Unauthorized"
+            else -> "Not Found"
+        }
+        val header = "HTTP/1.1 $status $reason\r\n" +
+            "Content-Type: application/json; charset=utf-8\r\n" +
+            "Content-Length: ${bytes.size}\r\n" +
+            "Connection: close\r\n\r\n"
+        socket.getOutputStream().apply {
+            write(header.toByteArray(StandardCharsets.US_ASCII))
+            write(bytes)
+            flush()
+        }
+    }
+}
