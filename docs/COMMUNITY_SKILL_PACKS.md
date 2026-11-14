@@ -12,16 +12,14 @@ These are source-tree counts, not a claim that all 512 will pass Zexa's import c
 
 The feature branch includes a GitHub Actions workflow that validates the pinned sources, imports only if at least 300 unique skills pass, verifies that all imported entries remain disabled, runs the regression suite, and commits the reference pack to the feature branch. It runs when the importer or importer workflow changes, or by manual workflow dispatch. A failed threshold check creates no imported pack.
 
-From the Zexa repository root:
+Inspect the committed pack from the CLI:
 
 ```bash
-pkg install git
-source .venv/bin/activate
-python scripts/import_community_skills.py --dry-run
-python scripts/import_community_skills.py
+zexa skillpacks status
+zexa skillpacks list --limit 20
 ```
 
-The local script uses shallow, blob-filtered clones and sparse checkout. It copies the selected skill directories and upstream license files into `skillpacks/imported/`. The pack is optional and can use substantial storage depending on the upstream reference files.
+The manifest loader validates the source pins, licenses, SHA-256 values, unique names, and disabled state. It does not execute or enable imported content. The importer uses shallow, blob-filtered clones pinned to exact commits, then copies the validated skill directories and upstream license files into `skillpacks/imported/`. The pack can use substantial storage depending on the upstream reference files.
 
 ## Security and compatibility boundary
 
@@ -29,7 +27,7 @@ The local script uses shallow, blob-filtered clones and sparse checkout. It copi
 - Zexa copies their text and supporting reference files as untrusted data.
 - No imported shell scripts, hooks, MCP servers, commands, or other executable files are run by the importer.
 - Source repositories are pinned to immutable full commit SHAs.
-- The importer rejects missing/unapproved licenses, malformed frontmatter, oversized files, path escapes, invalid names, and duplicate names.
+- The importer rejects missing/unapproved licenses, malformed frontmatter, oversized files, path escapes, invalid names, duplicate names, and content outside Zexa safe import scope.
 - Potentially unsafe patterns are flagged for manual review; static checks are not a security guarantee.
 - Third-party tools/connectors referenced by a skill are not installed or enabled.
 - A skill is not an executable Zexa capability until a native handler, permission policy, integration, tests, and an explicit enablement path are implemented.
