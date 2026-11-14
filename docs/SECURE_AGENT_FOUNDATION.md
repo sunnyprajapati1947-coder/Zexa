@@ -49,3 +49,16 @@ No claim of successful tests or Android runtime verification should be made unti
 - Add cancellation, timeout, idempotency and recovery semantics to long-running tasks.
 - Verify Android behavior on the actual supported handset and OS build.
 - Review third-party skills for provenance, license, dependencies, schemas and security before enabling them. Imported content is untrusted and never executable by default.
+
+
+## Unified skill execution engine
+
+`zexa skill list` prints the registered skill contracts. Run a pure-LLM draft or analysis skill with a JSON object matching its declared input schema:
+
+```bash
+zexa skill run proposal_writer '{"service":"Website design","client_needs":"A small business website","scope_timeline_pricing":"Scope and pricing to be confirmed"}'
+```
+
+The command validates the skill input, calls only the selected trusted brain-backed handler, requires a JSON response matching the declared output schema, and routes the invocation through `ExecutionGateway`. It does not send messages, publish content, make payments, or execute shell commands. High/critical skills require a fresh typed approval. Additional skill permissions must be explicitly listed in the local `ZEXA_SKILL_PERMISSIONS` environment variable.
+
+The engine API is in `zexa.execution.SkillExecutionEngine`. Application code supplies trusted handlers; model output cannot register a handler or provide executable code. `skill_capabilities(registry)` creates the gateway's trusted action/permission/risk map from the registry.
