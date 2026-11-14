@@ -18,10 +18,10 @@ ALLOWED_LICENSES = {
 }
 _NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 _EXCLUDED_TOPICS = re.compile(
-    r"(?i)\\b(?:firearms?|guns?|ammunition|explosives?|weapons?|knives?|"
+    r"(?i)\b(?:firearms?|guns?|ammunition|explosives?|weapons?|knives?|"
     r"self[- ]defen[cs]e weapons?|narcotics?|recreational drugs?|"
     r"controlled substances?|casino|gambling|sports betting|betting strategy|"
-    r"prediction markets?|dangerous challenges?|stunts?)\\b"
+    r"prediction markets?|dangerous challenges?|stunts?)\b"
 )
 _UNSAFE_PATTERNS = (
     re.compile(r"(?im)^\s*allowed-tools\s*:\s*.*\bBash\b"),
