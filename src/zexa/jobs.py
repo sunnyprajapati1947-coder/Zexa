@@ -17,6 +17,7 @@ from typing import Callable
 
 JobHandler = Callable[[dict], str]
 _KIND = re.compile(r"^[a-z][a-z0-9_]{0,49}$")
+_SAFE_ERROR = re.compile(r"^[A-Za-z][A-Za-z0-9_.]{0,79}$")
 
 
 class JobQueue:
@@ -126,11 +127,12 @@ class JobQueue:
         now = datetime.now(timezone.utc).isoformat()
         retry = retryable and job["attempts"] < job["max_attempts"]
         status = "pending" if retry else "failed"
+        safe_error = error if isinstance(error, str) and _SAFE_ERROR.fullmatch(error) else "JobError"
         with self._connect() as db:
             db.execute(
                 """UPDATE jobs SET status=?,last_error=?,updated_at=?
                    WHERE id=? AND status='running'""",
-                (status, str(error)[:1000], now, job["id"]),
+                (status, safe_error, now, job["id"]),
             )
         return status
 
