@@ -8,9 +8,11 @@ from .skills import SkillRegistry
 
 
 def create_plan(config: dict[str, str] | None, registry: SkillRegistry, goal: str, brain=None) -> list[dict[str, str]]:
+    if not isinstance(goal, str):
+        raise ValueError("Goal must be text.")
     goal = goal.strip()
-    if not goal:
-        raise ValueError("A non-empty goal is required.")
+    if not goal or len(goal) > 4000:
+        raise ValueError("Goal must contain 1–4000 characters.")
     available = [{"name": s.name, "description": s.description} for s in registry.list()]
     messages = [
         {
@@ -32,14 +34,16 @@ def create_plan(config: dict[str, str] | None, registry: SkillRegistry, goal: st
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise RuntimeError("Planner response was not valid JSON; no plan was accepted.") from exc
-    steps = payload.get("steps") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict) or set(payload) != {"steps"}:
+        raise RuntimeError("Planner response must contain exactly one top-level steps field.")
+    steps = payload.get("steps")
     if not isinstance(steps, list) or not 1 <= len(steps) <= 6:
         raise RuntimeError("Planner returned an invalid number of steps.")
     validated: list[dict[str, str]] = []
     allowed = {skill.name for skill in registry.list()}
     for step in steps:
-        if not isinstance(step, dict):
-            raise RuntimeError("Planner returned a malformed step.")
+        if not isinstance(step, dict) or set(step) != {"skill", "task"}:
+            raise RuntimeError("Planner returned a malformed step or unexpected fields.")
         name, task = step.get("skill"), step.get("task")
         if not isinstance(name, str) or name not in allowed:
             raise RuntimeError("Planner selected a skill that is not registered.")
