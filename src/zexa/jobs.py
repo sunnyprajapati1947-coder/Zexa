@@ -207,4 +207,5 @@ class JobWorker:
         except Exception as exc:
             # Exception messages can contain user text, provider responses, or secrets.
             # Persist only the exception class, never its potentially sensitive message.
-            return self.queue.fail(job, type(exc).__name__)
+            retryable = not isinstance(exc, (PermissionError, ValueError, KeyError, TypeError))
+            return self.queue.fail(job, type(exc).__name__, retryable=retryable)
