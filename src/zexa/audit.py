@@ -53,8 +53,8 @@ class AuditLog:
     """Append-only event log; callers should not store raw screen or message text."""
 
     def __init__(self, database: str | Path) -> None:
-        self.database = str(database)
-        Path(self.database).expanduser().parent.mkdir(parents=True, exist_ok=True)
+        self.database = str(Path(database).expanduser())
+        Path(self.database).parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
             connection.execute(
                 """CREATE TABLE IF NOT EXISTS audit_events (
