@@ -120,9 +120,9 @@ class JobQueue:
             if changed != 1:
                 raise ValueError("Job is not currently running.")
 
-    def fail(self, job: dict, error: str) -> str:
+    def fail(self, job: dict, error: str, retryable: bool = True) -> str:
         now = datetime.now(timezone.utc).isoformat()
-        retry = job["attempts"] < job["max_attempts"]
+        retry = retryable and job["attempts"] < job["max_attempts"]
         status = "pending" if retry else "failed"
         with self._connect() as db:
             db.execute(
@@ -169,7 +169,7 @@ class JobWorker:
             return "idle"
         handler = self.handlers.get(job["kind"])
         if handler is None:
-            self.queue.fail(job, f"No handler registered for job kind: {job['kind']}")
+            self.queue.fail(job, f"No handler registered for job kind: {job['kind']}", retryable=False)
             return "failed"
         try:
             result = handler(job["payload"])
