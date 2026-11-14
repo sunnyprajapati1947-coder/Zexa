@@ -67,7 +67,11 @@ class ZexaAccessibilityService : AccessibilityService() {
                     .put("left", bounds.left).put("top", bounds.top)
                     .put("right", bounds.right).put("bottom", bounds.bottom))
             nodes.put(item)
-            for (i in 0 until node.childCount) visit(node.getChild(i), depth + 1)
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                visit(child, depth + 1)
+                child?.recycle()
+            }
         }
         visit(root, 0)
         val result = JSONObject()
