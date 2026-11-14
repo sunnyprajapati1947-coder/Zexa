@@ -151,7 +151,7 @@ Never commit .env, API keys, bridge tokens, or personal data.
 
 ## Automated checks
 
-GitHub Actions runs the unit-test suite and byte-compilation on Python 3.11, 3.12, and 3.13 for pushes and pull requests.
+GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and the unit-test suite on Python 3.11, 3.12, and 3.13. A separate scheduled CodeQL workflow scans Python security queries. Dependabot checks Python and GitHub Actions updates. These CI checks do not replace Android device testing or repository-level secret-scanning settings.
 
 ## Development checks
 
