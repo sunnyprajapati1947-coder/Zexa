@@ -26,6 +26,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    @Synchronized
     fun refreshBridge() {
         val enabled = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
             .getBoolean("bridge_enabled", false)
