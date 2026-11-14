@@ -1,9 +1,9 @@
 package com.zexa.bridge
 
-import android.util.Base64
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.BufferedInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -48,17 +48,19 @@ class BridgeServer(
     private fun handle(socket: Socket) {
         socket.use { client ->
             client.soTimeout = 5000
-            val input = client.getInputStream()
-            val reader = BufferedReader(InputStreamReader(input, StandardCharsets.US_ASCII))
-            val requestLine = reader.readLine() ?: return
+            val input = BufferedInputStream(client.getInputStream())
+            val requestLine = readHttpLine(input) ?: return
             val parts = requestLine.split(" ")
             if (parts.size != 3) return respond(client, 400, JSONObject().put("error", "Bad request"))
             val method = parts[0]
             val path = parts[1]
             val headers = mutableMapOf<String, String>()
+            var headerCount = 0
             while (true) {
-                val line = reader.readLine() ?: return
+                val line = readHttpLine(input) ?: return
                 if (line.isEmpty()) break
+                headerCount++
+                require(headerCount <= 32) { "Too many request headers." }
                 val separator = line.indexOf(':')
                 if (separator > 0) headers[line.substring(0, separator).trim().lowercase()] =
                     line.substring(separator + 1).trim()
@@ -93,6 +95,23 @@ class BridgeServer(
             }
             respond(client, 200, response)
         }
+    }
+
+    private fun readHttpLine(input: InputStream): String? {
+        val output = ByteArrayOutputStream()
+        while (true) {
+            val value = input.read()
+            if (value < 0) {
+                if (output.size() == 0) return null
+                break
+            }
+            if (value == 10) break
+            output.write(value)
+            require(output.size() <= 8192) { "HTTP header line is too long." }
+        }
+        val bytes = output.toByteArray()
+        val length = if (bytes.isNotEmpty() && bytes.last() == 13.toByte()) bytes.size - 1 else bytes.size
+        return String(bytes, 0, length, StandardCharsets.US_ASCII)
     }
 
     private fun respond(socket: Socket, status: Int, body: JSONObject) {
