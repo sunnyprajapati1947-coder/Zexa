@@ -12,7 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class ZexaAccessibilityService : AccessibilityService() {
-    private var bridgeServer: BridgeServer? = null
+    @Volatile private var bridgeServer: BridgeServer? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
