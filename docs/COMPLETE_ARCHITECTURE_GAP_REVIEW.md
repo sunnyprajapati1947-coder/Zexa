@@ -224,3 +224,11 @@ This addendum records changes on `feature/secure-agent-foundation`; it does not 
 ### Latest branch acceptance evidence
 
 The secure-execution and worker CI run must pass compilation and the complete unit suite on Python 3.11, 3.12, and 3.13. This does not count as Android device validation.
+
+
+### Additional verified GitHub branch work
+
+- Pinned community import completed in GitHub Actions: 320 unique reference skills imported from three immutable source commits; manifest reports 320 disabled and zero enabled. One entry is flagged for manual review. The importer rejects entries outside its safe import scope, verifies licenses and SHA-256 provenance, and never runs imported scripts.
+- Android bridge server now limits concurrent clients, exposes readiness based on the actual bound server, retries startup after a bind failure, and refuses the UI start action until the AccessibilityService is connected.
+- Pure bridge validation rules are covered by JVM unit tests; Android CI now runs `:app:testDebugUnitTest` before assembling the debug APK.
+- GitHub Actions major-version updates proposed by the five open Dependabot PRs are included together on this feature branch to avoid conflicting workflow edits. The original Dependabot PRs remain separate open PRs until the mainline change is merged or they are closed.
