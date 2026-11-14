@@ -173,9 +173,11 @@ def load_imported_manifest(path: Path | None = None) -> dict:
     skills = data.get("skills")
     if not isinstance(skills, list) or len(skills) > MAX_SKILLS_PER_SCAN:
         raise ValueError("Imported skill manifest has an invalid skill list.")
-    if data.get("imported_count") != len(skills):
+    if type(data.get("imported_count")) is not int or data.get("imported_count") != len(skills):
         raise ValueError("Imported skill manifest count does not match its entries.")
-    if data.get("enabled_count") != 0:
+    if not isinstance(data.get("sources"), list):
+        raise ValueError("Imported skill manifest source list is invalid.")
+    if type(data.get("enabled_count")) is not int or data.get("enabled_count") != 0:
         raise ValueError("Imported skill packs must remain disabled by default.")
 
     seen: set[str] = set()
@@ -199,11 +201,17 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             raise ValueError("Imported skill manifest contains an invalid source repository.")
         if not isinstance(source_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", source_commit):
             raise ValueError("Imported skill manifest contains an invalid source commit.")
-        if not isinstance(source_path, str) or not source_path or source_path.startswith("/"):
+        if (
+            not isinstance(source_path, str)
+            or not source_path
+            or source_path.startswith("/")
+            or "\\\\" in source_path
+            or "\\x00" in source_path
+        ):
             raise ValueError("Imported skill manifest contains an invalid source path.")
-        if ".." in Path(source_path).parts:
+        if ".." in source_path.split("/") or ".." in Path(source_path).parts:
             raise ValueError("Imported skill manifest contains a path traversal.")
-        if license_id not in ALLOWED_LICENSES:
+        if not isinstance(license_id, str) or license_id not in ALLOWED_LICENSES:
             raise ValueError("Imported skill manifest contains an unapproved license.")
         if not isinstance(sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", sha256):
             raise ValueError("Imported skill manifest contains an invalid content hash.")
@@ -211,7 +219,9 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             raise ValueError("Imported skill references cannot be enabled by this loader.")
         if not isinstance(item.get("review_required"), bool):
             raise ValueError("Imported skill manifest has invalid review metadata.")
-        if not isinstance(item.get("warnings"), list):
+        if not isinstance(item.get("warnings"), list) or not all(
+            isinstance(warning, str) for warning in item["warnings"]
+        ):
             raise ValueError("Imported skill manifest has invalid warning metadata.")
         seen.add(name)
 
