@@ -6,6 +6,7 @@ source URLs. It does not fetch arbitrary pages or execute page-provided content.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -141,7 +142,7 @@ def summarize_research(brain, query: str, results: list[SearchResult]) -> str:
             "role": "user",
             "content": (
                 f"Research question: {query}\nSearch results (titles/snippets only): "
-                + __import__("json").dumps(sources, ensure_ascii=False)
+                + json.dumps(sources, ensure_ascii=False)
             ),
         },
     ]
