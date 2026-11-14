@@ -50,23 +50,29 @@ def run(command: list[str], cwd: Path | None = None) -> str:
     return result.stdout
 
 
-def clone_sparse(source: dict, destination: Path) -> list[str]:
+def clone_pinned(source: dict, destination: Path) -> list[str]:
     url = f"https://github.com/{source['repo']}.git"
     run(["git", "clone", "--filter=blob:none", "--no-checkout", "--depth", "1", url, str(destination)])
     run(["git", "fetch", "--depth", "1", "origin", source["commit"]], cwd=destination)
     paths = run(["git", "ls-tree", "-r", "--name-only", source["commit"]], cwd=destination).splitlines()
-    skill_files = sorted(p for p in paths if p.lower().endswith("/skill.md") or p.lower() == "skill.md")
+    skill_files = sorted(
+        p for p in paths
+        if p.lower().endswith("/skill.md") or p.lower() == "skill.md"
+    )
     if len(skill_files) < source["expected_skill_files"]:
         raise RuntimeError(
             f"{source['repo']} returned {len(skill_files)} skills; "
             f"expected at least {source['expected_skill_files']}."
         )
-    directories = sorted({str(Path(p).parent).replace("\\", "/") for p in skill_files})
-    run(["git", "sparse-checkout", "init", "--cone"], cwd=destination)
-    run(["git", "sparse-checkout", "set", *directories], cwd=destination)
+    # A complete pinned checkout avoids sparse-checkout edge cases where a
+    # nested skill directory is listed but omitted from the working tree.
     run(["git", "checkout", "--detach", source["commit"]], cwd=destination)
+    missing = [relative for relative in skill_files if not (destination / relative).is_file()]
+    if missing:
+        raise RuntimeError(
+            f"{source['repo']} checkout omitted {len(missing)} indexed SKILL.md files."
+        )
     return skill_files
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Import a pinned 600+ skill reference pack.")
@@ -85,7 +91,7 @@ def main() -> int:
         for source in SOURCES:
             repo_slug = source["repo"].replace("/", "__").lower()
             checkout = temp_root / repo_slug
-            skill_files = clone_sparse(source, checkout)
+            skill_files = clone_pinned(source, checkout)
             license_file = checkout / "LICENSE"
             if not license_file.is_file():
                 raise RuntimeError(f"Missing source LICENSE file: {source['repo']}")
