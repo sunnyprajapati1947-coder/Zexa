@@ -45,7 +45,7 @@ def _explicit_torch_request(transcript: str) -> str | None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="zexa", description="Zexa — Groq-only assistant")
+    parser = argparse.ArgumentParser(prog="zexa", description="Zexa — dual-brain phone-first assistant")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     ask_parser = subparsers.add_parser("ask", help="Ask Zexa a question")
@@ -63,8 +63,8 @@ def main() -> None:
     subparsers.add_parser("listen", help="Capture one speech transcript (microphone starts only when invoked)")
     speak_parser = subparsers.add_parser("speak", help="Speak text using Android text-to-speech")
     speak_parser.add_argument("text", nargs="+")
-    subparsers.add_parser("voice", help="Capture one utterance, send its transcript to Groq, and speak the reply")
-    subparsers.add_parser("converse", help="Start a user-controlled continuous voice conversation with Groq")
+    subparsers.add_parser("voice", help="Capture one utterance, send it to the selected brain, and speak the reply")
+    subparsers.add_parser("converse", help="Start a user-controlled continuous voice conversation")
 
     mem_parser = subparsers.add_parser("memory", help="Manage explicitly saved local memories")
     mem_sub = mem_parser.add_subparsers(dest="memory_command", required=True)
@@ -135,7 +135,7 @@ def main() -> None:
         print("Zexa background worker started. Press Ctrl+C to stop.")
         try:
             while True:
-                if worker.run_once() == "idle":
+                if worker.run_once() in {"idle", "pending"}:
                     time.sleep(args.poll_seconds)
         except KeyboardInterrupt:
             print("\nZexa background worker stopped.")
