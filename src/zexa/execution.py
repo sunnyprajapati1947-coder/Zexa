@@ -147,3 +147,31 @@ def brain_skill_handlers(registry: SkillRegistry, brain) -> dict[str, SkillHandl
             return handle
         handlers[skill.name] = make_handler(skill)
     return handlers
+
+
+
+def execute_background_skill(
+    engine: SkillExecutionEngine,
+    registry: SkillRegistry,
+    job_payload: dict[str, Any],
+    notify: Callable[[str], Any] | None = None,
+) -> str:
+    """Execute one queued low-risk skill; background jobs cannot request approval."""
+    import json
+
+    if not isinstance(job_payload, dict) or set(job_payload) != {"name", "input"}:
+        raise ValueError("Background skill job must contain exactly name and input.")
+    name = job_payload["name"]
+    if not isinstance(name, str):
+        raise ValueError("Background skill name must be a string.")
+    skill = registry.get(name)
+    if skill.risk_level != "low":
+        raise ExecutionDenied(
+            "Only low-risk skills may run in the background; consequential work needs interactive approval."
+        )
+    validated = registry.validate_payload(skill.name, job_payload["input"])
+    result = engine.execute(skill.name, validated, actor="background_worker")
+    rendered = json.dumps(result, ensure_ascii=False, allow_nan=False)
+    if notify is not None:
+        notify(f"{skill.name}: {rendered[:700]}")
+    return rendered
