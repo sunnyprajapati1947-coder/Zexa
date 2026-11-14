@@ -89,6 +89,10 @@ Zexa can search public web result snippets through a fixed DuckDuckGo HTML endpo
     zexa research "latest open source agent frameworks"
     zexa research --limit 8 "Android accessibility service guide"
 
+## Master skills and GitHub reference catalog
+
+See [`docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md`](docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md) for the consolidated 53-name skill inventory (3 baseline + 50 proposed), capability map, categorized upstream GitHub references, target architecture, and integration/safety acceptance criteria. Entries are classified as roadmap or research references; listing a project does not mean it is installed or integrated.
+
 ## Specialist-agent orchestration
 
 Zexa includes a bounded multi-agent workflow over the selected online/offline brain. The planner chooses only registered skills, then specialist roles (general, analyst, developer) handle each step sequentially. The workflow is capped at six steps and each result has an output budget. This is an LLM orchestration layer, not a general-purpose autonomous executor: it does not run shell commands, browse websites, send messages, or modify files.
