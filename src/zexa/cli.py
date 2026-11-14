@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
+from .agents import AgentOrchestrator
 from .config import get_config, load_env_file
 from .brain import build_brain_router
 from .intent import route_utterance
@@ -54,6 +55,8 @@ def main() -> None:
 
     plan_parser = subparsers.add_parser("plan", help="Create a proposed task plan")
     plan_parser.add_argument("goal", nargs="+", help="Goal to break into steps")
+    agent_parser = subparsers.add_parser("agent", help="Run a bounded multi-agent workflow")
+    agent_parser.add_argument("goal", nargs="+", help="Goal for specialist agents")
 
     subparsers.add_parser("skills", help="List registered skills")
     subparsers.add_parser("tools", help="List safe local tools")
@@ -242,6 +245,10 @@ def main() -> None:
         elif mode == "online":
             config = get_config()
         brain = build_brain_router(config, mode)
+        if args.command == "agent":
+            results = AgentOrchestrator(brain, registry).run(" ".join(args.goal))
+            print(json.dumps(results, ensure_ascii=False, indent=2))
+            return
         if args.command == "voice":
             voice = TermuxVoice()
             transcript = voice.listen()
