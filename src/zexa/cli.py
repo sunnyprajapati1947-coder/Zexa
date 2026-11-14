@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .agents import AgentOrchestrator
-from .config import get_config, load_env_file
+from .config import get_config, load_env_file\nfrom .approvals import ApprovalManager\nfrom .audit import AuditLog\nfrom .gateway import ExecutionGateway\nfrom .policy import PermissionPolicy
 from .brain import build_brain_router
 from .intent import route_utterance
 from .jobs import JobQueue, JobWorker
@@ -237,12 +237,52 @@ def main() -> None:
                     raise ValueError("Bridge action payload must be valid JSON.") from exc
                 if not isinstance(payload, dict):
                     raise ValueError("Bridge action payload must be a JSON object.")
+                allowed_actions = {
+                    item.strip().lower()
+                    for item in os.getenv("ZEXA_ALLOWED_ANDROID_ACTIONS", "").split(",")
+                    if item.strip()
+                }
+                known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
+                if not allowed_actions <= known_actions:
+                    raise ValueError("ZEXA_ALLOWED_ANDROID_ACTIONS contains an unknown action.")
+                permission_names = {f"android.{name}" for name in allowed_actions}
+                capabilities = {
+                    f"android.{name}": (f"android.{name}", "high")
+                    for name in allowed_actions
+                }
+                audit_path = Path(
+                    os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+                ).expanduser()
+                gateway = ExecutionGateway(
+                    PermissionPolicy(permission_names),
+                    ApprovalManager(ttl_seconds=60),
+                    AuditLog(audit_path),
+                    capabilities=capabilities,
+                )
+                action_name = f"android.{args.action}"
                 print(f"Requested Android action: {args.action}")
-                confirmation = input("Type APPROVE to perform this action: ")
+                if args.action not in allowed_actions:
+                    raise PermissionError(
+                        f"{args.action} is not enabled. Add it to ZEXA_ALLOWED_ANDROID_ACTIONS "
+                        "only if you want to allow this capability."
+                    )
+                confirmation = input("Review the exact action and payload above. Type APPROVE to continue: ")
                 if confirmation != "APPROVE":
                     print("Android action cancelled.")
                     return
-                result = bridge.perform(args.action, payload, approve=lambda *_: True)
+                approval = gateway.issue_approval(
+                    action=action_name, payload=payload, user_confirmed=True,
+                )
+                result = gateway.execute(
+                    action=action_name,
+                    permission=action_name,
+                    risk_level="high",
+                    payload=payload,
+                    approval_token=approval.token,
+                    handler=lambda approved_payload: bridge.perform(
+                        args.action, approved_payload, approve=lambda *_: True,
+                    ),
+                )
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
 
