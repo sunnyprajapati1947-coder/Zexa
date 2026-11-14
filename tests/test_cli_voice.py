@@ -53,7 +53,7 @@ class CliVoiceTests(unittest.TestCase):
             def speak(self, text):
                 events.append(("speak", text))
 
-        def fake_route(config, history, transcript):
+        def fake_route(config, history, transcript, brain=None):
             events.append(("route", [dict(item) for item in history], transcript))
             return {"intent": "question", "reply": "Namaste, main sun raha hoon."}
 
@@ -91,7 +91,7 @@ class CliVoiceTests(unittest.TestCase):
             def speak(self, text):
                 events.append(text)
 
-        def fake_route(config, history, transcript):
+        def fake_route(config, history, transcript, brain=None):
             return {"intent": "question", "reply": "I am listening."}
 
         output = io.StringIO()
