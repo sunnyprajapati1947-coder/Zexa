@@ -62,3 +62,26 @@ zexa skill run proposal_writer '{"service":"Website design","client_needs":"A sm
 The command validates the skill input, calls only the selected trusted brain-backed handler, requires a JSON response matching the declared output schema, and routes the invocation through `ExecutionGateway`. It does not send messages, publish content, make payments, or execute shell commands. High/critical skills require a fresh typed approval. Additional skill permissions must be explicitly listed in the local `ZEXA_SKILL_PERMISSIONS` environment variable.
 
 The engine API is in `zexa.execution.SkillExecutionEngine`. Application code supplies trusted handlers; model output cannot register a handler or provide executable code. `skill_capabilities(registry)` creates the gateway's trusted action/permission/risk map from the registry.
+
+
+## Background skill jobs
+
+The durable worker can process low-risk drafting/analysis jobs. Queue one:
+
+```bash
+zexa schedule-skill general_assistant '{"prompt":"Draft a polite reply to a customer asking about website design services."}'
+```
+
+Start the worker once:
+
+```bash
+zexa worker --once
+```
+
+Or keep it polling:
+
+```bash
+zexa worker --poll-seconds 5
+```
+
+The worker routes the job through `SkillExecutionEngine` and `ExecutionGateway`, writes the normal audit events, and sends a Termux notification when the result is ready. Only low-risk skills are accepted by the background queue. Medium/high/critical skills must be run interactively and, where required, receive a fresh approval; approval tokens are intentionally not persisted in the job database. Failed jobs use the existing bounded retry policy. The worker is a foreground process until installed/configured as an Android service; this change does not claim automatic boot persistence or guaranteed Android background survival.
