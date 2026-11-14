@@ -49,8 +49,12 @@ def _frontmatter(text: str) -> tuple[dict[str, str], str]:
     for line in text[4:end].splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        if line[:1].isspace() or ":" not in line:
-            raise ValueError("Only simple top-level frontmatter fields are supported.")
+        # Ignore nested metadata (e.g. generated_at) rather than interpreting it.
+        # The loader only consumes the two top-level routing fields below.
+        if line[:1].isspace():
+            continue
+        if ":" not in line:
+            raise ValueError("Unsupported top-level frontmatter line.")
         key, value = line.split(":", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
