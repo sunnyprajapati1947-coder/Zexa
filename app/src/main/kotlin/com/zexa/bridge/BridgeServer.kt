@@ -8,6 +8,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Semaphore
+import java.util.concurrent.ConcurrentHashMap
 import java.nio.charset.StandardCharsets
 
 class BridgeServer(
@@ -18,6 +19,7 @@ class BridgeServer(
     @Volatile private var ready = false
     @Volatile private var server: ServerSocket? = null
     private val clientSlots = Semaphore(4)
+    private val activeClients = ConcurrentHashMap.newKeySet<Socket>()
 
     val isRunning: Boolean
         get() = running && ready && server?.isClosed == false
@@ -42,8 +44,12 @@ class BridgeServer(
                         try { socket.close() } catch (_: Exception) {}
                         continue
                     }
+                    activeClients.add(socket)
                     Thread({
-                        try { handle(socket) } finally { clientSlots.release() }
+                        try { handle(socket) } finally {
+                            activeClients.remove(socket)
+                            clientSlots.release()
+                        }
                     }, "zexa-bridge-client").apply { isDaemon = true; start() }
                 }
             } catch (_: Exception) {
@@ -62,6 +68,8 @@ class BridgeServer(
         running = false
         try { server?.close() } catch (_: Exception) {}
         server = null
+        activeClients.forEach { client -> try { client.close() } catch (_: Exception) {} }
+        activeClients.clear()
         thread?.interrupt()
     }
 
