@@ -73,6 +73,10 @@ Inspect skill contracts:
 
     zexa skills
     zexa skills --json
+    zexa skillpacks status
+    zexa skillpacks list --limit 20
+
+The imported community reference pack contains 320 validated entries, all disabled. `skillpacks` commands are read-only metadata inspection; imported content is not routed to the planner and is never executed.
 
 ## Business drafting skills
 
