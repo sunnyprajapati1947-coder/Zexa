@@ -56,8 +56,8 @@ def clone_sparse(source: dict, destination: Path) -> list[str]:
             f"expected at least {source['expected_skill_files']}."
         )
     directories = sorted({str(Path(p).parent).replace("\\", "/") for p in skill_files})
-    run(["git", "sparse-checkout", "init", "--no-cone"], cwd=destination)
-    run(["git", "sparse-checkout", "set", "--no-cone", *directories, "LICENSE"], cwd=destination)
+    run(["git", "sparse-checkout", "init", "--cone"], cwd=destination)
+    run(["git", "sparse-checkout", "set", *directories, "LICENSE"], cwd=destination)
     run(["git", "checkout", "--detach", source["commit"]], cwd=destination)
     return skill_files
 
@@ -71,6 +71,8 @@ def main() -> int:
         raise SystemExit(f"{output} already exists; move it aside before importing again.")
     records: list[dict] = []
     rejected: list[dict] = []
+    pending_copies: list[tuple[Path, Path]] = []
+    license_copies: list[tuple[Path, Path]] = []
     seen: set[str] = set()
     with tempfile.TemporaryDirectory(prefix="zexa-skill-import-") as temp:
         temp_root = Path(temp)
@@ -92,9 +94,7 @@ def main() -> int:
                         continue
                     seen.add(item.name)
                     destination = output / repo_slug / Path(relative).parent
-                    if not args.dry_run:
-                        destination.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copytree(path.parent, destination, dirs_exist_ok=True, symlinks=False)
+                    pending_copies.append((path.parent, destination))
                     records.append({
                         "name": item.name,
                         "description": item.description,
@@ -110,10 +110,7 @@ def main() -> int:
                     })
                 except Exception as exc:
                     rejected.append({"source": source["repo"], "path": relative, "reason": str(exc)})
-            if not args.dry_run:
-                license_dir = output / "licenses"
-                license_dir.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(license_file, license_dir / f"{repo_slug}-LICENSE")
+            license_copies.append((license_file, Path(repo_slug + "-LICENSE")) )
     if len(records) < MINIMUM_SKILLS:
         raise SystemExit(
             f"Import stopped: only {len(records)} valid unique skills passed checks; "
@@ -129,7 +126,14 @@ def main() -> int:
         "execution_policy": "metadata and reference files only; never execute imported scripts or hooks",
     }
     if not args.dry_run:
-        output.mkdir(parents=True, exist_ok=True)
+        output.mkdir(parents=True, exist_ok=False)
+        for source_dir, destination in pending_copies:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(source_dir, destination, dirs_exist_ok=True, symlinks=False)
+        license_dir = output / "licenses"
+        license_dir.mkdir(parents=True, exist_ok=True)
+        for source_file, filename in license_copies:
+            shutil.copy2(source_file, license_dir / filename)
         (output / "index.json").write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
     print(f"Validated {len(records)} unique skills from {len(SOURCES)} pinned GitHub repositories.")
     print(f"Rejected or duplicate entries: {len(rejected)}")
