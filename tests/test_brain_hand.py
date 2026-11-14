@@ -10,8 +10,10 @@ class FakeBrain:
         self.name = name
         self.answer = answer
         self.error = error
+        self.calls = 0
 
     def chat(self, messages):
+        self.calls += 1
         if self.error:
             raise self.error
         return self.answer
@@ -30,13 +32,30 @@ class BrainRouterTests(unittest.TestCase):
         )
         self.assertEqual(router.chat([]), BrainReply("local answer", "local", True))
 
+    def test_auto_falls_back_from_grok_to_groq_then_qwen(self):
+        grok = FakeBrain("grok-xai", error=RuntimeError("Could not reach xAI API: timeout"))
+        groq = FakeBrain("groq-online", "groq answer")
+        qwen = FakeBrain("qwen-local", "qwen answer")
+        router = BrainRouter(grok, qwen, fallbacks=[groq])
+        self.assertEqual(router.chat([]), BrainReply("groq answer", "groq-online", False))
+        self.assertEqual((grok.calls, groq.calls, qwen.calls), (1, 1, 0))
+
+    def test_auto_falls_back_to_qwen_after_cloud_network_failures(self):
+        grok = FakeBrain("grok-xai", error=RuntimeError("Could not reach xAI API: timeout"))
+        groq = FakeBrain("groq-online", error=RuntimeError("Could not reach Groq API: offline"))
+        qwen = FakeBrain("qwen-local", "local answer")
+        router = BrainRouter(grok, qwen, fallbacks=[groq])
+        self.assertEqual(router.chat([]), BrainReply("local answer", "qwen-local", True))
+
     def test_auth_or_api_errors_do_not_fallback(self):
+        local = FakeBrain("local", "must not be used")
         router = BrainRouter(
             FakeBrain("groq-online", error=RuntimeError("Groq API returned HTTP 401")),
-            FakeBrain("local", "must not be used"),
+            local,
         )
         with self.assertRaisesRegex(RuntimeError, "HTTP 401"):
             router.chat([])
+        self.assertEqual(local.calls, 0)
 
     def test_offline_mode_does_not_call_online(self):
         online = FakeBrain("groq-online", error=AssertionError("online called"))
@@ -44,7 +63,7 @@ class BrainRouterTests(unittest.TestCase):
         self.assertEqual(router.chat([]).brain, "local")
 
     def test_offline_mode_requires_offline_brain(self):
-        with self.assertRaisesRegex(RuntimeError, "Offline brain"):
+        with self.assertRaisesRegex(RuntimeError, "Local Qwen"):
             BrainRouter(FakeBrain("groq-online", "online"), None, mode="offline").chat([])
 
 
