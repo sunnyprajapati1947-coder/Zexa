@@ -125,6 +125,10 @@ For a Termux runit service, install Termux:API (Android app) and the Termux pack
     python -m pip install -e .
     bash scripts/install-termux-worker.sh
 
+Optional device-reboot startup (after installing/opening the Termux:Boot Android add-on):
+
+    bash scripts/install-termux-boot.sh
+
 The installer creates a service entrypoint tied to this checkout, loads its `.env`, and uses the stable queue database at `~/.zexa/jobs.sqlite3` so scheduled jobs and the service see the same queue regardless of working directory. The worker handles local notifications and low-risk skill drafts through the guarded execution gateway; imported skills and arbitrary commands are never executed. Android notifications require Termux:API permission. Check the service with `sv status zexa-worker`; stop/start with `sv down zexa-worker` / `sv up zexa-worker`; disable service startup with `sv-disable zexa-worker`. Android may still restrict background work; device-reboot startup requires the optional Termux:Boot add-on and device validation.
 
 ## Existing Termux commands
