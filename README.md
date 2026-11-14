@@ -110,18 +110,22 @@ Queue a notification for now or later:
     zexa schedule-notification Zexa "Your task is due"
     zexa schedule-notification --after-seconds 3600 Zexa "One hour reminder"
     zexa jobs
+    zexa job cancel 12
+    zexa job retry 12
+
+Cancel applies only to pending jobs; retry applies only to failed jobs. Worker failures store the exception class, not potentially sensitive exception text.
 
 Run one due job manually:
 
     zexa worker --once
 
-For a persistent Termux service, install Termux:API (Android app) and the Termux packages, then:
+For a Termux runit service, install Termux:API (Android app) and the Termux packages, then:
 
     pkg install termux-api termux-services
     python -m pip install -e .
     bash scripts/install-termux-worker.sh
 
-The service processes only the built-in notification handler. Android notifications require Termux:API permission. To stop the service, use `sv down zexa-worker`; to start it again, use `sv up zexa-worker`.
+The installer creates a service entrypoint tied to this checkout, loads its `.env`, and uses the stable queue database at `~/.zexa/jobs.sqlite3` so scheduled jobs and the service see the same queue regardless of working directory. The worker handles local notifications and low-risk skill drafts through the guarded execution gateway; imported skills and arbitrary commands are never executed. Android notifications require Termux:API permission. Check the service with `sv status zexa-worker`; stop/start with `sv down zexa-worker` / `sv up zexa-worker`; disable service startup with `sv-disable zexa-worker`. Android may still restrict background work; device-reboot startup requires the optional Termux:Boot add-on and device validation.
 
 ## Existing Termux commands
 
