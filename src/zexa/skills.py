@@ -154,4 +154,51 @@ def default_registry() -> SkillRegistry:
         resource_budget={"max_input_chars": 24000, "max_output_tokens": 3500},
         risk_level="medium",
     ))
+    registry.register(Skill(
+        "customer_support_drafter",
+        "Draft customer support replies using only supplied customer context and approved policies.",
+        "Draft a courteous support reply. Use only the policy supplied by the user. "
+        "Never promise refunds, credits, delivery dates, or exceptions unless the policy explicitly authorizes them. "
+        "Do not send the reply; label it as a draft for human review.",
+        input_schema={"customer_message": "string", "approved_policy": "string"},
+        output_schema={"reply_draft": "string", "assumptions": "string"},
+        timeout_seconds=60,
+        resource_budget={"max_input_chars": 12000, "max_output_tokens": 1800},
+        risk_level="medium",
+    ))
+    registry.register(Skill(
+        "proposal_writer",
+        "Draft a service proposal from user-provided scope, timeline, and pricing.",
+        "Write a clear service proposal using only supplied facts. Do not invent prices, "
+        "client details, deliverables, deadlines, guarantees, or legal terms. Mark missing "
+        "details as placeholders. This is a draft and must not be sent automatically.",
+        input_schema={"service": "string", "client_needs": "string", "scope_timeline_pricing": "string"},
+        output_schema={"proposal_draft": "string", "missing_details": "string"},
+        timeout_seconds=90,
+        resource_budget={"max_input_chars": 16000, "max_output_tokens": 3000},
+        risk_level="low",
+    ))
+    registry.register(Skill(
+        "invoice_drafter",
+        "Format an invoice draft from user-supplied billing details and amounts.",
+        "Format an invoice draft using only the supplied seller, client, line items, dates, "
+        "and amounts. Do not invent tax rules, bank details, invoice numbers, or payment status. "
+        "Do not initiate payment or claim the invoice was issued. Flag missing information.",
+        input_schema={"seller_client_details": "string", "line_items_and_amounts": "string", "dates": "string"},
+        output_schema={"invoice_draft": "string", "missing_details": "string"},
+        timeout_seconds=60,
+        resource_budget={"max_input_chars": 12000, "max_output_tokens": 2200},
+        risk_level="medium",
+    ))
+    registry.register(Skill(
+        "faq_builder",
+        "Create frequently asked questions from approved product or service material.",
+        "Create questions and answers only from the supplied source material. If an answer "
+        "is not supported, mark it as requiring confirmation instead of guessing.",
+        input_schema={"approved_source_material": "string"},
+        output_schema={"faq": "string", "unanswered_questions": "string"},
+        timeout_seconds=60,
+        resource_budget={"max_input_chars": 20000, "max_output_tokens": 2500},
+        risk_level="low",
+    ))
     return registry
