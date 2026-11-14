@@ -58,7 +58,8 @@ def main() -> None:
     agent_parser = subparsers.add_parser("agent", help="Run a bounded multi-agent workflow")
     agent_parser.add_argument("goal", nargs="+", help="Goal for specialist agents")
 
-    subparsers.add_parser("skills", help="List registered skills")
+    skills_parser = subparsers.add_parser("skills", help="List registered skills")
+    skills_parser.add_argument("--json", action="store_true", help="Show skill schemas, permissions, risk and budgets")
     subparsers.add_parser("tools", help="List safe local tools")
     subparsers.add_parser("android", help="Inspect optional Android/Termux capabilities")
     notify_parser = subparsers.add_parser("notify", help="Send one notification after an explicit CLI request")
@@ -154,8 +155,11 @@ def main() -> None:
         return
 
     if args.command == "skills":
-        for skill in registry.list():
-            print(f"{skill.name}: {skill.description}")
+        if args.json:
+            print(json.dumps(registry.metadata(), ensure_ascii=False, indent=2))
+        else:
+            for skill in registry.list():
+                print(f"{skill.name}: {skill.description}")
         return
     if args.command == "tools":
         for tool in router.list():
