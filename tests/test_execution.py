@@ -6,6 +6,7 @@ from zexa.approvals import ApprovalManager
 from zexa.audit import AuditLog
 from zexa.execution import (
     SkillExecutionEngine, brain_skill_handlers, skill_capabilities,
+    execute_background_skill,
 )
 from zexa.gateway import ExecutionDenied, ExecutionGateway
 from zexa.policy import PermissionPolicy
@@ -159,6 +160,37 @@ class SkillExecutionEngineTests(unittest.TestCase):
         handler = brain_skill_handlers(self.registry, Brain())["general_assistant"]
         with self.assertRaisesRegex(ValueError, "invalid JSON"):
             handler({"prompt": "Hello"})
+
+    def test_background_skill_executor_runs_low_risk_and_notifies(self):
+        notices = []
+        rendered = execute_background_skill(
+            self.engine, self.registry,
+            {"name": "general_assistant", "input": {"prompt": "Draft a reply"}},
+            notify=notices.append,
+        )
+        self.assertIn("Hello from trusted handler", rendered)
+        self.assertEqual(len(notices), 1)
+        self.assertIn("general_assistant", notices[0])
+
+    def test_background_skill_executor_rejects_high_risk_and_extra_fields(self):
+        self.registry.register(Skill(
+            "publish_draft",
+            "Publish a reviewed draft.",
+            "Never publish automatically.",
+            input_schema={"draft": "string"},
+            output_schema={"status": "string"},
+            risk_level="high",
+        ))
+        with self.assertRaises(ExecutionDenied):
+            execute_background_skill(
+                self.engine, self.registry,
+                {"name": "publish_draft", "input": {"draft": "Hello"}},
+            )
+        with self.assertRaises(ValueError):
+            execute_background_skill(
+                self.engine, self.registry,
+                {"name": "general_assistant", "input": {"prompt": "Hi"}, "extra": True},
+            )
 
 
 if __name__ == "__main__":
