@@ -224,8 +224,7 @@ def main() -> None:
                 if worker.run_once() in {"idle", "pending"}:
                     time.sleep(args.poll_seconds)
         except KeyboardInterrupt:
-            print("
-Zexa background worker stopped.")
+            print("\nZexa background worker stopped.")
         return
 
     if args.command == "skill" and args.skill_command == "list":
