@@ -7,7 +7,7 @@ from .groq import chat
 from .skills import SkillRegistry
 
 
-def create_plan(config: dict[str, str], registry: SkillRegistry, goal: str) -> list[dict[str, str]]:
+def create_plan(config: dict[str, str] | None, registry: SkillRegistry, goal: str, brain=None) -> list[dict[str, str]]:
     goal = goal.strip()
     if not goal:
         raise ValueError("A non-empty goal is required.")
@@ -27,7 +27,7 @@ def create_plan(config: dict[str, str], registry: SkillRegistry, goal: str) -> l
             "content": json.dumps({"goal": goal, "allowed_skills": available}, ensure_ascii=False),
         },
     ]
-    raw = chat(config, messages)
+    raw = brain.chat(messages).text if brain is not None else chat(config, messages)
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
