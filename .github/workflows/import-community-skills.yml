@@ -34,10 +34,10 @@ jobs:
       - name: Validate pinned community skills and import disabled references
         run: |
           if [ -e skillpacks/imported ]; then
-            echo "skillpacks/imported already exists; refusing to overwrite imported user data."
-            exit 1
+            echo "Existing imported pack found; preserve it and validate its manifest without overwriting."
+          else
+            python scripts/import_community_skills.py
           fi
-          python scripts/import_community_skills.py
       - name: Verify generated manifest
         run: |
           python - <<'PY'
