@@ -1,5 +1,7 @@
 # Zexa Master AI Skills, Tools & GitHub Reference Catalog
 
+> **Roadmap source of truth:** The complete 170-skill roadmap is `docs/SKILL_CATALOG.md`. This file preserves the earlier condensed 53-name inventory and upstream GitHub reference directory; do not treat its 53 entries as the complete Zexa roadmap.
+
 > Status: consolidated roadmap and reference index. This document records capabilities and upstream projects discussed for Zexa. **A repository being listed here does not mean its code is installed, integrated, enabled, maintained, or safe to run inside Zexa.** Each integration requires compatibility, license, security, resource, and test review.
 
 ## 1. Skill inventory
