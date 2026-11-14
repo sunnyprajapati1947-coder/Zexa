@@ -17,6 +17,12 @@ ALLOWED_LICENSES = {
     "MPL-2.0", "CC0-1.0", "CC-BY-4.0", "Unlicense",
 }
 _NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
+_EXCLUDED_TOPICS = re.compile(
+    r"(?i)\\b(?:firearms?|guns?|ammunition|explosives?|weapons?|knives?|"
+    r"self[- ]defen[cs]e weapons?|narcotics?|recreational drugs?|"
+    r"controlled substances?|casino|gambling|sports betting|betting strategy|"
+    r"prediction markets?|dangerous challenges?|stunts?)\\b"
+)
 _UNSAFE_PATTERNS = (
     re.compile(r"(?im)^\s*allowed-tools\s*:\s*.*\bBash\b"),
     re.compile(r"(?i)\b(curl|wget)\b[^\n]{0,240}\|\s*(sh|bash)\b"),
@@ -98,6 +104,8 @@ def inspect_skill_file(
         raise ValueError("Source commit must be a full 40-character SHA.")
     if license_id not in ALLOWED_LICENSES:
         raise ValueError("Skill license is missing or not on the approved allowlist.")
+    if _EXCLUDED_TOPICS.search(" ".join((name, description, body))):
+        raise ValueError("Skill is outside Zexa safe import scope.")
     warnings = tuple(
         f"Potentially unsafe pattern: {pattern.pattern}"
         for pattern in _UNSAFE_PATTERNS if pattern.search(text)
