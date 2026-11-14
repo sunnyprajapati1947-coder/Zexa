@@ -16,7 +16,7 @@ class ExecutionGatewayTests(unittest.TestCase):
         self.audit = AuditLog(Path(self.temp.name) / "audit.sqlite3")
         self.approvals = ApprovalManager(ttl_seconds=60)
         self.policy = PermissionPolicy({"files.read", "message.send"})
-        self.gateway = ExecutionGateway(self.policy, self.approvals, self.audit)
+        self.gateway = ExecutionGateway(\n            self.policy, self.approvals, self.audit,\n            capabilities={"files.read": ("files.read", "low"), "message.send": ("message.send", "high")},\n        )
 
     def tearDown(self):
         self.temp.cleanup()
@@ -66,7 +66,7 @@ class ExecutionGatewayTests(unittest.TestCase):
                 handler=lambda data: "sent",
             )
 
-    def test_failed_handler_is_audited(self):
+    def test_caller_cannot_downgrade_registered_risk(self):\n        called = []\n        with self.assertRaises(ExecutionDenied):\n            self.gateway.execute(\n                action="message.send", permission="message.send", risk_level="low",\n                payload={}, handler=lambda data: called.append(True),\n            )\n        self.assertEqual(called, [])\n\n    def test_unknown_action_is_denied(self):\n        with self.assertRaises(ExecutionDenied):\n            self.gateway.execute(\n                action="android.tap", permission="android.tap", risk_level="low",\n                payload={}, handler=lambda data: "should not run",\n            )\n\n    def test_failed_handler_is_audited(self):
         def fail(_payload):
             raise RuntimeError("expected failure")
         with self.assertRaises(RuntimeError):
