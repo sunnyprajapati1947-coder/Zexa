@@ -77,6 +77,12 @@ class JobQueueTests(unittest.TestCase):
             configured = JobQueue()
         self.assertEqual(configured.path, Path(self.temp.name) / "configured.db")
 
+    def test_failure_storage_rejects_freeform_error_text(self):
+        self.queue.enqueue("test_echo", {})
+        job = self.queue.claim_due()
+        self.queue.fail(job, "customer email and private token should not be stored")
+        self.assertEqual(self.queue.list_jobs()[0]["last_error"], "JobError")
+
 
 if __name__ == "__main__":
     unittest.main()
