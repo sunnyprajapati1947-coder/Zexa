@@ -128,6 +128,12 @@ def main() -> None:
     worker_parser.add_argument("--once", action="store_true")
     jobs_parser = subparsers.add_parser("jobs", help="List queued background jobs")
     jobs_parser.add_argument("--limit", type=int, default=50)
+    job_parser = subparsers.add_parser("job", help="Control one queued background job")
+    job_sub = job_parser.add_subparsers(dest="job_command", required=True)
+    job_cancel = job_sub.add_parser("cancel", help="Cancel a pending job")
+    job_cancel.add_argument("job_id", type=int)
+    job_retry = job_sub.add_parser("retry", help="Retry a failed job")
+    job_retry.add_argument("job_id", type=int)
 
     bridge_parser = subparsers.add_parser("bridge", help="Inspect or control the opt-in local Android bridge")
     bridge_sub = bridge_parser.add_subparsers(dest="bridge_command", required=True)
@@ -138,6 +144,7 @@ def main() -> None:
     bridge_action.add_argument("payload", help="Action payload as a JSON object")
 
     args = parser.parse_args()
+    load_env_file(Path(os.getenv("ZEXA_ENV_FILE", str(Path.cwd() / ".env"))))
     registry = default_registry()
     router = default_router()
 
@@ -172,6 +179,12 @@ def main() -> None:
         return
     if args.command == "jobs":
         print(json.dumps(JobQueue().list_jobs(args.limit), ensure_ascii=False, indent=2))
+        return
+    if args.command == "job":
+        queue = JobQueue()
+        changed = queue.cancel(args.job_id) if args.job_command == "cancel" else queue.retry(args.job_id)
+        action = "cancelled" if args.job_command == "cancel" else "queued for retry"
+        print(f"Job #{args.job_id} {action}." if changed else f"Job #{args.job_id} was not changed (check its current status).")
         return
     if args.command == "worker":
         if not 1 <= args.poll_seconds <= 300:
@@ -292,7 +305,6 @@ def main() -> None:
             print("Task updated." if changed else "Task not found.")
         return
 
-    load_env_file()
     try:
         if args.command == "bridge":
             token = os.getenv("ZEXA_BRIDGE_TOKEN", "").strip()
