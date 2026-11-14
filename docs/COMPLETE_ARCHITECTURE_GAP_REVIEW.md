@@ -134,10 +134,10 @@ The 170-item `docs/SKILL_CATALOG.md` is the canonical roadmap. The separate 53-n
 Current workflows declare read-only repository permissions, which is a good baseline. The workflows currently reference Actions by mutable version tags (for example, `actions/checkout@v4`). Before production releases:
 - Pin third-party Actions to verified full commit SHAs or adopt GitHub's workflow dependency lockfile where supported.
 - Add Dependabot updates for Python packages and GitHub Actions.
-- Add CodeQL or equivalent static analysis for Python and Kotlin.
+- A Python CodeQL workflow is now present on this branch; Kotlin/Android static analysis and Android instrumentation tests remain pending.
 - Add secret scanning and push protection in repository settings; verify settings in GitHub because they are not fully represented by source files.
 - Add dependency vulnerability scanning and license/SBOM reporting.
-- Add Android unit/instrumentation tests in addition to `assembleDebug`.
+- Add Android unit/instrumentation tests in addition to `assembleDebug`; this remains pending.
 - Add release build signing through protected GitHub environments and short-lived credentials; never commit keystores or signing secrets.
 - Keep fork PR workflows read-only and never run untrusted code in privileged `pull_request_target` or `workflow_run` contexts.
 - Retain least-privilege `GITHUB_TOKEN` permissions and review any future permission elevation.
