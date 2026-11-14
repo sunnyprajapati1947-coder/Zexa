@@ -74,6 +74,13 @@ Inspect skill contracts:
     zexa skills
     zexa skills --json
 
+## Public web research
+
+Zexa can search public web result snippets through a fixed DuckDuckGo HTML endpoint, then ask the selected brain to summarize the returned titles and snippets with numbered source references. It does not fetch arbitrary pages, and the model is instructed to treat external snippets as untrusted data. Snippet-based summaries are not a substitute for opening and verifying full source pages.
+
+    zexa research "latest open source agent frameworks"
+    zexa research --limit 8 "Android accessibility service guide"
+
 ## Specialist-agent orchestration
 
 Zexa includes a bounded multi-agent workflow over the selected online/offline brain. The planner chooses only registered skills, then specialist roles (general, analyst, developer) handle each step sequentially. The workflow is capped at six steps and each result has an output budget. This is an LLM orchestration layer, not a general-purpose autonomous executor: it does not run shell commands, browse websites, send messages, or modify files.
