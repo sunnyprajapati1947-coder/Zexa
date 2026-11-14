@@ -57,7 +57,7 @@ def clone_sparse(source: dict, destination: Path) -> list[str]:
         )
     directories = sorted({str(Path(p).parent).replace("\\", "/") for p in skill_files})
     run(["git", "sparse-checkout", "init", "--cone"], cwd=destination)
-    run(["git", "sparse-checkout", "set", *directories, "LICENSE"], cwd=destination)
+    run(["git", "sparse-checkout", "set", *directories], cwd=destination)
     run(["git", "checkout", "--detach", source["commit"]], cwd=destination)
     return skill_files
 
@@ -129,12 +129,12 @@ def main() -> int:
         output.mkdir(parents=True, exist_ok=False)
         for source_dir, destination in pending_copies:
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(source_dir, destination, dirs_exist_ok=True, symlinks=False)
+            shutil.copytree(source_dir, destination, dirs_exist_ok=True, symlinks=False, ignore=lambda directory, names: [name for name in names if (Path(directory) / name).is_symlink()])
         license_dir = output / "licenses"
         license_dir.mkdir(parents=True, exist_ok=True)
         for source_file, filename in license_copies:
             shutil.copy2(source_file, license_dir / filename)
-        (output / "index.json").write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+        (output / "index.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Validated {len(records)} unique skills from {len(SOURCES)} pinned GitHub repositories.")
     print(f"Rejected or duplicate entries: {len(rejected)}")
     print("Imported skills remain disabled until individually reviewed.")
