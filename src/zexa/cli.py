@@ -58,7 +58,7 @@ def _explicit_torch_request(transcript: str) -> str | None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="zexa", description="Zexa — multi-brain phone-first assistant")
+    parser = argparse.ArgumentParser(prog="zexa", description="Zexa — dual-brain phone-first assistant")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     ask_parser = subparsers.add_parser("ask", help="Ask Zexa a question")
@@ -190,182 +190,377 @@ def main() -> None:
     if args.command == "job":
         queue = JobQueue()
         changed = queue.cancel(args.job_id) if args.job_command == "cancel" else queue.retry(args.job_id)
-        print("Updated." if changed else "No matching job could be changed.")
+        action = "cancelled" if args.job_command == "cancel" else "queued for retry"
+        print(f"Job #{args.job_id} {action}." if changed else f"Job #{args.job_id} was not changed (check its current status).")
         return
     if args.command == "worker":
-        worker = JobWorker()
-        if args.once:
-            print("Processed." if worker.run_once() else "No due jobs.")
-        else:
-            worker.run_forever(poll_seconds=args.poll_seconds)
-        return
-    if args.command == "skillpacks":
-        manifest = load_imported_manifest()
-        if args.skillpacks_command == "status":
-            print(json.dumps({
-                "total": len(manifest),
-                "enabled": sum(1 for item in manifest if item.get("enabled") is True),
-                "disabled": sum(1 for item in manifest if item.get("enabled") is not True),
-            }, indent=2))
-        else:
-            print(json.dumps(manifest[:max(0, args.limit)], ensure_ascii=False, indent=2))
-        return
-    if args.command == "skills":
-        items = registry.list()
-        if args.json:
-            print(json.dumps([
-                {
-                    "name": item.name, "description": item.description,
-                    "input_schema": item.input_schema, "output_schema": item.output_schema,
-                    "permissions": list(item.required_permissions),
-                    "dependencies": list(item.dependencies), "timeout_seconds": item.timeout_seconds,
-                    "resource_budget": item.resource_budget, "risk_level": item.risk_level,
-                    "enabled": item.enabled,
-                }
-                for item in items
-            ], ensure_ascii=False, indent=2))
-        else:
-            for item in items:
-                print(f"{item.name} [{item.risk_level}] — {item.description}")
-        return
-    if args.command == "tools":
-        print(json.dumps(router.describe(), ensure_ascii=False, indent=2))
-        return
-    if args.command == "android":
-        print(json.dumps(AndroidCapabilityProbe().report(), ensure_ascii=False, indent=2))
-        return
-    if args.command == "notify":
-        TermuxAndroidHand().notify(args.title, " ".join(args.message))
-        print("Notification sent.")
-        return
-    if args.command == "listen":
-        print(TermuxVoice().listen_once())
-        return
-    if args.command == "speak":
-        TermuxVoice().speak(" ".join(args.text))
-        return
-    if args.command == "bridge":
-        bridge = AccessibilityBridge(
-            os.getenv("ZEXA_BRIDGE_TOKEN", ""),
-            os.getenv("ZEXA_BRIDGE_URL", "http://127.0.0.1:8765"),
-        )
-        if args.bridge_command == "status":
-            print(json.dumps(bridge.status(), ensure_ascii=False, indent=2))
-            return
-        if args.bridge_command == "screen":
-            print(json.dumps(bridge.screen(), ensure_ascii=False, indent=2))
-            return
-        try:
-            payload = json.loads(args.payload)
-        except json.JSONDecodeError as exc:
-            raise ValueError("Bridge payload must be valid JSON.") from exc
-        if not isinstance(payload, dict):
-            raise ValueError("Bridge payload must be a JSON object.")
-        allowed_actions = {
+        if not 1 <= args.poll_seconds <= 300:
+            raise SystemExit("zexa: --poll-seconds must be between 1 and 300.")
+        queue = JobQueue()
+        queue.recover_stale()
+        mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
+        config = get_config() if mode == "online" or (
+            mode != "offline" and os.getenv("GROQ_API_KEY", "").strip()
+        ) else None
+        brain = build_brain_router(config, mode)
+        explicit_permissions = {
             item.strip().lower()
-            for item in os.getenv("ZEXA_ALLOWED_ANDROID_ACTIONS", "").split(",")
+            for item in os.getenv("ZEXA_SKILL_PERMISSIONS", "").split(",")
             if item.strip()
         }
-        known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
-        if not allowed_actions <= known_actions:
-            raise ValueError("ZEXA_ALLOWED_ANDROID_ACTIONS contains an unknown action.")
-        permission_names = {f"android.{name}" for name in allowed_actions}
-        capabilities = {
-            f"android.{name}": (f"android.{name}", "high")
-            for name in allowed_actions
-        }
+        policy = PermissionPolicy({
+            f"skill.execute:{skill.name}" for skill in registry.list()
+        } | explicit_permissions)
         audit_path = Path(
             os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
         ).expanduser()
         gateway = ExecutionGateway(
-            PermissionPolicy(permission_names),
-            ApprovalManager(ttl_seconds=60),
-            AuditLog(audit_path),
-            capabilities=capabilities,
+            policy, ApprovalManager(ttl_seconds=60), AuditLog(audit_path),
+            capabilities=skill_capabilities(registry),
         )
-        action_name = f"android.{args.action}"
-        print(f"Requested Android action: {args.action}")
-        print("Exact payload:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
-        if args.action not in allowed_actions:
-            raise PermissionError(
-                f"{args.action} is not enabled. Add it to ZEXA_ALLOWED_ANDROID_ACTIONS "
-                "only if you want to allow this capability."
+        skill_engine = SkillExecutionEngine(
+            registry, gateway, brain_skill_handlers(registry, brain),
+        )
+        def run_background_skill(payload):
+            return execute_background_skill(
+                skill_engine, registry, payload,
+                notify=lambda message: TermuxAndroidHand().notify(
+                    "Zexa task completed", message,
+                ),
             )
-        confirmation = input("Review the exact action and payload above. Type APPROVE to continue: ")
-        if confirmation != "APPROVE":
-            print("Android action cancelled.")
-            return
-        approval = gateway.issue_approval(
-            action=action_name, payload=payload, user_confirmed=True,
-        )
-        result = gateway.execute(
-            action=action_name,
-            permission=action_name,
-            risk_level="high",
-            payload=payload,
-            approval_token=approval.token,
-            handler=lambda approved_payload: bridge.perform(
-                args.action, approved_payload, approve=lambda *_: True,
+        worker = JobWorker(queue, {
+            "notification": lambda payload: (
+                TermuxAndroidHand().notify(payload["title"], payload["content"])
+                or "Notification delivered."
             ),
-        )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+            "skill_draft": run_background_skill,
+        })
+        if args.once:
+            print(worker.run_once())
+            return
+        print("Zexa background worker started. Press Ctrl+C to stop.")
+        try:
+            while True:
+                if worker.run_once() in {"idle", "pending"}:
+                    time.sleep(args.poll_seconds)
+        except KeyboardInterrupt:
+            print("\nZexa background worker stopped.")
         return
 
-    mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
-    groq_config = (
-        get_groq_config() if os.getenv("GROQ_API_KEY", "").strip() else None
-    )
-    xai_config = (
-        get_xai_config() if os.getenv("XAI_API_KEY", "").strip() else None
-    )
-    brain = build_brain_router(
-        groq_config,
-        mode,
-        xai_config=xai_config,
-    )
-    if args.command == "ask":
-        from .brain import BrainReply
-        answer = brain.chat([{"role": "system", "content": SYSTEM_PROMPT},
-                             {"role": "user", "content": " ".join(args.prompt)}])
-        print(answer.text)
-        print(f"\n[brain: {answer.brain}]")
+    if args.command == "skill" and args.skill_command == "list":
+        print(json.dumps(registry.metadata(), ensure_ascii=False, indent=2))
         return
-    if args.command == "plan":
-        result = create_plan(None, registry, " ".join(args.goal), brain=brain)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.command == "skillpacks":
+        manifest = load_imported_manifest()
+        if args.skillpacks_command == "status":
+            summary = {
+                "imported_count": manifest["imported_count"],
+                "enabled_count": manifest["enabled_count"],
+                "review_required_count": sum(
+                    1 for item in manifest["skills"] if item["review_required"]
+                ),
+                "source_count": len(manifest.get("sources", [])),
+                "execution": "disabled; imported references are not executable",
+            }
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            if not 1 <= args.limit <= 500:
+                raise SystemExit("zexa: --limit must be between 1 and 500.")
+            items = [
+                {
+                    "name": item["name"],
+                    "description": item["description"],
+                    "license": item["license"],
+                    "review_required": item["review_required"],
+                    "enabled": False,
+                }
+                for item in manifest["skills"][:args.limit]
+            ]
+            print(json.dumps(items, ensure_ascii=False, indent=2))
         return
-    if args.command == "agent":
-        result = AgentOrchestrator(registry, brain).run(" ".join(args.goal))
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.command == "skills":
+        if args.json:
+            print(json.dumps(registry.metadata(), ensure_ascii=False, indent=2))
+        else:
+            for skill in registry.list():
+                print(f"{skill.name}: {skill.description}")
         return
-    if args.command == "research":
-        search = DuckDuckGoSearch()
-        items = search.search(" ".join(args.query), limit=args.limit)
-        result = summarize_research(brain, " ".join(args.query), items)
-        print(result)
+    if args.command == "tools":
+        for tool in router.list():
+            print(f"{tool.name}: {tool.description}")
         return
-    if args.command == "voice":
-        transcript = TermuxVoice().listen_once()
-        result = route_utterance(None, [], transcript, brain=brain)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        if result.get("reply"):
-            TermuxVoice().speak(result["reply"])
+    if args.command == "android":
+        print(json.dumps(AndroidCapabilityProbe().as_dict(), ensure_ascii=False, indent=2))
         return
-    if args.command == "converse":
-        history = [{"role": "system", "content": SYSTEM_PROMPT}]
-        voice = TermuxVoice()
-        while True:
+    if args.command == "listen":
+        try:
+            print(TermuxVoice().listen())
+        except (RuntimeError, OSError) as exc:
+            print(f"zexa: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        return
+    if args.command == "speak":
+        try:
+            TermuxVoice().speak(" ".join(args.text))
+            print("Speech completed.")
+        except (ValueError, RuntimeError, OSError) as exc:
+            print(f"zexa: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        return
+    if args.command == "notify":
+        try:
+            TermuxAndroidHand().notify(args.title, " ".join(args.message))
+            print("Notification sent.")
+        except (ValueError, RuntimeError, OSError) as exc:
+            print(f"zexa: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        return
+    if args.command == "memory":
+        store = MemoryStore()
+        if args.memory_command == "save":
+            print(f"Saved memory ID: {store.remember(args.key, ' '.join(args.value))}")
+        elif args.memory_command == "get":
+            item = store.recall(args.key)
+            print(json.dumps(item, ensure_ascii=False, indent=2) if item else "Memory not found.")
+        elif args.memory_command == "list":
+            print(json.dumps(store.list_memories(), ensure_ascii=False, indent=2))
+        elif args.memory_command == "forget":
+            print("Memory deleted." if store.forget(args.key) else "Memory not found.")
+        elif args.memory_command == "clear":
+            print(f"Deleted {store.clear()} memories.")
+        return
+    if args.command == "tasks":
+        store = TaskStore()
+        if args.task_command == "add":
+            print(f"Task created: #{store.create(' '.join(args.title))}")
+        elif args.task_command == "list":
+            print(json.dumps(store.list_tasks(args.limit), ensure_ascii=False, indent=2))
+        elif args.task_command == "status":
+            changed = store.update_status(args.task_id, args.status, args.notes)
+            print("Task updated." if changed else "Task not found.")
+        return
+
+    try:
+        if args.command == "bridge":
+            token = os.getenv("ZEXA_BRIDGE_TOKEN", "").strip()
+            base_url = os.getenv("ZEXA_BRIDGE_URL", "http://127.0.0.1:8765").strip()
+            bridge = AccessibilityBridge(token, base_url)
+            if args.bridge_command == "status":
+                result = bridge.status()
+            elif args.bridge_command == "screen":
+                result = bridge.screen()
+            else:
+                try:
+                    payload = json.loads(args.payload)
+                except json.JSONDecodeError as exc:
+                    raise ValueError("Bridge action payload must be valid JSON.") from exc
+                if not isinstance(payload, dict):
+                    raise ValueError("Bridge action payload must be a JSON object.")
+                allowed_actions = {
+                    item.strip().lower()
+                    for item in os.getenv("ZEXA_ALLOWED_ANDROID_ACTIONS", "").split(",")
+                    if item.strip()
+                }
+                known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
+                if not allowed_actions <= known_actions:
+                    raise ValueError("ZEXA_ALLOWED_ANDROID_ACTIONS contains an unknown action.")
+                permission_names = {f"android.{name}" for name in allowed_actions}
+                capabilities = {
+                    f"android.{name}": (f"android.{name}", "high")
+                    for name in allowed_actions
+                }
+                audit_path = Path(
+                    os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+                ).expanduser()
+                gateway = ExecutionGateway(
+                    PermissionPolicy(permission_names),
+                    ApprovalManager(ttl_seconds=60),
+                    AuditLog(audit_path),
+                    capabilities=capabilities,
+                )
+                action_name = f"android.{args.action}"
+                print(f"Requested Android action: {args.action}")
+                print("Exact payload:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
+                if args.action not in allowed_actions:
+                    raise PermissionError(
+                        f"{args.action} is not enabled. Add it to ZEXA_ALLOWED_ANDROID_ACTIONS "
+                        "only if you want to allow this capability."
+                    )
+                confirmation = input("Review the exact action and payload above. Type APPROVE to continue: ")
+                if confirmation != "APPROVE":
+                    print("Android action cancelled.")
+                    return
+                approval = gateway.issue_approval(
+                    action=action_name, payload=payload, user_confirmed=True,
+                )
+                result = gateway.execute(
+                    action=action_name,
+                    permission=action_name,
+                    risk_level="high",
+                    payload=payload,
+                    approval_token=approval.token,
+                    handler=lambda approved_payload: bridge.perform(
+                        args.action, approved_payload, approve=lambda *_: True,
+                    ),
+                )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
+
+        mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
+        groq_config = (
+            get_groq_config() if os.getenv("GROQ_API_KEY", "").strip() else None
+        )
+        xai_config = (
+            get_xai_config() if os.getenv("XAI_API_KEY", "").strip() else None
+        )
+        brain = build_brain_router(
+            groq_config,
+            mode,
+            xai_config=xai_config,
+        )
+        if args.command == "skill" and args.skill_command == "run":
             try:
-                transcript = voice.listen_once()
+                payload = json.loads(args.payload)
+            except json.JSONDecodeError as exc:
+                raise ValueError("Skill payload must be valid JSON.") from exc
+            if not isinstance(payload, dict):
+                raise ValueError("Skill payload must be a JSON object.")
+            selected = registry.get(args.name)
+            explicit_permissions = {
+                item.strip().lower()
+                for item in os.getenv("ZEXA_SKILL_PERMISSIONS", "").split(",")
+                if item.strip()
+            }
+            grants = {
+                f"skill.execute:{skill.name}"
+                for skill in registry.list()
+            } | explicit_permissions
+            policy = PermissionPolicy(grants)
+            audit_path = Path(
+                os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+            ).expanduser()
+            gateway = ExecutionGateway(
+                policy,
+                ApprovalManager(ttl_seconds=60),
+                AuditLog(audit_path),
+                capabilities=skill_capabilities(registry),
+            )
+            engine = SkillExecutionEngine(
+                registry, gateway, brain_skill_handlers(registry, brain),
+            )
+            approval_token = None
+            if selected.risk_level in {"high", "critical"}:
+                print(f"Skill: {selected.name} (risk: {selected.risk_level})")
+                print("Exact input:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
+                confirmation = input("Review the exact input. Type APPROVE to continue: ")
+                if confirmation != "APPROVE":
+                    print("Skill execution cancelled.")
+                    return
+                approval_token = engine.issue_approval(
+                    selected.name, payload, user_confirmed=True,
+                ).token
+            result = engine.execute(
+                selected.name, payload, approval_token=approval_token,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
+        if args.command == "research":
+            query = " ".join(args.query)
+            results = DuckDuckGoSearch().search(query, limit=args.limit)
+            print(summarize_research(brain, query, results))
+            if results:
+                print("\
+Sources:")
+                for index, item in enumerate(results, start=1):
+                    print(f"[{index}] {item.title} — {item.url}")
+            return
+        if args.command == "agent":
+            results = AgentOrchestrator(brain, registry).run(" ".join(args.goal))
+            print(json.dumps(results, ensure_ascii=False, indent=2))
+            return
+        if args.command == "voice":
+            voice = TermuxVoice()
+            transcript = voice.listen()
+            print(f"You: {transcript}")
+            answer = brain.chat(
+                [
+                    {"role": "system", "content": SYSTEM_PROMPT + " For voice replies, answer naturally and concisely in the user's language."},
+                    {"role": "user", "content": transcript},
+                ],
+            ).text
+            print(f"Zexa: {answer}")
+            voice.speak(answer[:3000])
+            return
+        if args.command == "converse":
+            voice = TermuxVoice()
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT + " In this ongoing voice conversation, answer naturally and concisely in the user's language."}
+            ]
+            stop_phrases = {"stop", "exit", "quit", "band karo", "bas karo", "बंद करो", "रुको"}
+            print("Zexa continuous voice mode started. Say 'stop' or press Ctrl+C to exit.")
+            try:
+                empty_transcripts = 0
+                while True:
+                    try:
+                        transcript = voice.listen().strip()
+                    except RuntimeError as exc:
+                        if "No speech transcript was returned" not in str(exc):
+                            raise
+                        empty_transcripts += 1
+                        if empty_transcripts == 1:
+                            print("Zexa: Awaaz clear nahi mili. Dobara boliye.")
+                        elif empty_transcripts % 3 == 0:
+                            print("Zexa: Main listening mode mein hoon. Jab ready ho, boliye.")
+                        # Empty captures do not end a user-started session.
+                        # Ctrl+C or a spoken stop phrase remains the exit path.
+                        time.sleep(1)
+                        continue
+                    empty_transcripts = 0
+                    print(f"You: {transcript}")
+                    if transcript.casefold().strip(" .!?") in stop_phrases:
+                        print("Zexa: Voice conversation ended.")
+                        break
+                    torch_state = _explicit_torch_request(transcript)
+                    if torch_state:
+                        try:
+                            TermuxAndroidHand().set_torch(torch_state)
+                            answer = "Flashlight on kar di." if torch_state == "on" else "Flashlight band kar di."
+                        except (RuntimeError, OSError, ValueError) as exc:
+                            answer = f"Flashlight control available nahi hai: {exc}"
+                        print(f"Zexa: {answer}")
+                        voice.speak(answer)
+                        continue
+                    routed = route_utterance(config, messages[1:], transcript, brain=brain)
+                    intent = routed["intent"]
+                    answer = routed["reply"]
+                    if intent == "noise" or not answer:
+                        print("Zexa: Speech clear nahi thi; is turn ko skip kar raha hoon.")
+                        continue
+                    if intent == "task_request":
+                        print("Zexa: Task request detected. Abhi koi action execute nahi hua.")
+                    print(f"Zexa: {answer}")
+                    voice.speak(answer[:3000])
+                    messages.append({"role": "user", "content": transcript})
+                    messages.append({"role": "assistant", "content": answer})
+                    # Keep the system prompt and the latest six exchanges to bound context.
+                    messages = [messages[0]] + messages[-12:]
             except KeyboardInterrupt:
-                break
-            if transcript.strip().lower() in {"exit", "quit", "stop"}:
-                break
-            history.append({"role": "user", "content": transcript})
-            answer = brain.chat(history)
-            history.append({"role": "assistant", "content": answer.text})
-            print(answer.text)
-            voice.speak(answer.text)
+                print("\nZexa: Voice conversation ended.")
+            return
+        if args.command == "plan":
+            print(json.dumps(create_plan(config, registry, " ".join(args.goal), brain=brain), indent=2))
+            print("\nPlan only: no tools or external actions were executed.")
+            return
+        answer = brain.chat(
+            [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": " ".join(args.prompt)},
+            ],
+        ).text
+        print(answer)
+    except (ValueError, RuntimeError, KeyError, PermissionError) as exc:
+        print(f"zexa: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":
