@@ -26,10 +26,10 @@ This file separates work that is implemented and CI-verified on the feature bran
 
 ## Still requires real-device / account verification
 
-- [ ] Install the current branch on the OPPO Android 16 device and validate Termux commands.
-- [ ] Enable Accessibility manually and test the local bridge, approval prompts, and every supported action.
-- [ ] Validate Termux:Services and optional Termux:Boot across app restart and device reboot.
-- [ ] Verify notifications, Doze/battery restrictions, process recovery, and queue persistence on-device.
+- [ ] Install the current branch on the OPPO Android 16 device and validate Termux commands. (Not performed by GitHub CI.)
+- [ ] Enable Accessibility manually and test the local bridge, approval prompts, and every supported action. (Not performed by GitHub CI.)
+- [ ] Validate Termux:Services and optional Termux:Boot across app restart and device reboot. (Not performed by GitHub CI.)
+- [ ] Verify notifications, Doze/battery restrictions, process recovery, and queue persistence on-device. (Not performed by GitHub CI.)
 - [ ] Confirm the installed APK on the physical device; CI assembly is not a device test.
 
 ## Product integrations not yet implemented
@@ -42,6 +42,14 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [ ] Semantic memory/RAG with retention and deletion controls.
 - [ ] Kotlin/Android static analysis and Android instrumentation tests.
 - [ ] Signed release build, release provenance/SBOM, and repository-level secret-scanning configuration.
+
+## Latest GitHub Actions verification
+
+- [x] Zexa CI #284 passed on commit `43f5882` (Python 3.11/3.12/3.13; tests, byte-compilation, and Termux shell syntax).
+- [x] CodeQL #113 passed on commit `43f5882`.
+- [x] Android Bridge Build #70 passed on commit `43f5882` (Android SDK 36, JVM unit tests, and debug APK assembly).
+- [x] Community skill import #13 passed; manifest records 320 references, 0 enabled, 1 flagged for manual review.
+- [ ] Physical OPPO Android 16 validation remains outstanding.
 
 ## Pull request state
 
