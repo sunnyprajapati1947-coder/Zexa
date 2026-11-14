@@ -16,9 +16,9 @@ Status labels:
 ## 1. Brain, reasoning and conversation
 
 1. `reasoning_engine` — structured multi-step reasoning.
-2. `intent_detection` — classify the user's request.
+2. `intent_detection` [CORE-EXISTS] — classify the user's request.
 3. `context_awareness` — use relevant conversation context.
-4. `task_decomposition` — split goals into bounded subtasks.
+4. `task_decomposition` [CORE-EXISTS] — split goals into bounded subtasks.
 5. `decision_engine` — choose a safe next action.
 6. `answer_planning` — plan response structure before answering.
 7. `self_evaluation` — check an answer against requirements.
@@ -52,16 +52,16 @@ Status labels:
 ## 3. Android Human Hand and device
 
 31. `android_status` — read approved device status.
-32. `android_app_launcher` — launch an explicitly selected app.
+32. `android_app_launcher` [CORE-EXISTS] — launch an explicitly selected app.
 33. `screen_understanding` — interpret user-authorized screen snapshots.
-34. `accessibility_tree_reader` — read approved accessibility nodes.
-35. `touch_gesture_controller` — perform allowlisted gestures after approval.
-36. `scroll_controller` — scroll an approved screen.
-37. `back_home_navigation` — use standard navigation actions.
-38. `text_input_assistant` — enter user-approved text.
+34. `accessibility_tree_reader` [CORE-EXISTS] — read approved accessibility nodes.
+35. `touch_gesture_controller` [CORE-EXISTS] — perform allowlisted gestures after approval.
+36. `scroll_controller` [CORE-EXISTS] — scroll an approved screen.
+37. `back_home_navigation` [CORE-EXISTS] — use standard navigation actions.
+38. `text_input_assistant` [CORE-EXISTS] — enter user-approved text.
 39. `file_manager` — list and organize user-selected files.
 40. `download_manager` — manage explicitly requested downloads.
-41. `notification_manager` — send Zexa status notifications.
+41. `notification_manager` [CORE-EXISTS] — send Zexa status notifications.
 42. `clipboard_manager` — read/write clipboard only on user request.
 43. `share_sheet_helper` — open Android share sheet for user review.
 44. `connectivity_status` — report network connectivity.
@@ -69,11 +69,11 @@ Status labels:
 
 ## 4. Voice and accessibility
 
-46. `push_to_talk` — start microphone capture only on user action.
-47. `speech_to_text` — transcribe authorized audio.
-48. `text_to_speech` — speak generated responses.
+46. `push_to_talk` [CORE-EXISTS] — start microphone capture only on user action.
+47. `speech_to_text` [CORE-EXISTS] — transcribe authorized audio.
+48. `text_to_speech` [CORE-EXISTS] — speak generated responses.
 49. `voice_activity_gate` — detect speech during an active session.
-50. `voice_command_parser` — parse spoken commands.
+50. `voice_command_parser` [CORE-EXISTS] — parse spoken commands.
 51. `wake_phrase_optional` — optional, visibly enabled wake phrase mode.
 52. `voice_language_router` — select supported speech language.
 53. `pronunciation_helper` — improve spoken output.
@@ -87,13 +87,13 @@ Status labels:
 
 ## 5. Memory and personal productivity
 
-61. `explicit_memory_save` — save details only when requested or authorized.
-62. `memory_retrieval` — retrieve relevant saved context.
+61. `explicit_memory_save` [CORE-EXISTS] — save details only when requested or authorized.
+62. `memory_retrieval` [CORE-EXISTS] — retrieve relevant saved context.
 63. `semantic_memory_search` — search memory by meaning.
 64. `memory_edit` — update user-approved memory.
 65. `memory_retention_policy` — apply retention and deletion rules.
 66. `conversation_history_search` — search local conversation records.
-67. `task_history` — view prior task outcomes.
+67. `task_history` [CORE-EXISTS] — view prior task outcomes.
 68. `reminder_scheduler` — create reminders.
 69. `calendar_reader` — read an authorized calendar.
 70. `calendar_planner` — propose schedule slots.
@@ -114,7 +114,7 @@ Status labels:
 82. `code_generator` — generate code from requirements.
 83. `code_explainer` — explain existing code.
 84. `code_debugger` — diagnose errors from supplied logs.
-85. `code_reviewer` — review code for defects.
+85. `code_reviewer` [CORE-EXISTS] — review code for defects.
 86. `security_code_review` — identify common security weaknesses.
 87. `unit_test_generator` — propose focused unit tests.
 88. `test_runner` — run approved project tests.
@@ -183,26 +183,26 @@ Status labels:
 ## 10. Automation, orchestration and reliability
 
 141. `workflow_engine` — run bounded multi-step workflows.
-142. `multi_agent_router` — route subtasks to specialist agents.
-143. `skill_registry` — register and discover skills.
+142. `multi_agent_router` [CORE-EXISTS] — route subtasks to specialist agents.
+143. `skill_registry` [CORE-EXISTS] — register and discover skills.
 144. `dynamic_skill_loader` — load reviewed local skill packages.
 145. `plugin_adapter` — connect explicitly configured integrations.
-146. `background_task_queue` — queue bounded background work.
-147. `retry_manager` — retry transient failures with limits.
-148. `error_recovery` — recover safely from known errors.
+146. `background_task_queue` [CORE-EXISTS] — queue bounded background work.
+147. `retry_manager` [CORE-EXISTS] — retry transient failures with limits.
+148. `error_recovery` [CORE-EXISTS] — recover safely from known errors.
 149. `task_verifier` — verify outcomes against acceptance criteria.
 150. `audit_log_writer` — record security-relevant actions.
 
 ## 11. Security, privacy and governance
 
-151. `permission_guard` — enforce least-privilege permissions.
-152. `approval_gate` — require confirmation for consequential actions.
+151. `permission_guard` [CORE-EXISTS] — enforce least-privilege permissions.
+152. `approval_gate` [CORE-EXISTS] — require confirmation for consequential actions.
 153. `secret_manager` — keep API keys and tokens out of source control.
 154. `prompt_injection_guard` — treat external content as untrusted data.
 155. `path_sandbox` — restrict file access to approved roots.
 156. `network_allowlist` — restrict outbound network destinations.
 157. `action_policy_checker` — validate actions against policy.
-158. `privacy_filter` — minimize personal data in logs and outputs.
+158. `privacy_filter` [CORE-EXISTS] — minimize personal data in logs and outputs.
 159. `dependency_license_checker` — track third-party licenses.
 160. `security_event_monitor` — report suspicious or denied actions.
 
@@ -218,6 +218,12 @@ Status labels:
 168. `recipe_planner` — suggest recipes from available ingredients.
 169. `fitness_habit_planner` — suggest age-appropriate general activity habits.
 170. `personal_finance_organizer` — categorize user-provided budgets without executing transactions.
+
+## Current implementation snapshot
+
+The following entries marked `[CORE-EXISTS]` have a working foundation in the repository, but the marker does not imply production completeness. In particular, the built-in skill set is still small; web research, browser automation, calendar/CRM integrations, advanced memory, and most of the 170 listed capabilities remain planned or require configured external services.
+
+The specialist-agent router, typed skill contracts, durable background notification queue, and opt-in Android bridge are implemented as foundations. Each skill still needs its own handler, integration, permission review, and tests before it can be called fully implemented.
 
 ## Implementation order
 
