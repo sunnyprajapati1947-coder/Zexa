@@ -17,7 +17,10 @@ from .approvals import ApprovalManager
 from .audit import AuditLog
 from .gateway import ExecutionGateway
 from .policy import PermissionPolicy
-from .execution import SkillExecutionEngine, brain_skill_handlers, skill_capabilities
+from .execution import (
+    SkillExecutionEngine, brain_skill_handlers, skill_capabilities,
+    execute_background_skill,
+)
 from .brain import build_brain_router
 from .intent import route_utterance
 from .jobs import JobQueue, JobWorker
@@ -199,17 +202,12 @@ def main() -> None:
             registry, gateway, brain_skill_handlers(registry, brain),
         )
         def run_background_skill(payload):
-            selected = registry.get(payload["name"])
-            if selected.risk_level != "low":
-                raise PermissionError("Only low-risk skills are allowed in background jobs.")
-            result = skill_engine.execute(
-                selected.name, payload["input"], actor="background_worker",
+            return execute_background_skill(
+                skill_engine, registry, payload,
+                notify=lambda message: TermuxAndroidHand().notify(
+                    "Zexa task completed", message,
+                ),
             )
-            rendered = json.dumps(result, ensure_ascii=False)
-            TermuxAndroidHand().notify(
-                "Zexa task completed", f"{selected.name}: {rendered[:700]}",
-            )
-            return rendered
         worker = JobWorker(queue, {
             "notification": lambda payload: (
                 TermuxAndroidHand().notify(payload["title"], payload["content"])
@@ -226,7 +224,8 @@ def main() -> None:
                 if worker.run_once() in {"idle", "pending"}:
                     time.sleep(args.poll_seconds)
         except KeyboardInterrupt:
-            print("\nZexa background worker stopped.")
+            print("
+Zexa background worker stopped.")
         return
 
     if args.command == "skill" and args.skill_command == "list":
@@ -419,7 +418,8 @@ def main() -> None:
             results = DuckDuckGoSearch().search(query, limit=args.limit)
             print(summarize_research(brain, query, results))
             if results:
-                print("\\nSources:")
+                print("\
+Sources:")
                 for index, item in enumerate(results, start=1):
                     print(f"[{index}] {item.title} — {item.url}")
             return
@@ -494,11 +494,13 @@ def main() -> None:
                     # Keep the system prompt and the latest six exchanges to bound context.
                     messages = [messages[0]] + messages[-12:]
             except KeyboardInterrupt:
-                print("\nZexa: Voice conversation ended.")
+                print("
+Zexa: Voice conversation ended.")
             return
         if args.command == "plan":
             print(json.dumps(create_plan(config, registry, " ".join(args.goal), brain=brain), indent=2))
-            print("\nPlan only: no tools or external actions were executed.")
+            print("
+Plan only: no tools or external actions were executed.")
             return
         answer = brain.chat(
             [
