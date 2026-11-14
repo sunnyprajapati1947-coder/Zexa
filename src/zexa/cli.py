@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .config import get_config, load_env_file
-from .groq import chat
+from .brain import build_brain_router
 from .intent import route_utterance
 from .memory import MemoryStore
 from .planner import create_plan
@@ -151,18 +152,23 @@ def main() -> None:
 
     load_env_file()
     try:
-        config = get_config()
+        mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
+        config = None
+        if mode != "offline" and os.getenv("GROQ_API_KEY", "").strip():
+            config = get_config()
+        elif mode == "online":
+            config = get_config()
+        brain = build_brain_router(config, mode)
         if args.command == "voice":
             voice = TermuxVoice()
             transcript = voice.listen()
             print(f"You: {transcript}")
-            answer = chat(
-                config,
+            answer = brain.chat(
                 [
                     {"role": "system", "content": SYSTEM_PROMPT + " For voice replies, answer naturally and concisely in the user's language."},
                     {"role": "user", "content": transcript},
                 ],
-            )
+            ).text
             print(f"Zexa: {answer}")
             voice.speak(answer[:3000])
             return
@@ -205,7 +211,7 @@ def main() -> None:
                         print(f"Zexa: {answer}")
                         voice.speak(answer)
                         continue
-                    routed = route_utterance(config, messages[1:], transcript)
+                    routed = route_utterance(config, messages[1:], transcript, brain=brain)
                     intent = routed["intent"]
                     answer = routed["reply"]
                     if intent == "noise" or not answer:
@@ -223,16 +229,15 @@ def main() -> None:
                 print("\nZexa: Voice conversation ended.")
             return
         if args.command == "plan":
-            print(json.dumps(create_plan(config, registry, " ".join(args.goal)), indent=2))
+            print(json.dumps(create_plan(config, registry, " ".join(args.goal), brain=brain), indent=2))
             print("\nPlan only: no tools or external actions were executed.")
             return
-        answer = chat(
-            config,
+        answer = brain.chat(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": " ".join(args.prompt)},
             ],
-        )
+        ).text
         print(answer)
     except (ValueError, RuntimeError, KeyError, PermissionError) as exc:
         print(f"zexa: {exc}", file=sys.stderr)

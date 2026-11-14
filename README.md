@@ -37,7 +37,7 @@ The brain router can be used by Python integrations:
     reply = router.chat([{'role': 'user', 'content': 'Hello'}])
     print(reply.brain, reply.text)
 
-For online + offline auto mode, pass the validated Groq config returned by get_config(). The CLI chat commands have not yet been switched to the new router.
+The CLI `ask`, `voice`, `converse`, and `plan` commands now use the same brain router. Set `ZEXA_BRAIN_MODE=auto` (default), `online`, or `offline`. In `auto`, Groq is preferred when configured and local inference is used only when the network cannot reach Groq. If no Groq key is configured, `auto` can use a ready local model. Authentication, quota, and model errors are surfaced rather than silently hidden. `plan` and voice intent classification also use the selected brain.
 
 ## Human Hand bridge protocol
 
@@ -70,6 +70,10 @@ Microphone capture starts only after the user manually invokes a voice command. 
     cp .env.example .env
 
 Never commit .env, API keys, bridge tokens, or personal data.
+
+## Automated checks
+
+GitHub Actions runs the unit-test suite and byte-compilation on Python 3.11, 3.12, and 3.13 for pushes and pull requests.
 
 ## Development checks
 
