@@ -1,0 +1,3 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Termux:Services runit entrypoint. Only allowlisted Zexa jobs are processed.
+exec zexa worker --poll-seconds 5
