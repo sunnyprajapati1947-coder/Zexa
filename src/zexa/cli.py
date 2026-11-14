@@ -29,6 +29,7 @@ from .memory import MemoryStore
 from .planner import create_plan
 from .research import DuckDuckGoSearch, summarize_research
 from .skills import default_registry
+from .skillpacks import load_imported_manifest
 from .tasks import TaskStore
 from .tools import default_router
 
@@ -77,6 +78,12 @@ def main() -> None:
     skill_run = skill_sub.add_parser("run", help="Run one skill with a JSON input object")
     skill_run.add_argument("name")
     skill_run.add_argument("payload", help="Input JSON object matching the skill schema")
+
+    skillpacks_parser = subparsers.add_parser("skillpacks", help="Inspect disabled imported skill references")
+    skillpacks_sub = skillpacks_parser.add_subparsers(dest="skillpacks_command", required=True)
+    skillpacks_sub.add_parser("status", help="Show imported skill pack counts and review status")
+    skillpacks_list = skillpacks_sub.add_parser("list", help="List imported skill metadata; imported content stays disabled")
+    skillpacks_list.add_argument("--limit", type=int, default=50)
 
     skills_parser = subparsers.add_parser("skills", help="List registered skills")
     skills_parser.add_argument("--json", action="store_true", help="Show skill schemas, permissions, risk and budgets")
@@ -242,6 +249,34 @@ def main() -> None:
 
     if args.command == "skill" and args.skill_command == "list":
         print(json.dumps(registry.metadata(), ensure_ascii=False, indent=2))
+        return
+    if args.command == "skillpacks":
+        manifest = load_imported_manifest()
+        if args.skillpacks_command == "status":
+            summary = {
+                "imported_count": manifest["imported_count"],
+                "enabled_count": manifest["enabled_count"],
+                "review_required_count": sum(
+                    1 for item in manifest["skills"] if item["review_required"]
+                ),
+                "source_count": len(manifest.get("sources", [])),
+                "execution": "disabled; imported references are not executable",
+            }
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            if not 1 <= args.limit <= 500:
+                raise SystemExit("zexa: --limit must be between 1 and 500.")
+            items = [
+                {
+                    "name": item["name"],
+                    "description": item["description"],
+                    "license": item["license"],
+                    "review_required": item["review_required"],
+                    "enabled": False,
+                }
+                for item in manifest["skills"][:args.limit]
+            ]
+            print(json.dumps(items, ensure_ascii=False, indent=2))
         return
     if args.command == "skills":
         if args.json:
