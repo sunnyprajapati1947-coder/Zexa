@@ -32,6 +32,12 @@ SOURCES = (
         "license": "CC-BY-4.0",
         "expected_skill_files": 201,
     },
+    {
+        "repo": "Nikoxkx/Agent-Skills",
+        "commit": "d4fd9165fa786d12c3d836273ac8346f5f3275ab",
+        "license": "Apache-2.0",
+        "expected_skill_files": 59,
+    },
 )
 MINIMUM_SKILLS = 300
 
@@ -44,42 +50,52 @@ def run(command: list[str], cwd: Path | None = None) -> str:
     return result.stdout
 
 
-def clone_sparse(source: dict, destination: Path) -> list[str]:
+def clone_pinned(source: dict, destination: Path) -> list[str]:
     url = f"https://github.com/{source['repo']}.git"
     run(["git", "clone", "--filter=blob:none", "--no-checkout", "--depth", "1", url, str(destination)])
     run(["git", "fetch", "--depth", "1", "origin", source["commit"]], cwd=destination)
     paths = run(["git", "ls-tree", "-r", "--name-only", source["commit"]], cwd=destination).splitlines()
-    skill_files = sorted(p for p in paths if p.lower().endswith("/skill.md") or p.lower() == "skill.md")
+    skill_files = sorted(
+        p for p in paths
+        if p.lower().endswith("/skill.md") or p.lower() == "skill.md"
+    )
     if len(skill_files) < source["expected_skill_files"]:
         raise RuntimeError(
             f"{source['repo']} returned {len(skill_files)} skills; "
             f"expected at least {source['expected_skill_files']}."
         )
-    directories = sorted({str(Path(p).parent).replace("\\", "/") for p in skill_files})
-    run(["git", "sparse-checkout", "init", "--cone"], cwd=destination)
-    run(["git", "sparse-checkout", "set", *directories], cwd=destination)
+    # A complete pinned checkout avoids sparse-checkout edge cases where a
+    # nested skill directory is listed but omitted from the working tree.
     run(["git", "checkout", "--detach", source["commit"]], cwd=destination)
+    missing = [relative for relative in skill_files if not (destination / relative).is_file()]
+    if missing:
+        raise RuntimeError(
+            f"{source['repo']} checkout omitted {len(missing)} indexed SKILL.md files."
+        )
     return skill_files
 
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import a pinned 450+ skill reference pack.")
+    parser = argparse.ArgumentParser(description="Import a pinned 500+ skill reference pack.")
     parser.add_argument("--dry-run", action="store_true", help="scan and report without copying skill folders")
     args = parser.parse_args()
     output = ROOT / "skillpacks" / "imported"
     if output.exists():
         raise SystemExit(f"{output} already exists; move it aside before importing again.")
+
     records: list[dict] = []
     rejected: list[dict] = []
     pending_copies: list[tuple[Path, Path]] = []
     license_copies: list[tuple[Path, Path]] = []
     seen: set[str] = set()
+
+    # Keep temporary checkouts alive until all validated skill directories and
+    # their license files have been copied into the final reference pack.
     with tempfile.TemporaryDirectory(prefix="zexa-skill-import-") as temp:
         temp_root = Path(temp)
         for source in SOURCES:
             repo_slug = source["repo"].replace("/", "__").lower()
             checkout = temp_root / repo_slug
-            skill_files = clone_sparse(source, checkout)
+            skill_files = clone_pinned(source, checkout)
             license_file = checkout / "LICENSE"
             if not license_file.is_file():
                 raise RuntimeError(f"Missing source LICENSE file: {source['repo']}")
@@ -90,7 +106,11 @@ def main() -> int:
                         path, checkout, source["repo"], source["commit"], source["license"]
                     )
                     if item.name in seen:
-                        rejected.append({"source": source["repo"], "path": relative, "reason": "duplicate skill name"})
+                        rejected.append({
+                            "source": source["repo"],
+                            "path": relative,
+                            "reason": "duplicate skill name",
+                        })
                         continue
                     seen.add(item.name)
                     destination = output / repo_slug / Path(relative).parent
@@ -109,33 +129,56 @@ def main() -> int:
                         "enabled": False,
                     })
                 except Exception as exc:
-                    rejected.append({"source": source["repo"], "path": relative, "reason": str(exc)})
-            license_copies.append((license_file, Path(repo_slug + "-LICENSE")) )
-    if len(records) < MINIMUM_SKILLS:
-        raise SystemExit(
-            f"Import stopped: only {len(records)} valid unique skills passed checks; "
-            f"at least {MINIMUM_SKILLS} are required. No skills were activated."
-        )
-    report = {
-        "schema_version": 1,
-        "imported_count": len(records),
-        "enabled_count": 0,
-        "sources": SOURCES,
-        "skills": records,
-        "rejected": rejected,
-        "execution_policy": "metadata and reference files only; never execute imported scripts or hooks",
-    }
-    if not args.dry_run:
-        output.mkdir(parents=True, exist_ok=False)
-        for source_dir, destination in pending_copies:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(source_dir, destination, dirs_exist_ok=True, symlinks=False, ignore=lambda directory, names: [name for name in names if (Path(directory) / name).is_symlink()])
-        license_dir = output / "licenses"
-        license_dir.mkdir(parents=True, exist_ok=True)
-        for source_file, filename in license_copies:
-            shutil.copy2(source_file, license_dir / filename)
-        (output / "index.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(f"Validated {len(records)} unique skills from {len(SOURCES)} pinned GitHub repositories.")
+                    rejected.append({
+                        "source": source["repo"],
+                        "path": relative,
+                        "reason": str(exc)[:240],
+                    })
+            license_copies.append((license_file, Path(repo_slug + "-LICENSE")))
+
+        if len(records) < MINIMUM_SKILLS:
+            raise SystemExit(
+                f"Import stopped: only {len(records)} safe, valid unique skills passed checks; "
+                f"at least {MINIMUM_SKILLS} are required. No skills were activated."
+            )
+
+        report = {
+            "schema_version": 1,
+            "imported_count": len(records),
+            "enabled_count": 0,
+            "sources": SOURCES,
+            "skills": records,
+            "rejected": rejected,
+            "execution_policy": (
+                "metadata and reference files only; imported skills are disabled; "
+                "never execute imported scripts or hooks"
+            ),
+        }
+
+        if not args.dry_run:
+            output.mkdir(parents=True, exist_ok=False)
+            for source_dir, destination in pending_copies:
+                if not source_dir.is_dir():
+                    raise RuntimeError("A validated skill directory was missing before copy.")
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(
+                    source_dir,
+                    destination,
+                    dirs_exist_ok=True,
+                    symlinks=False,
+                    ignore=lambda directory, names: [
+                        name for name in names if (Path(directory) / name).is_symlink()
+                    ],
+                )
+            license_dir = output / "licenses"
+            license_dir.mkdir(parents=True, exist_ok=True)
+            for source_file, filename in license_copies:
+                shutil.copy2(source_file, license_dir / filename)
+            (output / "index.json").write_text(
+                json.dumps(report, indent=2) + "\n", encoding="utf-8"
+            )
+
+    print(f"Validated and imported {len(records)} safe unique skills from {len(SOURCES)} pinned GitHub repositories.")
     print(f"Rejected or duplicate entries: {len(rejected)}")
     print("Imported skills remain disabled until individually reviewed.")
     return 0

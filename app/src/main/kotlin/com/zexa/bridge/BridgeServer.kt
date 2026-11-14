@@ -7,7 +7,8 @@ import java.io.BufferedInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.security.MessageDigest
+import java.util.concurrent.Semaphore
+import java.util.concurrent.ConcurrentHashMap
 import java.nio.charset.StandardCharsets
 
 class BridgeServer(
@@ -15,7 +16,13 @@ class BridgeServer(
     private val service: ZexaAccessibilityService,
 ) {
     @Volatile private var running = false
+    @Volatile private var ready = false
     @Volatile private var server: ServerSocket? = null
+    private val clientSlots = Semaphore(4)
+    private val activeClients = ConcurrentHashMap.newKeySet<Socket>()
+
+    val isRunning: Boolean
+        get() = running && ready && server?.isClosed == false
     private var thread: Thread? = null
 
     fun start() {
@@ -25,17 +32,30 @@ class BridgeServer(
             try {
                 val socketServer = ServerSocket(8765, 8, InetAddress.getByName("127.0.0.1"))
                 server = socketServer
+                ready = true
                 if (!running) {
                     socketServer.close()
                     return@Thread
                 }
                 while (running) {
                     val socket = socketServer.accept()
-                    Thread({ handle(socket) }, "zexa-bridge-client").start()
+                    if (!clientSlots.tryAcquire()) {
+                        try { respond(socket, 503, JSONObject().put("error", "Bridge is busy")) } catch (_: Exception) {}
+                        try { socket.close() } catch (_: Exception) {}
+                        continue
+                    }
+                    activeClients.add(socket)
+                    Thread({
+                        try { handle(socket) } finally {
+                            activeClients.remove(socket)
+                            clientSlots.release()
+                        }
+                    }, "zexa-bridge-client").apply { isDaemon = true; start() }
                 }
             } catch (_: Exception) {
                 // Server is intentionally silent; status is visible in the app.
             } finally {
+                ready = false
                 running = false
                 try { server?.close() } catch (_: Exception) {}
                 server = null
@@ -44,9 +64,13 @@ class BridgeServer(
     }
 
     fun stop() {
+        ready = false
         running = false
         try { server?.close() } catch (_: Exception) {}
         server = null
+        activeClients.forEach { client -> try { client.close() } catch (_: Exception) {} }
+        activeClients.clear()
+        thread?.interrupt()
     }
 
     private fun handle(socket: Socket) {
@@ -70,7 +94,7 @@ class BridgeServer(
                     line.substring(separator + 1).trim()
             }
             val provided = headers["authorization"]?.removePrefix("Bearer ") ?: ""
-            if (!MessageDigest.isEqual(token.toByteArray(), provided.toByteArray())) {
+            if (!BridgeSecurityRules.tokenMatches(token, provided)) {
                 return respond(client, 401, JSONObject().put("error", "Unauthorized"))
             }
             val response = try {
@@ -78,8 +102,8 @@ class BridgeServer(
                     method == "GET" && path == "/v1/status" -> service.statusJson()
                     method == "GET" && path == "/v1/screen" -> service.screenJson()
                     method == "POST" && path == "/v1/action" -> {
-                        val length = headers["content-length"]?.toIntOrNull() ?: 0
-                        require(length in 1..16000)
+                        val length = BridgeSecurityRules.contentLength(headers["content-length"])
+                            ?: error("Invalid request body length.")
                         val body = ByteArray(length)
                         var offset = 0
                         while (offset < length) {
@@ -124,6 +148,7 @@ class BridgeServer(
             200 -> "OK"
             400 -> "Bad Request"
             401 -> "Unauthorized"
+            503 -> "Service Unavailable"
             else -> "Not Found"
         }
         val header = "HTTP/1.1 $status $reason\r\n" +

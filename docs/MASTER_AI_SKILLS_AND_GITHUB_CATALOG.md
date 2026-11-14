@@ -6,11 +6,17 @@
 
 ## 1. Skill inventory
 
-### 1.1 Registered baseline skills (3)
-These are the three baseline skill names in the current catalog:
+### 1.1 Registered skills (7)
+These seven declarative skill contracts are currently registered in `default_registry()`:
 - `general_assistant`
 - `text_analysis`
 - `coding_review`
+- `customer_support_drafter`
+- `proposal_writer`
+- `invoice_drafter`
+- `faq_builder`
+
+Only skills with trusted native handlers are executable. Registration alone does not grant external permissions or make a skill production-integrated.
 
 ### 1.2 Proposed skill roadmap (50)
 These are proposed names, not claims of completed implementation.
@@ -81,7 +87,7 @@ These are proposed names, not claims of completed implementation.
 - `security_guardian`
 - `task_verification`
 
-**Inventory count:** 3 baseline names + 50 proposed names = 53 named skills. This is a roadmap inventory, not a claim that all 53 are implemented.
+**Inventory count:** 7 currently registered skill contracts + 50 names in this earlier proposal inventory = 57 names. The canonical 170-skill roadmap in `docs/SKILL_CATALOG.md` supersedes this condensed inventory. A registered contract is not proof of a complete end-to-end integration.
 
 ## 2. Additional tools and capabilities
 

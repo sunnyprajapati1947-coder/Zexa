@@ -1,3 +1,14 @@
 #!/data/data/com.termux/files/usr/bin/sh
 # Termux:Services runit entrypoint. Only allowlisted Zexa jobs are processed.
+umask 077
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+ROOT="${ZEXA_ROOT:-$HOME/Zexa}"
+export PATH="$ROOT/.venv/bin:$PREFIX/bin"
+export ZEXA_ENV_FILE="${ZEXA_ENV_FILE:-$ROOT/.env}"
+export ZEXA_JOB_DB="${ZEXA_JOB_DB:-$HOME/.zexa/jobs.sqlite3}"
+export ZEXA_AUDIT_DB="${ZEXA_AUDIT_DB:-$HOME/.zexa/audit.sqlite3}"
+cd "$ROOT" || exit 1
+if [ -x "$ROOT/.venv/bin/zexa" ]; then
+  exec "$ROOT/.venv/bin/zexa" worker --poll-seconds 5
+fi
 exec zexa worker --poll-seconds 5

@@ -134,10 +134,10 @@ The 170-item `docs/SKILL_CATALOG.md` is the canonical roadmap. The separate 53-n
 Current workflows declare read-only repository permissions, which is a good baseline. The workflows currently reference Actions by mutable version tags (for example, `actions/checkout@v4`). Before production releases:
 - Pin third-party Actions to verified full commit SHAs or adopt GitHub's workflow dependency lockfile where supported.
 - Add Dependabot updates for Python packages and GitHub Actions.
-- Add CodeQL or equivalent static analysis for Python and Kotlin.
+- A Python CodeQL workflow is now present on this branch; Kotlin/Android static analysis and Android instrumentation tests remain pending.
 - Add secret scanning and push protection in repository settings; verify settings in GitHub because they are not fully represented by source files.
 - Add dependency vulnerability scanning and license/SBOM reporting.
-- Add Android unit/instrumentation tests in addition to `assembleDebug`.
+- Add Android unit/instrumentation tests in addition to `assembleDebug`; this remains pending.
 - Add release build signing through protected GitHub environments and short-lived credentials; never commit keystores or signing secrets.
 - Keep fork PR workflows read-only and never run untrusted code in privileged `pull_request_target` or `workflow_run` contexts.
 - Retain least-privilege `GITHUB_TOKEN` permissions and review any future permission elevation.
@@ -193,3 +193,42 @@ A milestone is complete only when all applicable gates pass:
 Zexa is ready for a capability only when the feature works end-to-end on the target device, the permission and approval boundary is enforced in code, tests cover both success and denial/failure, documentation matches reality, and the user can inspect, stop, revoke, and recover the operation.
 
 **Bottom line:** Keep Zexa as one repository. Keep the 170-skill list as a roadmap. Implement the smallest dependable phone-first core first; do not bulk-import 167 upstream projects or pretend that catalogue entries are working skills.
+
+
+## Branch implementation delta — secure execution and worker milestone
+
+This addendum records changes on `feature/secure-agent-foundation`; it does not rewrite the historical main-branch review above.
+
+### Implemented on this branch
+
+- Central deny-by-default permission policy, trusted capability metadata, action-bound one-time approvals, and local SQLite audit events.
+- Android bridge CLI actions routed through the gateway with a local action allowlist and exact typed confirmation.
+- Typed skill execution engine with input/output schema validation and trusted application handlers.
+- Brain-backed drafting/analysis adapters that accept JSON output only and cannot register tools or execute model-generated code.
+- `zexa skill list` and `zexa skill run` commands.
+- Low-risk background skill jobs routed through the skill engine and gateway, with completion notifications.
+- Stable queue database path at `~/.zexa/jobs.sqlite3`, configurable via `ZEXA_JOB_DB`; explicit `ZEXA_ENV_FILE` loading before queue and worker commands.
+- Pending-job cancellation, failed-job retry, and failure-message redaction to avoid storing arbitrary exception text.
+- Termux:Services installer that generates a runit entrypoint for the selected checkout; optional Termux:Boot hook is provided separately.
+- Regression tests for gateway, skill execution, job lifecycle, and CLI queue controls.
+
+### Still not complete / cannot be verified from GitHub CI
+
+- The current specialist-agent orchestrator remains text-only; it does not execute browser, shell, GitHub, messaging, or external tools.
+- Not every existing local tool/agent read path is routed through the execution gateway. Any future side-effecting adapter must be gateway-protected before activation.
+- Skill catalogue entries and the 512-candidate community import are not 453 integrated executable skills. Imported third-party content stays disabled and untrusted.
+- Browser automation, MCP runtime, email/CRM/calendar providers, semantic memory/RAG, and a user-facing dashboard remain unimplemented.
+- Android AccessibilityService, Termux notifications, runit startup, Termux:Boot, Doze behavior, battery restrictions, and process recovery require physical-device tests.
+- Release signing, Android instrumentation tests, SBOM/dependency vulnerability gates, CodeQL, and repository security-setting verification remain separate release-hardening work.
+
+### Latest branch acceptance evidence
+
+The secure-execution and worker CI run must pass compilation and the complete unit suite on Python 3.11, 3.12, and 3.13. This does not count as Android device validation.
+
+
+### Additional verified GitHub branch work
+
+- Pinned community import completed in GitHub Actions: 320 unique reference skills imported from three immutable source commits; manifest reports 320 disabled and zero enabled. One entry is flagged for manual review. The importer rejects entries outside its safe import scope, verifies licenses and SHA-256 provenance, and never runs imported scripts.
+- Android bridge server now limits concurrent clients, exposes readiness based on the actual bound server, retries startup after a bind failure, and refuses the UI start action until the AccessibilityService is connected.
+- Pure bridge validation rules are covered by JVM unit tests; Android CI now runs `:app:testDebugUnitTest` before assembling the debug APK.
+- GitHub Actions major-version updates proposed by the five open Dependabot PRs are included together on this feature branch to avoid conflicting workflow edits. The original Dependabot PRs remain separate open PRs until the mainline change is merged or they are closed.

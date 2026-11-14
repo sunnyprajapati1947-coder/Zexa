@@ -12,7 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class ZexaAccessibilityService : AccessibilityService() {
-    private var bridgeServer: BridgeServer? = null
+    @Volatile private var bridgeServer: BridgeServer? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -26,14 +26,18 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    @Synchronized
     fun refreshBridge() {
         val enabled = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
             .getBoolean("bridge_enabled", false)
-        if (enabled && bridgeServer == null) {
-            val token = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
-                .getString("token", null) ?: return
-            bridgeServer = BridgeServer(token, this).also { it.start() }
-        } else if (!enabled) {
+        if (enabled) {
+            if (bridgeServer?.isRunning != true) {
+                bridgeServer?.stop()
+                val token = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
+                    .getString("token", null) ?: return
+                bridgeServer = BridgeServer(token, this).also { it.start() }
+            }
+        } else {
             bridgeServer?.stop()
             bridgeServer = null
         }
@@ -42,7 +46,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     fun statusJson(): JSONObject = JSONObject()
         .put("ok", true)
         .put("accessibility_enabled", true)
-        .put("bridge_enabled", bridgeServer != null)
+        .put("bridge_enabled", bridgeServer?.isRunning == true)
 
     fun screenJson(): JSONObject {
         val root = rootInActiveWindow ?: return JSONObject()
@@ -87,7 +91,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             "tap" -> {
                 val x = payload.optDouble("x", Double.NaN)
                 val y = payload.optDouble("y", Double.NaN)
-                require(x.isFinite() && y.isFinite() && x in 0.0..10000.0 && y in 0.0..10000.0)
+                require(BridgeSecurityRules.coordinate(x) && BridgeSecurityRules.coordinate(y))
                 val path = Path().apply { moveTo(x.toFloat(), y.toFloat()) }
                 dispatch(path, 80)
             }
@@ -97,8 +101,8 @@ class ZexaAccessibilityService : AccessibilityService() {
                 val x2 = payload.optDouble("x2", Double.NaN)
                 val y2 = payload.optDouble("y2", Double.NaN)
                 val duration = payload.optLong("duration_ms", 450L)
-                require(listOf(x1, y1, x2, y2).all { it.isFinite() && it in 0.0..10000.0 })
-                require(duration in 100L..2000L)
+                require(listOf(x1, y1, x2, y2).all { BridgeSecurityRules.coordinate(it) })
+                require(BridgeSecurityRules.gestureDuration(duration))
                 val path = Path().apply {
                     moveTo(x1.toFloat(), y1.toFloat())
                     lineTo(x2.toFloat(), y2.toFloat())
@@ -121,7 +125,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             }
             "launch_app" -> {
                 val packageName = payload.optString("package_name", "")
-                require(packageName.matches(Regex("^[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+$")))
+                require(BridgeSecurityRules.packageName(packageName))
                 val launch = packageManager.getLaunchIntentForPackage(packageName)
                     ?: error("No launchable app for that package.")
                 launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

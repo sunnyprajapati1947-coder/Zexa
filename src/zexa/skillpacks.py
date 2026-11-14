@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -17,6 +18,12 @@ ALLOWED_LICENSES = {
     "MPL-2.0", "CC0-1.0", "CC-BY-4.0", "Unlicense",
 }
 _NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
+_EXCLUDED_TOPICS = re.compile(
+    r"(?i)\b(?:firearms?|guns?|ammunition|explosives?|weapons?|knives?|"
+    r"self[- ]defen[cs]e weapons?|narcotics?|recreational drugs?|"
+    r"controlled substances?|casino|gambling|sports betting|betting strategy|"
+    r"prediction markets?|dangerous challenges?|stunts?)\b"
+)
 _UNSAFE_PATTERNS = (
     re.compile(r"(?im)^\s*allowed-tools\s*:\s*.*\bBash\b"),
     re.compile(r"(?i)\b(curl|wget)\b[^\n]{0,240}\|\s*(sh|bash)\b"),
@@ -98,6 +105,8 @@ def inspect_skill_file(
         raise ValueError("Source commit must be a full 40-character SHA.")
     if license_id not in ALLOWED_LICENSES:
         raise ValueError("Skill license is missing or not on the approved allowlist.")
+    if _EXCLUDED_TOPICS.search(" ".join((name, description, body))):
+        raise ValueError("Skill is outside Zexa safe import scope.")
     warnings = tuple(
         f"Potentially unsafe pattern: {pattern.pattern}"
         for pattern in _UNSAFE_PATTERNS if pattern.search(text)
@@ -144,3 +153,76 @@ def scan_skill_directory(
         seen.add(item.name)
         results.append(item)
     return results
+
+
+
+def load_imported_manifest(path: Path | None = None) -> dict:
+    """Load metadata for disabled imported skills without executing their content."""
+    manifest_path = path or (
+        Path(__file__).resolve().parents[2] / "skillpacks" / "imported" / "index.json"
+    )
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise FileNotFoundError("No imported skill reference pack is installed.") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Imported skill manifest is not valid UTF-8 JSON.") from exc
+
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        raise ValueError("Unsupported imported skill manifest schema.")
+    skills = data.get("skills")
+    if not isinstance(skills, list) or len(skills) > MAX_SKILLS_PER_SCAN:
+        raise ValueError("Imported skill manifest has an invalid skill list.")
+    if type(data.get("imported_count")) is not int or data.get("imported_count") != len(skills):
+        raise ValueError("Imported skill manifest count does not match its entries.")
+    if not isinstance(data.get("sources"), list):
+        raise ValueError("Imported skill manifest source list is invalid.")
+    if type(data.get("enabled_count")) is not int or data.get("enabled_count") != 0:
+        raise ValueError("Imported skill packs must remain disabled by default.")
+
+    seen: set[str] = set()
+    for item in skills:
+        if not isinstance(item, dict):
+            raise ValueError("Imported skill manifest contains an invalid entry.")
+        name = item.get("name")
+        description = item.get("description")
+        source_repo = item.get("source_repo")
+        source_commit = item.get("source_commit")
+        source_path = item.get("source_path")
+        license_id = item.get("license")
+        sha256 = item.get("sha256")
+        if not isinstance(name, str) or not _NAME.fullmatch(name) or name in seen:
+            raise ValueError("Imported skill manifest contains an invalid or duplicate name.")
+        if not isinstance(description, str) or not 1 <= len(description) <= 500:
+            raise ValueError("Imported skill manifest contains an invalid description.")
+        if not isinstance(source_repo, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source_repo
+        ):
+            raise ValueError("Imported skill manifest contains an invalid source repository.")
+        if not isinstance(source_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", source_commit):
+            raise ValueError("Imported skill manifest contains an invalid source commit.")
+        if (
+            not isinstance(source_path, str)
+            or not source_path
+            or source_path.startswith("/")
+            or "\\\\" in source_path
+            or "\\x00" in source_path
+        ):
+            raise ValueError("Imported skill manifest contains an invalid source path.")
+        if ".." in source_path.split("/") or ".." in Path(source_path).parts:
+            raise ValueError("Imported skill manifest contains a path traversal.")
+        if not isinstance(license_id, str) or license_id not in ALLOWED_LICENSES:
+            raise ValueError("Imported skill manifest contains an unapproved license.")
+        if not isinstance(sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", sha256):
+            raise ValueError("Imported skill manifest contains an invalid content hash.")
+        if item.get("enabled") is not False:
+            raise ValueError("Imported skill references cannot be enabled by this loader.")
+        if not isinstance(item.get("review_required"), bool):
+            raise ValueError("Imported skill manifest has invalid review metadata.")
+        if not isinstance(item.get("warnings"), list) or not all(
+            isinstance(warning, str) for warning in item["warnings"]
+        ):
+            raise ValueError("Imported skill manifest has invalid warning metadata.")
+        seen.add(name)
+
+    return data

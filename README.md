@@ -73,6 +73,10 @@ Inspect skill contracts:
 
     zexa skills
     zexa skills --json
+    zexa skillpacks status
+    zexa skillpacks list --limit 20
+
+The imported community reference pack contains 320 validated entries, all disabled. `skillpacks` commands are read-only metadata inspection; imported content is not routed to the planner and is never executed.
 
 ## Business drafting skills
 
@@ -89,9 +93,13 @@ Zexa can search public web result snippets through a fixed DuckDuckGo HTML endpo
     zexa research "latest open source agent frameworks"
     zexa research --limit 8 "Android accessibility service guide"
 
+## GitHub completion status
+
+See [`docs/GITHUB_COMPLETION_CHECKLIST.md`](docs/GITHUB_COMPLETION_CHECKLIST.md) for verified branch work, device acceptance checks, and remaining product integrations.
+
 ## Master skills and GitHub reference catalog
 
-See [`docs/SKILL_CATALOG.md`](docs/SKILL_CATALOG.md) for the canonical 170-skill roadmap and [`docs/COMMUNITY_SKILL_PACKS.md`](docs/COMMUNITY_SKILL_PACKS.md) for the optional pinned 453-candidate GitHub skill import. The import script validates at least 300 unique skills before copying them; imported skills remain disabled and are never executed automatically. See [`docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md`](docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md) for the earlier condensed skill list, capability map, categorized upstream GitHub references, and integration/safety criteria. See [`docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md`](docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md) for verified current-state findings, missing capabilities, engineering risks, and acceptance gates. A catalogue entry or upstream repository link does not mean a feature is installed or integrated.
+See [`docs/SKILL_CATALOG.md`](docs/SKILL_CATALOG.md) for the canonical 170-skill roadmap and [`docs/COMMUNITY_SKILL_PACKS.md`](docs/COMMUNITY_SKILL_PACKS.md) for the pinned 512-candidate GitHub skill reference import; the latest successful run stored 320 validated references, all disabled by default. The import script validates at least 300 unique skills before copying them; imported skills remain disabled and are never executed automatically. See [`docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md`](docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md) for the earlier condensed skill list, capability map, categorized upstream GitHub references, and integration/safety criteria. See [`docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md`](docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md) for verified current-state findings, missing capabilities, engineering risks, and acceptance gates. A catalogue entry or upstream repository link does not mean a feature is installed or integrated.
 
 ## Specialist-agent orchestration
 
@@ -110,18 +118,26 @@ Queue a notification for now or later:
     zexa schedule-notification Zexa "Your task is due"
     zexa schedule-notification --after-seconds 3600 Zexa "One hour reminder"
     zexa jobs
+    zexa job cancel 12
+    zexa job retry 12
+
+Cancel applies only to pending jobs; retry applies only to failed jobs. Worker failures store the exception class, not potentially sensitive exception text.
 
 Run one due job manually:
 
     zexa worker --once
 
-For a persistent Termux service, install Termux:API (Android app) and the Termux packages, then:
+For a Termux runit service, install Termux:API (Android app) and the Termux packages, then:
 
     pkg install termux-api termux-services
     python -m pip install -e .
     bash scripts/install-termux-worker.sh
 
-The service processes only the built-in notification handler. Android notifications require Termux:API permission. To stop the service, use `sv down zexa-worker`; to start it again, use `sv up zexa-worker`.
+Optional device-reboot startup (after installing/opening the Termux:Boot Android add-on):
+
+    bash scripts/install-termux-boot.sh
+
+The installer creates a service entrypoint tied to this checkout, loads its `.env`, and uses the stable queue database at `~/.zexa/jobs.sqlite3` so scheduled jobs and the service see the same queue regardless of working directory. The worker handles local notifications and low-risk skill drafts through the guarded execution gateway; imported skills and arbitrary commands are never executed. Android notifications require Termux:API permission. Check the service with `sv status zexa-worker`; stop/start with `sv down zexa-worker` / `sv up zexa-worker`; disable service startup with `sv-disable zexa-worker`. Android may still restrict background work; device-reboot startup requires the optional Termux:Boot add-on and device validation.
 
 ## Existing Termux commands
 
@@ -147,7 +163,7 @@ Never commit .env, API keys, bridge tokens, or personal data.
 
 ## Automated checks
 
-GitHub Actions runs the unit-test suite and byte-compilation on Python 3.11, 3.12, and 3.13 for pushes and pull requests.
+GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and the unit-test suite on Python 3.11, 3.12, and 3.13. The Android workflow runs bridge JVM unit tests and assembles a debug APK. A separate scheduled CodeQL workflow scans Python security queries. Dependabot checks Python and GitHub Actions updates. These CI checks do not replace Android device testing or repository-level secret-scanning settings.
 
 ## Development checks
 

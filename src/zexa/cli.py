@@ -7,11 +7,20 @@ import os
 import re
 import sys
 import time
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .agents import AgentOrchestrator
 from .config import get_config, load_env_file
+from .approvals import ApprovalManager
+from .audit import AuditLog
+from .gateway import ExecutionGateway
+from .policy import PermissionPolicy
+from .execution import (
+    SkillExecutionEngine, brain_skill_handlers, skill_capabilities,
+    execute_background_skill,
+)
 from .brain import build_brain_router
 from .intent import route_utterance
 from .jobs import JobQueue, JobWorker
@@ -20,6 +29,7 @@ from .memory import MemoryStore
 from .planner import create_plan
 from .research import DuckDuckGoSearch, summarize_research
 from .skills import default_registry
+from .skillpacks import load_imported_manifest
 from .tasks import TaskStore
 from .tools import default_router
 
@@ -62,6 +72,19 @@ def main() -> None:
     research_parser.add_argument("--limit", type=int, default=5)
     research_parser.add_argument("query", nargs="+", help="Research question")
 
+    skill_parser = subparsers.add_parser("skill", help="Run one registered skill through the execution gateway")
+    skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
+    skill_sub.add_parser("list", help="List available skill contracts")
+    skill_run = skill_sub.add_parser("run", help="Run one skill with a JSON input object")
+    skill_run.add_argument("name")
+    skill_run.add_argument("payload", help="Input JSON object matching the skill schema")
+
+    skillpacks_parser = subparsers.add_parser("skillpacks", help="Inspect disabled imported skill references")
+    skillpacks_sub = skillpacks_parser.add_subparsers(dest="skillpacks_command", required=True)
+    skillpacks_sub.add_parser("status", help="Show imported skill pack counts and review status")
+    skillpacks_list = skillpacks_sub.add_parser("list", help="List imported skill metadata; imported content stays disabled")
+    skillpacks_list.add_argument("--limit", type=int, default=50)
+
     skills_parser = subparsers.add_parser("skills", help="List registered skills")
     skills_parser.add_argument("--json", action="store_true", help="Show skill schemas, permissions, risk and budgets")
     subparsers.add_parser("tools", help="List safe local tools")
@@ -98,6 +121,10 @@ def main() -> None:
     task_update.add_argument("status")
     task_update.add_argument("--notes", default=None)
 
+    skill_schedule = subparsers.add_parser("schedule-skill", help="Queue a low-risk skill for background processing")
+    skill_schedule.add_argument("name")
+    skill_schedule.add_argument("payload", help="Input JSON object matching the skill schema")
+
     schedule = subparsers.add_parser("schedule-notification", help="Queue a local Android notification")
     schedule.add_argument("--after-seconds", type=int, default=0)
     schedule.add_argument("title")
@@ -108,6 +135,12 @@ def main() -> None:
     worker_parser.add_argument("--once", action="store_true")
     jobs_parser = subparsers.add_parser("jobs", help="List queued background jobs")
     jobs_parser.add_argument("--limit", type=int, default=50)
+    job_parser = subparsers.add_parser("job", help="Control one queued background job")
+    job_sub = job_parser.add_subparsers(dest="job_command", required=True)
+    job_cancel = job_sub.add_parser("cancel", help="Cancel a pending job")
+    job_cancel.add_argument("job_id", type=int)
+    job_retry = job_sub.add_parser("retry", help="Retry a failed job")
+    job_retry.add_argument("job_id", type=int)
 
     bridge_parser = subparsers.add_parser("bridge", help="Inspect or control the opt-in local Android bridge")
     bridge_sub = bridge_parser.add_subparsers(dest="bridge_command", required=True)
@@ -118,9 +151,28 @@ def main() -> None:
     bridge_action.add_argument("payload", help="Action payload as a JSON object")
 
     args = parser.parse_args()
+    load_env_file(Path(os.getenv("ZEXA_ENV_FILE", str(Path.cwd() / ".env"))))
     registry = default_registry()
     router = default_router()
 
+    if args.command == "schedule-skill":
+        try:
+            payload = json.loads(args.payload)
+        except json.JSONDecodeError as exc:
+            raise SystemExit("zexa: skill payload must be valid JSON.") from exc
+        if not isinstance(payload, dict):
+            raise SystemExit("zexa: skill payload must be a JSON object.")
+        selected = registry.get(args.name)
+        if selected.risk_level != "low":
+            raise SystemExit(
+                "zexa: only low-risk skills can be queued. Run higher-risk skills interactively for fresh approval."
+            )
+        registry.validate_payload(selected.name, payload)
+        job_id = JobQueue().enqueue(
+            "skill_draft", {"name": selected.name, "input": payload},
+        )
+        print(f"Background skill job queued: #{job_id}")
+        return
     if args.command == "schedule-notification":
         if not 0 <= args.after_seconds <= 31_536_000:
             raise SystemExit("zexa: --after-seconds must be between 0 and 31536000.")
@@ -135,16 +187,53 @@ def main() -> None:
     if args.command == "jobs":
         print(json.dumps(JobQueue().list_jobs(args.limit), ensure_ascii=False, indent=2))
         return
+    if args.command == "job":
+        queue = JobQueue()
+        changed = queue.cancel(args.job_id) if args.job_command == "cancel" else queue.retry(args.job_id)
+        action = "cancelled" if args.job_command == "cancel" else "queued for retry"
+        print(f"Job #{args.job_id} {action}." if changed else f"Job #{args.job_id} was not changed (check its current status).")
+        return
     if args.command == "worker":
         if not 1 <= args.poll_seconds <= 300:
             raise SystemExit("zexa: --poll-seconds must be between 1 and 300.")
         queue = JobQueue()
         queue.recover_stale()
+        mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
+        config = get_config() if mode == "online" or (
+            mode != "offline" and os.getenv("GROQ_API_KEY", "").strip()
+        ) else None
+        brain = build_brain_router(config, mode)
+        explicit_permissions = {
+            item.strip().lower()
+            for item in os.getenv("ZEXA_SKILL_PERMISSIONS", "").split(",")
+            if item.strip()
+        }
+        policy = PermissionPolicy({
+            f"skill.execute:{skill.name}" for skill in registry.list()
+        } | explicit_permissions)
+        audit_path = Path(
+            os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+        ).expanduser()
+        gateway = ExecutionGateway(
+            policy, ApprovalManager(ttl_seconds=60), AuditLog(audit_path),
+            capabilities=skill_capabilities(registry),
+        )
+        skill_engine = SkillExecutionEngine(
+            registry, gateway, brain_skill_handlers(registry, brain),
+        )
+        def run_background_skill(payload):
+            return execute_background_skill(
+                skill_engine, registry, payload,
+                notify=lambda message: TermuxAndroidHand().notify(
+                    "Zexa task completed", message,
+                ),
+            )
         worker = JobWorker(queue, {
             "notification": lambda payload: (
                 TermuxAndroidHand().notify(payload["title"], payload["content"])
                 or "Notification delivered."
             ),
+            "skill_draft": run_background_skill,
         })
         if args.once:
             print(worker.run_once())
@@ -158,6 +247,37 @@ def main() -> None:
             print("\nZexa background worker stopped.")
         return
 
+    if args.command == "skill" and args.skill_command == "list":
+        print(json.dumps(registry.metadata(), ensure_ascii=False, indent=2))
+        return
+    if args.command == "skillpacks":
+        manifest = load_imported_manifest()
+        if args.skillpacks_command == "status":
+            summary = {
+                "imported_count": manifest["imported_count"],
+                "enabled_count": manifest["enabled_count"],
+                "review_required_count": sum(
+                    1 for item in manifest["skills"] if item["review_required"]
+                ),
+                "source_count": len(manifest.get("sources", [])),
+                "execution": "disabled; imported references are not executable",
+            }
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            if not 1 <= args.limit <= 500:
+                raise SystemExit("zexa: --limit must be between 1 and 500.")
+            items = [
+                {
+                    "name": item["name"],
+                    "description": item["description"],
+                    "license": item["license"],
+                    "review_required": item["review_required"],
+                    "enabled": False,
+                }
+                for item in manifest["skills"][:args.limit]
+            ]
+            print(json.dumps(items, ensure_ascii=False, indent=2))
+        return
     if args.command == "skills":
         if args.json:
             print(json.dumps(registry.metadata(), ensure_ascii=False, indent=2))
@@ -220,7 +340,6 @@ def main() -> None:
             print("Task updated." if changed else "Task not found.")
         return
 
-    load_env_file()
     try:
         if args.command == "bridge":
             token = os.getenv("ZEXA_BRIDGE_TOKEN", "").strip()
@@ -237,12 +356,53 @@ def main() -> None:
                     raise ValueError("Bridge action payload must be valid JSON.") from exc
                 if not isinstance(payload, dict):
                     raise ValueError("Bridge action payload must be a JSON object.")
+                allowed_actions = {
+                    item.strip().lower()
+                    for item in os.getenv("ZEXA_ALLOWED_ANDROID_ACTIONS", "").split(",")
+                    if item.strip()
+                }
+                known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
+                if not allowed_actions <= known_actions:
+                    raise ValueError("ZEXA_ALLOWED_ANDROID_ACTIONS contains an unknown action.")
+                permission_names = {f"android.{name}" for name in allowed_actions}
+                capabilities = {
+                    f"android.{name}": (f"android.{name}", "high")
+                    for name in allowed_actions
+                }
+                audit_path = Path(
+                    os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+                ).expanduser()
+                gateway = ExecutionGateway(
+                    PermissionPolicy(permission_names),
+                    ApprovalManager(ttl_seconds=60),
+                    AuditLog(audit_path),
+                    capabilities=capabilities,
+                )
+                action_name = f"android.{args.action}"
                 print(f"Requested Android action: {args.action}")
-                confirmation = input("Type APPROVE to perform this action: ")
+                print("Exact payload:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
+                if args.action not in allowed_actions:
+                    raise PermissionError(
+                        f"{args.action} is not enabled. Add it to ZEXA_ALLOWED_ANDROID_ACTIONS "
+                        "only if you want to allow this capability."
+                    )
+                confirmation = input("Review the exact action and payload above. Type APPROVE to continue: ")
                 if confirmation != "APPROVE":
                     print("Android action cancelled.")
                     return
-                result = bridge.perform(args.action, payload, approve=lambda *_: True)
+                approval = gateway.issue_approval(
+                    action=action_name, payload=payload, user_confirmed=True,
+                )
+                result = gateway.execute(
+                    action=action_name,
+                    permission=action_name,
+                    risk_level="high",
+                    payload=payload,
+                    approval_token=approval.token,
+                    handler=lambda approved_payload: bridge.perform(
+                        args.action, approved_payload, approve=lambda *_: True,
+                    ),
+                )
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
 
@@ -253,12 +413,59 @@ def main() -> None:
         elif mode == "online":
             config = get_config()
         brain = build_brain_router(config, mode)
+        if args.command == "skill" and args.skill_command == "run":
+            try:
+                payload = json.loads(args.payload)
+            except json.JSONDecodeError as exc:
+                raise ValueError("Skill payload must be valid JSON.") from exc
+            if not isinstance(payload, dict):
+                raise ValueError("Skill payload must be a JSON object.")
+            selected = registry.get(args.name)
+            explicit_permissions = {
+                item.strip().lower()
+                for item in os.getenv("ZEXA_SKILL_PERMISSIONS", "").split(",")
+                if item.strip()
+            }
+            grants = {
+                f"skill.execute:{skill.name}"
+                for skill in registry.list()
+            } | explicit_permissions
+            policy = PermissionPolicy(grants)
+            audit_path = Path(
+                os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+            ).expanduser()
+            gateway = ExecutionGateway(
+                policy,
+                ApprovalManager(ttl_seconds=60),
+                AuditLog(audit_path),
+                capabilities=skill_capabilities(registry),
+            )
+            engine = SkillExecutionEngine(
+                registry, gateway, brain_skill_handlers(registry, brain),
+            )
+            approval_token = None
+            if selected.risk_level in {"high", "critical"}:
+                print(f"Skill: {selected.name} (risk: {selected.risk_level})")
+                print("Exact input:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
+                confirmation = input("Review the exact input. Type APPROVE to continue: ")
+                if confirmation != "APPROVE":
+                    print("Skill execution cancelled.")
+                    return
+                approval_token = engine.issue_approval(
+                    selected.name, payload, user_confirmed=True,
+                ).token
+            result = engine.execute(
+                selected.name, payload, approval_token=approval_token,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
         if args.command == "research":
             query = " ".join(args.query)
             results = DuckDuckGoSearch().search(query, limit=args.limit)
             print(summarize_research(brain, query, results))
             if results:
-                print("\\nSources:")
+                print("\
+Sources:")
                 for index, item in enumerate(results, start=1):
                     print(f"[{index}] {item.title} — {item.url}")
             return
