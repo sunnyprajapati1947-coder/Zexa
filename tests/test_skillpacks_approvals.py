@@ -53,7 +53,7 @@ class SkillPackTests(unittest.TestCase):
     def test_nested_metadata_is_ignored_safely(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            path = self._write(root, "---\\nname: cloud-guide\\ndescription: Explain a cloud workflow.\\nmetadata:\\n  generated_at: today\\n---\\nUse supplied documentation.")
+            path = self._write(root, "---\nname: cloud-guide\ndescription: Explain a cloud workflow.\nmetadata:\n  generated_at: today\n---\nUse supplied documentation.")
             item = inspect_skill_file(path, root, "owner/repo", "c" * 40, "CC-BY-4.0")
             self.assertEqual(item.name, "cloud-guide")
 
