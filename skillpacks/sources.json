@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "description": "Pinned source manifest for the optional community skill pack. The import script copies skill folders as untrusted reference material; it never executes them.",
+  "target_minimum_unique_skills": 300,
+  "expected_candidates": 453,
+  "sources": [
+    {
+      "repository": "anthropics/knowledge-work-plugins",
+      "commit": "e91a134584eb798bac7fb0379358006a2b63b965",
+      "license": "Apache-2.0",
+      "skill_files": 252,
+      "license_url": "https://github.com/anthropics/knowledge-work-plugins/blob/e91a134584eb798bac7fb0379358006a2b63b965/LICENSE"
+    },
+    {
+      "repository": "MicrosoftDocs/Agent-Skills",
+      "commit": "9b16b5c7c7716949c83fc4bbdc448e0ada7f93a3",
+      "license": "CC-BY-4.0",
+      "skill_files": 201,
+      "license_url": "https://github.com/MicrosoftDocs/Agent-Skills/blob/9b16b5c7c7716949c83fc4bbdc448e0ada7f93a3/LICENSE"
+    }
+  ],
+  "policy": {
+    "default_enabled": false,
+    "execute_scripts": false,
+    "execute_hooks": false,
+    "start_mcp_servers": false,
+    "require_license_allowlist": true,
+    "require_pinned_commit": true,
+    "require_sha256": true,
+    "require_manual_review_for_flagged_content": true
+  }
+}
