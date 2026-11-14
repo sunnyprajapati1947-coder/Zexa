@@ -193,3 +193,34 @@ A milestone is complete only when all applicable gates pass:
 Zexa is ready for a capability only when the feature works end-to-end on the target device, the permission and approval boundary is enforced in code, tests cover both success and denial/failure, documentation matches reality, and the user can inspect, stop, revoke, and recover the operation.
 
 **Bottom line:** Keep Zexa as one repository. Keep the 170-skill list as a roadmap. Implement the smallest dependable phone-first core first; do not bulk-import 167 upstream projects or pretend that catalogue entries are working skills.
+
+
+## Branch implementation delta — secure execution and worker milestone
+
+This addendum records changes on `feature/secure-agent-foundation`; it does not rewrite the historical main-branch review above.
+
+### Implemented on this branch
+
+- Central deny-by-default permission policy, trusted capability metadata, action-bound one-time approvals, and local SQLite audit events.
+- Android bridge CLI actions routed through the gateway with a local action allowlist and exact typed confirmation.
+- Typed skill execution engine with input/output schema validation and trusted application handlers.
+- Brain-backed drafting/analysis adapters that accept JSON output only and cannot register tools or execute model-generated code.
+- `zexa skill list` and `zexa skill run` commands.
+- Low-risk background skill jobs routed through the skill engine and gateway, with completion notifications.
+- Stable queue database path at `~/.zexa/jobs.sqlite3`, configurable via `ZEXA_JOB_DB`; explicit `ZEXA_ENV_FILE` loading before queue and worker commands.
+- Pending-job cancellation, failed-job retry, and failure-message redaction to avoid storing arbitrary exception text.
+- Termux:Services installer that generates a runit entrypoint for the selected checkout; optional Termux:Boot hook is provided separately.
+- Regression tests for gateway, skill execution, job lifecycle, and CLI queue controls.
+
+### Still not complete / cannot be verified from GitHub CI
+
+- The current specialist-agent orchestrator remains text-only; it does not execute browser, shell, GitHub, messaging, or external tools.
+- Not every existing local tool/agent read path is routed through the execution gateway. Any future side-effecting adapter must be gateway-protected before activation.
+- Skill catalogue entries and the 453-candidate community import are not 453 integrated executable skills. Imported third-party content stays disabled and untrusted.
+- Browser automation, MCP runtime, email/CRM/calendar providers, semantic memory/RAG, and a user-facing dashboard remain unimplemented.
+- Android AccessibilityService, Termux notifications, runit startup, Termux:Boot, Doze behavior, battery restrictions, and process recovery require physical-device tests.
+- Release signing, Android instrumentation tests, SBOM/dependency vulnerability gates, CodeQL, and repository security-setting verification remain separate release-hardening work.
+
+### Latest branch acceptance evidence
+
+The secure-execution and worker CI run must pass compilation and the complete unit suite on Python 3.11, 3.12, and 3.13. This does not count as Android device validation.
