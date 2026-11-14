@@ -8,6 +8,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.security.MessageDigest
+import java.util.concurrent.Semaphore
 import java.nio.charset.StandardCharsets
 
 class BridgeServer(
@@ -15,7 +16,12 @@ class BridgeServer(
     private val service: ZexaAccessibilityService,
 ) {
     @Volatile private var running = false
+    @Volatile private var ready = false
     @Volatile private var server: ServerSocket? = null
+    private val clientSlots = Semaphore(4)
+
+    val isRunning: Boolean
+        get() = running && ready && server?.isClosed == false
     private var thread: Thread? = null
 
     fun start() {
@@ -25,17 +31,26 @@ class BridgeServer(
             try {
                 val socketServer = ServerSocket(8765, 8, InetAddress.getByName("127.0.0.1"))
                 server = socketServer
+                ready = true
                 if (!running) {
                     socketServer.close()
                     return@Thread
                 }
                 while (running) {
                     val socket = socketServer.accept()
-                    Thread({ handle(socket) }, "zexa-bridge-client").start()
+                    if (!clientSlots.tryAcquire()) {
+                        try { respond(socket, 503, JSONObject().put("error", "Bridge is busy")) } catch (_: Exception) {}
+                        try { socket.close() } catch (_: Exception) {}
+                        continue
+                    }
+                    Thread({
+                        try { handle(socket) } finally { clientSlots.release() }
+                    }, "zexa-bridge-client").apply { isDaemon = true; start() }
                 }
             } catch (_: Exception) {
                 // Server is intentionally silent; status is visible in the app.
             } finally {
+                ready = false
                 running = false
                 try { server?.close() } catch (_: Exception) {}
                 server = null
@@ -44,9 +59,11 @@ class BridgeServer(
     }
 
     fun stop() {
+        ready = false
         running = false
         try { server?.close() } catch (_: Exception) {}
         server = null
+        thread?.interrupt()
     }
 
     private fun handle(socket: Socket) {
@@ -124,6 +141,7 @@ class BridgeServer(
             200 -> "OK"
             400 -> "Bad Request"
             401 -> "Unauthorized"
+            503 -> "Service Unavailable"
             else -> "Not Found"
         }
         val header = "HTTP/1.1 $status $reason\r\n" +
