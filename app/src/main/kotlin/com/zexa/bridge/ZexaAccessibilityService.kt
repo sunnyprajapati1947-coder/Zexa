@@ -90,7 +90,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             "tap" -> {
                 val x = payload.optDouble("x", Double.NaN)
                 val y = payload.optDouble("y", Double.NaN)
-                require(x.isFinite() && y.isFinite() && x in 0.0..10000.0 && y in 0.0..10000.0)
+                require(BridgeSecurityRules.coordinate(x) && BridgeSecurityRules.coordinate(y))
                 val path = Path().apply { moveTo(x.toFloat(), y.toFloat()) }
                 dispatch(path, 80)
             }
@@ -100,8 +100,8 @@ class ZexaAccessibilityService : AccessibilityService() {
                 val x2 = payload.optDouble("x2", Double.NaN)
                 val y2 = payload.optDouble("y2", Double.NaN)
                 val duration = payload.optLong("duration_ms", 450L)
-                require(listOf(x1, y1, x2, y2).all { it.isFinite() && it in 0.0..10000.0 })
-                require(duration in 100L..2000L)
+                require(listOf(x1, y1, x2, y2).all { BridgeSecurityRules.coordinate(it) })
+                require(BridgeSecurityRules.gestureDuration(duration))
                 val path = Path().apply {
                     moveTo(x1.toFloat(), y1.toFloat())
                     lineTo(x2.toFloat(), y2.toFloat())
@@ -124,7 +124,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             }
             "launch_app" -> {
                 val packageName = payload.optString("package_name", "")
-                require(packageName.matches(Regex("^[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+$")))
+                require(BridgeSecurityRules.packageName(packageName))
                 val launch = packageManager.getLaunchIntentForPackage(packageName)
                     ?: error("No launchable app for that package.")
                 launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
