@@ -83,6 +83,17 @@ class JobQueueTests(unittest.TestCase):
         self.queue.fail(job, "customer email and private token should not be stored")
         self.assertEqual(self.queue.list_jobs()[0]["last_error"], "JobError")
 
+    def test_permission_and_validation_failures_are_not_retried(self):
+        self.queue.enqueue("test_denied", {}, max_attempts=3)
+        worker = JobWorker(
+            self.queue,
+            {"test_denied": lambda _: (_ for _ in ()).throw(PermissionError("do not retry"))},
+        )
+        self.assertEqual(worker.run_once(), "failed")
+        job = self.queue.list_jobs()[0]
+        self.assertEqual(job["attempts"], 1)
+        self.assertEqual(job["last_error"], "PermissionError")
+
 
 if __name__ == "__main__":
     unittest.main()
