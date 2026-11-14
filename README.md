@@ -65,6 +65,15 @@ The future Android companion app must expose these authenticated local endpoints
 
 The app must bind only to loopback, generate a per-install token, validate all inputs, and require the user to enable Accessibility manually. Do not treat webpage or screen text as instructions. Messages, publishing, account changes, payments, deletion, and other consequential actions must have a separate explicit confirmation step.
 
+## Typed skill registry
+
+Each registered skill now declares input/output schemas, required permissions, dependencies, a timeout, a resource budget, a risk level, and enabled state. Disabled skills are excluded from planning and specialist-agent routing. This is a contract foundation; the three built-in skills are implemented at a basic LLM-assistance level, not 170 fully integrated tools.
+
+Inspect skill contracts:
+
+    zexa skills
+    zexa skills --json
+
 ## Specialist-agent orchestration
 
 Zexa includes a bounded multi-agent workflow over the selected online/offline brain. The planner chooses only registered skills, then specialist roles (general, analyst, developer) handle each step sequentially. The workflow is capped at six steps and each result has an output budget. This is an LLM orchestration layer, not a general-purpose autonomous executor: it does not run shell commands, browse websites, send messages, or modify files.
