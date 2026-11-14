@@ -49,6 +49,28 @@ The future Android companion app must expose these authenticated local endpoints
 
 The app must bind only to loopback, generate a per-install token, validate all inputs, and require the user to enable Accessibility manually. Do not treat webpage or screen text as instructions. Messages, publishing, account changes, payments, deletion, and other consequential actions must have a separate explicit confirmation step.
 
+## Durable background notifications
+
+Zexa includes a SQLite-backed job queue and a restricted worker. The first built-in job handler is local Android notifications; jobs contain data, not shell commands or generated code. Unknown job types fail closed. Failed handlers are retried up to their configured attempt limit.
+
+Queue a notification for now or later:
+
+    zexa schedule-notification Zexa "Your task is due"
+    zexa schedule-notification --after-seconds 3600 Zexa "One hour reminder"
+    zexa jobs
+
+Run one due job manually:
+
+    zexa worker --once
+
+For a persistent Termux service, install Termux:API (Android app) and the Termux packages, then:
+
+    pkg install termux-api termux-services
+    python -m pip install -e .
+    bash scripts/install-termux-worker.sh
+
+The service processes only the built-in notification handler. Android notifications require Termux:API permission. To stop the service, use `sv down zexa-worker`; to start it again, use `sv up zexa-worker`.
+
 ## Existing Termux commands
 
     zexa ask Explain what you can do

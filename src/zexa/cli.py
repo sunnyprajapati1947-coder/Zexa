@@ -7,11 +7,13 @@ import os
 import re
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .config import get_config, load_env_file
 from .brain import build_brain_router
 from .intent import route_utterance
+from .jobs import JobQueue, JobWorker
 from .memory import MemoryStore
 from .planner import create_plan
 from .skills import default_registry
@@ -43,7 +45,7 @@ def _explicit_torch_request(transcript: str) -> str | None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="zexa", description="Zexa — Groq-only assistant")
+    parser = argparse.ArgumentParser(prog="zexa", description="Zexa — dual-brain phone-first assistant")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     ask_parser = subparsers.add_parser("ask", help="Ask Zexa a question")
@@ -61,8 +63,8 @@ def main() -> None:
     subparsers.add_parser("listen", help="Capture one speech transcript (microphone starts only when invoked)")
     speak_parser = subparsers.add_parser("speak", help="Speak text using Android text-to-speech")
     speak_parser.add_argument("text", nargs="+")
-    subparsers.add_parser("voice", help="Capture one utterance, send its transcript to Groq, and speak the reply")
-    subparsers.add_parser("converse", help="Start a user-controlled continuous voice conversation with Groq")
+    subparsers.add_parser("voice", help="Capture one utterance, send it to the selected brain, and speak the reply")
+    subparsers.add_parser("converse", help="Start a user-controlled continuous voice conversation")
 
     mem_parser = subparsers.add_parser("memory", help="Manage explicitly saved local memories")
     mem_sub = mem_parser.add_subparsers(dest="memory_command", required=True)
@@ -87,9 +89,57 @@ def main() -> None:
     task_update.add_argument("status")
     task_update.add_argument("--notes", default=None)
 
+    schedule = subparsers.add_parser("schedule-notification", help="Queue a local Android notification")
+    schedule.add_argument("--after-seconds", type=int, default=0)
+    schedule.add_argument("title")
+    schedule.add_argument("message", nargs="+")
+
+    worker_parser = subparsers.add_parser("worker", help="Run the durable background job worker")
+    worker_parser.add_argument("--poll-seconds", type=int, default=5)
+    worker_parser.add_argument("--once", action="store_true")
+    jobs_parser = subparsers.add_parser("jobs", help="List queued background jobs")
+    jobs_parser.add_argument("--limit", type=int, default=50)
+
     args = parser.parse_args()
     registry = default_registry()
     router = default_router()
+
+    if args.command == "schedule-notification":
+        if not 0 <= args.after_seconds <= 31_536_000:
+            raise SystemExit("zexa: --after-seconds must be between 0 and 31536000.")
+        run_at = datetime.now(timezone.utc) + timedelta(seconds=args.after_seconds)
+        job_id = JobQueue().enqueue(
+            "notification",
+            {"title": args.title, "content": " ".join(args.message)},
+            run_at=run_at,
+        )
+        print(f"Notification job queued: #{job_id}")
+        return
+    if args.command == "jobs":
+        print(json.dumps(JobQueue().list_jobs(args.limit), ensure_ascii=False, indent=2))
+        return
+    if args.command == "worker":
+        if not 1 <= args.poll_seconds <= 300:
+            raise SystemExit("zexa: --poll-seconds must be between 1 and 300.")
+        queue = JobQueue()
+        queue.recover_stale()
+        worker = JobWorker(queue, {
+            "notification": lambda payload: (
+                TermuxAndroidHand().notify(payload["title"], payload["content"])
+                or "Notification delivered."
+            ),
+        })
+        if args.once:
+            print(worker.run_once())
+            return
+        print("Zexa background worker started. Press Ctrl+C to stop.")
+        try:
+            while True:
+                if worker.run_once() in {"idle", "pending"}:
+                    time.sleep(args.poll_seconds)
+        except KeyboardInterrupt:
+            print("\nZexa background worker stopped.")
+        return
 
     if args.command == "skills":
         for skill in registry.list():
