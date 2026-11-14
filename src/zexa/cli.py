@@ -18,6 +18,7 @@ from .jobs import JobQueue, JobWorker
 from .hand import AccessibilityBridge
 from .memory import MemoryStore
 from .planner import create_plan
+from .research import DuckDuckGoSearch, summarize_research
 from .skills import default_registry
 from .tasks import TaskStore
 from .tools import default_router
@@ -57,6 +58,9 @@ def main() -> None:
     plan_parser.add_argument("goal", nargs="+", help="Goal to break into steps")
     agent_parser = subparsers.add_parser("agent", help="Run a bounded multi-agent workflow")
     agent_parser.add_argument("goal", nargs="+", help="Goal for specialist agents")
+    research_parser = subparsers.add_parser("research", help="Search public web snippets and summarize with source references")
+    research_parser.add_argument("--limit", type=int, default=5)
+    research_parser.add_argument("query", nargs="+", help="Research question")
 
     skills_parser = subparsers.add_parser("skills", help="List registered skills")
     skills_parser.add_argument("--json", action="store_true", help="Show skill schemas, permissions, risk and budgets")
@@ -249,6 +253,15 @@ def main() -> None:
         elif mode == "online":
             config = get_config()
         brain = build_brain_router(config, mode)
+        if args.command == "research":
+            query = " ".join(args.query)
+            results = DuckDuckGoSearch().search(query, limit=args.limit)
+            print(summarize_research(brain, query, results))
+            if results:
+                print("\\nSources:")
+                for index, item in enumerate(results, start=1):
+                    print(f"[{index}] {item.title} — {item.url}")
+            return
         if args.command == "agent":
             results = AgentOrchestrator(brain, registry).run(" ".join(args.goal))
             print(json.dumps(results, ensure_ascii=False, indent=2))
