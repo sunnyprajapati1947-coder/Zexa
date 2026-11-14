@@ -6,6 +6,7 @@ shell command, Python expression, or model-generated code is ever executed.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import time
@@ -19,8 +20,9 @@ _KIND = re.compile(r"^[a-z][a-z0-9_]{0,49}$")
 
 
 class JobQueue:
-    def __init__(self, path: str | Path = "data/zexa.db") -> None:
-        self.path = Path(path)
+    def __init__(self, path: str | Path | None = None) -> None:
+        configured = path or os.getenv("ZEXA_JOB_DB") or (Path.home() / ".zexa" / "jobs.sqlite3")
+        self.path = Path(configured).expanduser()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
@@ -146,6 +148,31 @@ class JobQueue:
             )
             return cursor.rowcount
 
+    def cancel(self, job_id: int) -> bool:
+        """Cancel a pending job; running/completed jobs are never silently interrupted."""
+        if type(job_id) is not int or job_id < 1:
+            raise ValueError("job_id must be a positive integer.")
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as db:
+            changed = db.execute(
+                "UPDATE jobs SET status='cancelled',updated_at=? WHERE id=? AND status='pending'",
+                (now, job_id),
+            ).rowcount
+            return changed == 1
+
+    def retry(self, job_id: int) -> bool:
+        """Requeue a failed job with its original validated data and fresh attempt budget."""
+        if type(job_id) is not int or job_id < 1:
+            raise ValueError("job_id must be a positive integer.")
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as db:
+            changed = db.execute(
+                """UPDATE jobs SET status='pending',attempts=0,last_error='',
+                   run_at=?,updated_at=? WHERE id=? AND status='failed'""",
+                (now, now, job_id),
+            ).rowcount
+            return changed == 1
+
     def list_jobs(self, limit: int = 50) -> list[dict]:
         if not 1 <= limit <= 200:
             raise ValueError("Job list limit must be between 1 and 200.")
@@ -176,4 +203,4 @@ class JobWorker:
             self.queue.complete(job["id"], str(result or ""))
             return "completed"
         except Exception as exc:
-            return self.queue.fail(job, f"{type(exc).__name__}: {exc}")
+            # Exception messages can contain user text, provider responses, or secrets.\n            # Persist only the exception class, never its potentially sensitive message.\n            return self.queue.fail(job, type(exc).__name__)
