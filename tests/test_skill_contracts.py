@@ -17,7 +17,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertNotIn("coding_review", {skill.name for skill in registry.list()})
         with self.assertRaisesRegex(KeyError, "disabled"):
             registry.get("coding_review")
-        self.assertEqual(len(registry.all()), 3)
+        self.assertEqual(len(registry.all()), 7)
 
     def test_invalid_risk_and_unbounded_timeout_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "risk_level"):

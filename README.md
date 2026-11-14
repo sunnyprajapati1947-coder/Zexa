@@ -74,6 +74,14 @@ Inspect skill contracts:
     zexa skills
     zexa skills --json
 
+## Business drafting skills
+
+The business specialist can draft customer-support replies, service proposals, invoices, and FAQs from user-provided details. It does not invent prices or commercial terms, send messages, issue invoices, process payments, or update a CRM. All outputs are drafts for human review.
+
+Example:
+
+    zexa agent "Draft a customer support reply using this message and our approved refund policy: ..."
+
 ## Public web research
 
 Zexa can search public web result snippets through a fixed DuckDuckGo HTML endpoint, then ask the selected brain to summarize the returned titles and snippets with numbered source references. It does not fetch arbitrary pages, and the model is instructed to treat external snippets as untrusted data. Snippet-based summaries are not a substitute for opening and verifying full source pages.

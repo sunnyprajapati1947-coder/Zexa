@@ -131,15 +131,15 @@ Status labels:
 96. `business_research` — research public business information.
 97. `market_research` — summarize a market or niche.
 98. `competitor_analysis` — compare publicly available offerings.
-99. `customer_support_drafter` — draft support replies for review.
-100. `faq_builder` — build FAQs from approved material.
+99. `customer_support_drafter` [CORE-EXISTS] — draft support replies for review.
+100. `faq_builder` [CORE-EXISTS] — build FAQs from approved material.
 101. `lead_research_public` — find public business contact channels.
 102. `lead_qualification` — score prospects using declared criteria.
 103. `crm_record_helper` — prepare CRM updates for approval.
 104. `appointment_request_drafter` — draft appointment requests.
-105. `proposal_writer` — draft service proposals.
+105. `proposal_writer` [CORE-EXISTS] — draft service proposals.
 106. `quotation_builder` — prepare estimates from user-supplied prices.
-107. `invoice_drafter` — prepare invoices for user review.
+107. `invoice_drafter` [CORE-EXISTS] — prepare invoices for user review.
 108. `customer_feedback_analyzer` — summarize feedback themes.
 109. `sales_pipeline_summary` — summarize authorized pipeline data.
 110. `business_workflow_builder` — design repeatable business workflows.

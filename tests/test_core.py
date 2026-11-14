@@ -7,7 +7,7 @@ from zexa.tools import default_router
 class CoreTests(unittest.TestCase):
     def test_default_skills_are_registered(self):
         names = {skill.name for skill in default_registry().list()}
-        self.assertEqual(names, {"general_assistant", "text_analysis", "coding_review"})
+        self.assertTrue({"general_assistant", "text_analysis", "coding_review", "customer_support_drafter", "proposal_writer", "invoice_drafter", "faq_builder"}.issubset(names))
 
     def test_calculator(self):
         router = default_router()
