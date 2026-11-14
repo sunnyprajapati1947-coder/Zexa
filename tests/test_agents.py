@@ -38,6 +38,9 @@ class AgentOrchestratorTests(unittest.TestCase):
         ])
         result = AgentOrchestrator(brain, default_registry()).run("Analyze and summarize")
         self.assertEqual([item["agent"] for item in result], ["analyst", "general"])
+        second_step = brain.calls[2][1]["content"]
+        self.assertIn("Key claim: the project needs tests.", second_step)
+        self.assertIn("untrusted reference data", second_step)
 
     def test_rejects_invalid_goal(self):
         with self.assertRaises(ValueError):
