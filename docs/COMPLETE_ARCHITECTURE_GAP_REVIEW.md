@@ -216,7 +216,7 @@ This addendum records changes on `feature/secure-agent-foundation`; it does not 
 
 - The current specialist-agent orchestrator remains text-only; it does not execute browser, shell, GitHub, messaging, or external tools.
 - Not every existing local tool/agent read path is routed through the execution gateway. Any future side-effecting adapter must be gateway-protected before activation.
-- Skill catalogue entries and the 453-candidate community import are not 453 integrated executable skills. Imported third-party content stays disabled and untrusted.
+- Skill catalogue entries and the 619-candidate community import are not 453 integrated executable skills. Imported third-party content stays disabled and untrusted.
 - Browser automation, MCP runtime, email/CRM/calendar providers, semantic memory/RAG, and a user-facing dashboard remain unimplemented.
 - Android AccessibilityService, Termux notifications, runit startup, Termux:Boot, Doze behavior, battery restrictions, and process recovery require physical-device tests.
 - Release signing, Android instrumentation tests, SBOM/dependency vulnerability gates, CodeQL, and repository security-setting verification remain separate release-hardening work.
