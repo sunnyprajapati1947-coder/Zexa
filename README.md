@@ -10,7 +10,7 @@
 - **Human Hand foundation:** authenticated loopback client for an opt-in Android Accessibility Bridge (src/zexa/hand.py).
 - **Existing modules:** skills, explicit local memory, task history, planner, safe tool router, Termux notifications, voice I/O, and explicit flashlight control.
 
-The Accessibility Bridge client is a protocol foundation, not a complete Android AccessibilityService app. The companion Android app, its user-enabled AccessibilityService, and end-to-end device verification are still required before screen reading or gestures can work. The bridge is restricted to loopback HTTP with a bearer token. Screen snapshots are read-only; every action requires an approval callback. No arbitrary shell command is exposed.
+The native Android companion app and its user-enabled AccessibilityService are now included in `app/`, with an Android debug-build workflow. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token; screen snapshots are read-only and each action requires explicit CLI approval. Real-device installation, permission, lifecycle, and gesture verification are still required before describing the Human Hand as fully validated. No arbitrary shell command is exposed.
 
 ## Brain configuration
 
@@ -57,7 +57,7 @@ Every action requires typing the exact word `APPROVE` in the CLI. Screen snapsho
 
 ## Human Hand bridge protocol
 
-The future Android companion app must expose these authenticated local endpoints:
+The Android companion app in `app/` exposes these authenticated local endpoints:
 
 - GET /v1/status — bridge and AccessibilityService status.
 - GET /v1/screen — structured, read-only accessibility snapshot.
@@ -67,7 +67,7 @@ The app must bind only to loopback, generate a per-install token, validate all i
 
 ## Typed skill registry
 
-Each registered skill now declares input/output schemas, required permissions, dependencies, a timeout, a resource budget, a risk level, and enabled state. Disabled skills are excluded from planning and specialist-agent routing. This is a contract foundation; the three built-in skills are implemented at a basic LLM-assistance level, not 170 fully integrated tools.
+Each registered skill now declares input/output schemas, required permissions, dependencies, a timeout, a resource budget, a risk level, and enabled state. Disabled skills are excluded from planning and specialist-agent routing. This is a contract foundation. Seven skill definitions are currently registered (three general-purpose and four business-drafting skills); most of the 170 roadmap entries do not yet have executable handlers or end-to-end integrations.
 
 Inspect skill contracts:
 
@@ -91,11 +91,11 @@ Zexa can search public web result snippets through a fixed DuckDuckGo HTML endpo
 
 ## Master skills and GitHub reference catalog
 
-See [`docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md`](docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md) for the consolidated 53-name skill inventory (3 baseline + 50 proposed), capability map, categorized upstream GitHub references, target architecture, and integration/safety acceptance criteria. Entries are classified as roadmap or research references; listing a project does not mean it is installed or integrated.
+See [`docs/SKILL_CATALOG.md`](docs/SKILL_CATALOG.md) for the canonical 170-skill roadmap. See [`docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md`](docs/MASTER_AI_SKILLS_AND_GITHUB_CATALOG.md) for the earlier condensed skill list, capability map, categorized upstream GitHub references, and integration/safety criteria. See [`docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md`](docs/COMPLETE_ARCHITECTURE_GAP_REVIEW.md) for verified current-state findings, missing capabilities, engineering risks, and acceptance gates. A catalogue entry or upstream repository link does not mean a feature is installed or integrated.
 
 ## Specialist-agent orchestration
 
-Zexa includes a bounded multi-agent workflow over the selected online/offline brain. The planner chooses only registered skills, then specialist roles (general, analyst, developer) handle each step sequentially. The workflow is capped at six steps and each result has an output budget. This is an LLM orchestration layer, not a general-purpose autonomous executor: it does not run shell commands, browse websites, send messages, or modify files.
+Zexa includes a bounded multi-agent workflow over the selected online/offline brain. The planner chooses only registered skills, then specialist roles (general, analyst, developer, business) handle each step sequentially. The workflow is capped at six steps and each result has an output budget. This is an LLM orchestration layer, not a general-purpose autonomous executor: it does not run shell commands, browse websites, send messages, or modify files.
 
 Run:
 
