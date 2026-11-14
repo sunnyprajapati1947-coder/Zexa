@@ -203,4 +203,6 @@ class JobWorker:
             self.queue.complete(job["id"], str(result or ""))
             return "completed"
         except Exception as exc:
-            # Exception messages can contain user text, provider responses, or secrets.\n            # Persist only the exception class, never its potentially sensitive message.\n            return self.queue.fail(job, type(exc).__name__)
+            # Exception messages can contain user text, provider responses, or secrets.
+            # Persist only the exception class, never its potentially sensitive message.
+            return self.queue.fail(job, type(exc).__name__)
