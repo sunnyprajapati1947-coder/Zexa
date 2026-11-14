@@ -47,7 +47,7 @@ class AgentOrchestratorTests(unittest.TestCase):
         brain = FakeBrain([
             '{"steps":[{"skill":"unknown_skill","task":"Do something"}]}'
         ])
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(RuntimeError, "not registered"):
             AgentOrchestrator(brain, default_registry()).run("Do something")
 
     def test_truncates_oversized_agent_output(self):
