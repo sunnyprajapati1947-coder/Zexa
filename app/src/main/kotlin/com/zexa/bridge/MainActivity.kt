@@ -363,7 +363,7 @@ class MainActivity : Activity() {
             } catch (error: UnsatisfiedLinkError) {
                 runOnUiThread {
                     if (chatHistory.lastOrNull()?.first == "user") chatHistory.removeAt(chatHistory.lastIndex)
-                    chatGenerating = false
+                    ChatGenerationGate.finish()
                     chatSendButton?.isEnabled = false
                     renderChatHistory()
                     addChatNotice("Native runtime unavailable: " + (error.message ?: "library load failed"))
@@ -371,7 +371,7 @@ class MainActivity : Activity() {
             } catch (error: Exception) {
                 runOnUiThread {
                     if (chatHistory.lastOrNull()?.first == "user") chatHistory.removeAt(chatHistory.lastIndex)
-                    chatGenerating = false
+                    ChatGenerationGate.finish()
                     chatSendButton?.isEnabled = nativeModelLoaded
                     renderChatHistory()
                     addChatNotice("Local response failed: " + (error.message ?: "unknown error"))
