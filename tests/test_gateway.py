@@ -85,6 +85,26 @@ class ExecutionGatewayTests(unittest.TestCase):
                 payload={}, handler=lambda data: "should not run",
             )
 
+    def test_handler_receives_deep_copy_of_nested_payload(self):
+        payload = {"nested": {"items": ["original"]}}
+        def mutate(data):
+            data["nested"]["items"].append("handler-change")
+            return {"ok": "yes"}
+        self.gateway.execute(
+            action="files.read", permission="files.read", risk_level="low",
+            payload=payload, handler=mutate,
+        )
+        self.assertEqual(payload, {"nested": {"items": ["original"]}})
+
+    def test_rejects_non_finite_payload_values(self):
+        called = []
+        with self.assertRaisesRegex(ValueError, "finite JSON"):
+            self.gateway.execute(
+                action="files.read", permission="files.read", risk_level="low",
+                payload={"value": float("nan")}, handler=lambda data: called.append(True),
+            )
+        self.assertEqual(called, [])
+
     def test_failed_handler_is_audited(self):
         def fail(_payload):
             raise RuntimeError("expected failure")
