@@ -50,6 +50,8 @@ std::string from_java(JNIEnv * env, jstring value) {
             i + 1 < length && chars[i + 1] >= 0xDC00 && chars[i + 1] <= 0xDFFF) {
             codepoint = 0x10000 + ((codepoint - 0xD800) << 10) +
                         (static_cast<uint32_t>(chars[++i]) - 0xDC00);
+        } else if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
+            codepoint = 0xFFFD;
         }
         append_utf8(result, codepoint);
     }
