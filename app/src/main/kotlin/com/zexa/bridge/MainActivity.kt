@@ -26,6 +26,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import java.io.File
+import java.io.ByteArrayOutputStream
 import java.security.SecureRandom
 import org.json.JSONArray
 import org.json.JSONObject
@@ -82,6 +83,7 @@ class MainActivity : Activity() {
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
     private val modelPickerRequest = 4107
     private val memoryExportRequest = 4110
+    private val memoryImportRequest = 4111
 
     private fun preferences() = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
 
@@ -527,6 +529,7 @@ class MainActivity : Activity() {
         when (requestCode) {
             modelPickerRequest -> importSelectedModel(uri)
             memoryExportRequest -> exportMemoryTo(uri)
+            memoryImportRequest -> importMemoryFrom(uri)
         }
     }
 
@@ -722,6 +725,12 @@ class MainActivity : Activity() {
             text = "Export personal memory (JSON)"
             setOnClickListener { openMemoryExportPicker() }
         })
+        content.addView(Button(this).apply {
+            text = "Restore / merge memory backup"
+            setOnClickListener { openMemoryImportPicker() }
+        })
+        addCard("BACKUP RESTORE", "Safe merge; existing facts are kept",
+            "Choose a Zexa JSON backup. The file is validated before import, duplicate facts are skipped, and nothing is uploaded. Restore never deletes current facts.")
         val searchInput = EditText(this).apply {
             hint = "Search saved facts"
             setSingleLine(true)
@@ -783,6 +792,63 @@ class MainActivity : Activity() {
             startActivityForResult(intent, memoryExportRequest)
         } catch (_: Exception) {
             Toast.makeText(this, "No document provider is available for export.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openMemoryImportPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+        }
+        try {
+            startActivityForResult(intent, memoryImportRequest)
+        } catch (_: Exception) {
+            Toast.makeText(this, "No document provider is available for restore.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun importMemoryFrom(uri: Uri) {
+        try {
+            val input = contentResolver.openInputStream(uri)
+                ?: throw IllegalStateException("Could not open the selected backup file.")
+            val bytes = input.use { stream ->
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(4096)
+                var total = 0
+                while (true) {
+                    val count = stream.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > MAX_MEMORY_BACKUP_BYTES) {
+                        throw IllegalArgumentException("Backup is too large. Maximum size is 128 KB.")
+                    }
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
+            val root = JSONObject(String(bytes, Charsets.UTF_8))
+            if (root.optString("format") != "zexa-personal-memory" || root.optInt("schema_version", -1) != 1) {
+                throw IllegalArgumentException("This is not a supported Zexa memory backup.")
+            }
+            val array = root.optJSONArray("facts")
+                ?: throw IllegalArgumentException("Backup is missing its facts list.")
+            if (array.length() > MemoryFactRules.MAX_FACTS) {
+                throw IllegalArgumentException("Backup contains too many memory facts.")
+            }
+            val importedFacts = ArrayList<String>(array.length())
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index)
+                    ?: throw IllegalArgumentException("Backup contains an invalid fact entry.")
+                val fact = item.opt("fact") as? String
+                    ?: throw IllegalArgumentException("Backup contains a fact with an invalid type.")
+                importedFacts.add(fact)
+            }
+            val validated = MemoryFactRules.normalizeImportFacts(importedFacts)
+            val added = memoryStore.mergeImportedFacts(validated)
+            showMemory()
+            Toast.makeText(this, "Restore complete: $added new fact(s) added; duplicates skipped.", Toast.LENGTH_LONG).show()
+        } catch (error: Exception) {
+            Toast.makeText(this, "Memory restore failed: " + (error.message ?: "invalid backup"), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1230,7 +1296,7 @@ class MainActivity : Activity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    companion object {
+    companion object {\n        private const val MAX_MEMORY_BACKUP_BYTES = 128 * 1024\n
         const val QWEN_MODEL_LOAD_WORK = "zexa-qwen-model-load"
         const val EXTRA_ACTION_APPROVAL_REQUEST_ID = "com.zexa.bridge.extra.ACTION_APPROVAL_REQUEST_ID"
         const val EXTRA_OPEN_TASKS_FROM_REMINDER = "com.zexa.bridge.extra.OPEN_TASKS_FROM_REMINDER"
