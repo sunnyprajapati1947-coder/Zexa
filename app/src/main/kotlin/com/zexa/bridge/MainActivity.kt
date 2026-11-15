@@ -249,7 +249,7 @@ class MainActivity : Activity() {
                 text = (if (role == "user") "YOU" else "ZEXA") + "\n" + message
                 textSize = 14f
                 setTextColor(0xFFF9FAFB.toInt())
-                isTextSelectable = true
+                setTextIsSelectable(true)
                 setPadding(dp(12), dp(10), dp(12), dp(10))
                 setBackgroundColor(if (role == "user") 0xFF303744.toInt() else 0xFF20232B.toInt())
             }
