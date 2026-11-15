@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import hmac
 import json
 import re
 from pathlib import Path
@@ -247,7 +248,7 @@ def load_imported_manifest(path: Path | None = None) -> dict:
         if not raw or len(raw) > MAX_SKILL_BYTES:
             raise ValueError("Imported skill content is empty or exceeds the 64 KiB limit.")
         actual_hash = hashlib.sha256(raw).hexdigest()
-        if not hashlib.compare_digest(actual_hash, sha256):
+        if not hmac.compare_digest(actual_hash, sha256):
             raise ValueError("Imported skill content hash does not match its manifest.")
 
         seen.add(name)
