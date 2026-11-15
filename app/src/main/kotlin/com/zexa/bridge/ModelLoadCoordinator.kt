@@ -13,11 +13,28 @@ object ModelLoadCoordinator {
     fun addListener(listener: (String, String?) -> Unit) { listeners.addIfAbsent(listener) }
     fun removeListener(listener: (String, String?) -> Unit) { listeners.remove(listener) }
 
+    @Synchronized
     fun publish(context: Context, state: String, detail: String? = null) {
         context.getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE).edit()
             .putString("model_load_state", state)
             .putString("model_load_detail", detail)
             .apply()
+        notifyListeners(state, detail)
+    }
+
+    /**
+     * WorkManager may invoke onStopped after cancellation or a stop race.
+     * Never let that callback overwrite a terminal loaded/failed result.
+     */
+    @Synchronized
+    fun publishInterruptedIfActive(context: Context, detail: String): Boolean {
+        val current = savedState(context).first
+        if (!shouldPublishInterrupted(current)) return false
+        publish(context, "interrupted", detail)
+        return true
+    }
+
+    private fun notifyListeners(state: String, detail: String?) {
         listeners.forEach { listener ->
             try { listener(state, detail) } catch (_: Exception) { /* UI observers are isolated. */ }
         }
@@ -28,4 +45,9 @@ object ModelLoadCoordinator {
         return (prefs.getString("model_load_state", "idle") ?: "idle") to
             prefs.getString("model_load_detail", null)
     }
+
+    internal fun shouldPublishInterrupted(state: String): Boolean =
+        state in ACTIVE_STATES
+
+    private val ACTIVE_STATES = setOf("queued", "waiting", "checking", "loading")
 }
