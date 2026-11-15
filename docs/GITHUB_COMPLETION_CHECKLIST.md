@@ -19,7 +19,8 @@ The Android project now includes a native workspace shell, GGUF import/integrity
 - [x] Basic local reminder scheduling via WorkManager, pending-reminder list, individual confirmed cancellation and cancel-all, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (Android build verification pending; physical-device delivery verification outstanding).
 - [ ] Full task management, reminder editing/history, notification deep links and target-device Doze/reboot validation.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
-- [ ] Android execution gateway and per-action confirmation in the app; the loopback bearer token alone must not authorize a sensitive action.
+- [ ] Android execution gateway and integrated per-action confirmation UI; the loopback bearer token alone must not authorize a sensitive action.
+- [x] Bounded in-memory Android approval-ticket primitive with allowlisted actions, expiry, queue limit, and one-use approve/deny operations (unit tests added; not connected to server execution).
 - [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, request IDs, replay protection and sensitive-screen redaction.
 - [ ] Android unit/instrumentation tests, release signing, install/upgrade tests and target-device acceptance on Android 16.
 
