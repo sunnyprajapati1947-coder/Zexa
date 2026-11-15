@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
@@ -15,12 +16,19 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.database.Cursor
+import android.provider.OpenableColumns
+import java.io.File
 import java.security.SecureRandom
 
 class MainActivity : Activity() {
     private lateinit var bridgeButton: Button
     private lateinit var bridgeStatus: TextView
     private lateinit var content: LinearLayout
+    private var brainStatus: TextView? = null
+    private var modelImportButton: Button? = null
+    private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
+    private val modelPickerRequest = 4107
 
     private fun preferences() = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
 
@@ -84,7 +92,7 @@ class MainActivity : Activity() {
         when (section) {
             "Home" -> showHome()
             "Chat" -> showStatusPage("Chat", "Native chat interface foundation", "The Android chat screen is being connected to the Zexa brain. No demo replies are generated or presented as real AI output.")
-            "Brain" -> showStatusPage("Brain", "Qwen runtime integration pending", "The app does not yet load a local GGUF model. Model selection, storage checks, inference and secure online-provider setup must be integrated before this is marked ready.")
+            "Brain" -> showBrain()
             "Tasks" -> showStatusPage("Tasks", "Native task centre pending", "The current Python task queue has not yet been migrated to Android-native persistent scheduling and notifications.")
             "Memory" -> showStatusPage("Memory", "Private memory centre pending", "Conversation history and explicit memory controls are not yet connected to Android storage.")
             "Device" -> showDevice()
@@ -100,6 +108,108 @@ class MainActivity : Activity() {
         addCard("MEMORY & TASKS", "Migration pending", "These modules need Android-native storage and scheduling.")
         addCard("DEVICE HAND", "Optional and OFF by default", "Accessibility access is separate from AI chat and remains user-controlled.")
         addButton("Open device settings") { showDevice() }
+    }
+
+
+    private fun showBrain() {
+        content.removeAllViews()
+        addHeading("AI brain")
+        addCard("INFERENCE", "Runtime not connected", "This app can import and validate a GGUF model, but it cannot run Qwen inference yet. Model import does not mean the AI brain is ready.")
+        brainStatus = TextView(this).apply {
+            textSize = 13f
+            setTextColor(0xFFD1D5DB.toInt())
+            setPadding(0, dp(8), 0, dp(12))
+        }
+        content.addView(brainStatus)
+        modelImportButton = Button(this).apply {
+            text = "Import Qwen GGUF model"
+            setOnClickListener { openModelPicker() }
+        }
+        content.addView(modelImportButton)
+        addCard("PRIVACY", "Stored privately on this device", "The selected model is copied into Zexa's app-private storage. No model file is uploaded to a server.")
+        refreshModelStatus()
+    }
+
+    private fun openModelPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/octet-stream"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivityForResult(intent, modelPickerRequest)
+        } catch (_: Exception) {
+            Toast.makeText(this, "No file picker is available on this device.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    @Deprecated("Uses the platform document picker for compatibility with the current Activity foundation.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != modelPickerRequest || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        importSelectedModel(uri)
+    }
+
+    private fun importSelectedModel(uri: Uri) {
+        modelImportButton?.isEnabled = false
+        modelImportButton?.text = "Validating and importing…"
+        brainStatus?.text = "Import in progress. Keep Zexa open until it finishes."
+        Thread {
+            try {
+                val expectedSize = queryModelSize(uri)
+                val stream = contentResolver.openInputStream(uri)
+                    ?: throw IllegalStateException("Could not open the selected model file.")
+                val imported = modelStore.importModel(stream, expectedSize)
+                getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE).edit()
+                    .putLong("model_size_bytes", imported.sizeBytes)
+                    .putString("model_sha256", imported.sha256)
+                    .apply()
+                runOnUiThread {
+                    modelImportButton?.isEnabled = true
+                    modelImportButton?.text = "Replace Qwen GGUF model"
+                    refreshModelStatus()
+                    Toast.makeText(this, "GGUF model imported and verified.", Toast.LENGTH_LONG).show()
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    modelImportButton?.isEnabled = true
+                    modelImportButton?.text = "Try model import again"
+                    brainStatus?.text = "Import failed: " + (error.message ?: "unknown error")
+                    Toast.makeText(this, "Model import failed. Check storage and file format.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun queryModelSize(uri: Uri): Long? {
+        var cursor: Cursor? = null
+        return try {
+            cursor = contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (index >= 0 && !cursor.isNull(index)) cursor.getLong(index) else null
+            } else null
+        } catch (_: Exception) {
+            null
+        } finally {
+            cursor?.close()
+        }
+    }
+
+    private fun refreshModelStatus() {
+        val status = brainStatus ?: return
+        val model = modelStore.installedModel()
+        if (model == null) {
+            status.text = "No GGUF model imported yet. Select a compatible GGUF file to copy it into private app storage."
+            return
+        }
+        val size = model.length() / (1024.0 * 1024.0 * 1024.0)
+        val hash = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
+            .getString("model_sha256", null)
+        status.text = "Model imported: " + String.format("%.2f", size) + " GiB\nSHA-256: " +
+            (hash ?: "not recorded") + "\nInference status: not connected (native llama.cpp runtime pending)."
+        modelImportButton?.text = "Replace Qwen GGUF model"
     }
 
     private fun showStatusPage(title: String, status: String, detail: String) {
