@@ -43,6 +43,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         } else {
             bridgeServer?.stop()
             bridgeServer = null
+            actionApprovals.clear()
         }
     }
 
@@ -67,8 +68,9 @@ class ZexaAccessibilityService : AccessibilityService() {
         val ticket = actionApprovals.approve(requestId, System.currentTimeMillis())
             ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
         val result = try {
-            perform(ticket.action, JSONObject(ticket.payloadJson))
-                .put("status", "completed")
+            val execution = perform(ticket.action, JSONObject(ticket.payloadJson))
+            execution
+                .put("status", if (execution.optBoolean("ok", false)) "completed" else "failed")
                 .put("request_id", ticket.requestId)
         } catch (error: Exception) {
             JSONObject()
