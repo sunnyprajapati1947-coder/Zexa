@@ -2,7 +2,7 @@
 
 ## Standalone Android app status (2026-11-15)
 
-The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. The latest verified CI run `43671195011` passed and produced an APK containing the arm64 native library. Android CI run `43671941890` passed for app-private SQLite persistence of completed chat turns and a confirmed clear-history action. A subsequent change adds explicit on-device speech input and optional Android TTS output; its CI and target-device verification are pending. It is not yet the full Zexa assistant: editable/semantic memory, tasks, reminders, notifications and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
+The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. The latest verified CI run `43671195011` passed and produced an APK containing the arm64 native library. Android CI run `43671941890` passed for app-private SQLite persistence of completed chat turns and a confirmed clear-history action. A subsequent change adds explicit on-device speech input, optional Android TTS output and a WorkManager-backed local reminder screen with notification permission and cancel-all control. These changes are awaiting CI and target-device verification. It is not yet the full Zexa assistant: editable/semantic memory, full task management and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
 
 - [x] Native Android workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections; unfinished modules are explicitly marked pending.
 - [x] Android bridge action endpoint defaults to deny (HTTP 403) until native per-action approval is implemented.
@@ -13,8 +13,10 @@ The Android project now includes a native workspace shell, GGUF import/integrity
 - [ ] Online provider setup with secure Android Keystore-backed credential storage; no API keys in source, logs, or clipboard.
 - [x] Explicit Android on-device speech recognition wired into Chat, with runtime microphone permission, visible status, cancellation on navigation, Hindi locale preference and review-before-send.
 - [ ] Verify voice input with Hindi/Hinglish offline language packs on the target Android 16 device; confirm installed TTS voice behavior and lifecycle.
+- [ ] Verify WorkManager reminder delivery, cancellation, reboot recovery, notification permission denial and Doze/battery behavior on the target Android 16 device.
 - [ ] Editable personal-memory facts, semantic search/RAG, and user-controlled save, search, export and deletion. Persistent chat history is implemented separately; verify its CI and device behavior.
-- [ ] Native tasks, reminders, notifications and a reliable WorkManager-based background scheduler.
+- [x] Basic local reminder scheduling/cancellation via WorkManager, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (CI and device verification pending).
+- [ ] Full task management, reminder editing/history, notification deep links and target-device Doze/reboot validation.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
 - [ ] Android execution gateway and per-action confirmation in the app; the loopback bearer token alone must not authorize a sensitive action.
 - [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, request IDs, replay protection and sensitive-screen redaction.
