@@ -1114,6 +1114,29 @@ class MainActivity : Activity() {
                 setOnClickListener { reviewActionApproval(request) }
             })
         }
+        val history = service.actionAuditHistory()
+        container.addView(TextView(this).apply {
+            text = "RECENT ACTION HISTORY"
+            textSize = 12f
+            setTextColor(0xFF9CA3AF.toInt())
+            setPadding(0, dp(14), 0, dp(6))
+        })
+        if (history.isEmpty()) {
+            container.addView(TextView(this).apply {
+                text = "No action history yet."
+                textSize = 13f
+                setTextColor(0xFFD1D5DB.toInt())
+            })
+        } else {
+            history.take(20).forEach { entry ->
+                container.addView(TextView(this).apply {
+                    text = "${entry.action} · ${entry.status} · ${entry.requestId.take(8)}"
+                    textSize = 13f
+                    setTextColor(0xFFD1D5DB.toInt())
+                    setPadding(0, dp(4), 0, dp(4))
+                })
+            }
+        }
     }
 
     private fun reviewActionApproval(request: PendingDeviceAction) {
