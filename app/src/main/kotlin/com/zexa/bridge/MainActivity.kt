@@ -24,6 +24,8 @@ import android.database.Cursor
 import android.provider.OpenableColumns
 import java.io.File
 import java.security.SecureRandom
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : Activity() {
     private lateinit var bridgeButton: Button
@@ -52,6 +54,7 @@ class MainActivity : Activity() {
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
     private val modelPickerRequest = 4107
+    private val memoryExportRequest = 4110
 
     private fun preferences() = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
 
@@ -452,9 +455,12 @@ class MainActivity : Activity() {
     @Deprecated("Uses the platform document picker for compatibility with the current Activity foundation.")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != modelPickerRequest || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        importSelectedModel(uri)
+        when (requestCode) {
+            modelPickerRequest -> importSelectedModel(uri)
+            memoryExportRequest -> exportMemoryTo(uri)
+        }
     }
 
     private fun importSelectedModel(uri: Uri) {
@@ -653,6 +659,10 @@ class MainActivity : Activity() {
                 }
             }
         })
+        content.addView(Button(this).apply {
+            text = "Export personal memory (JSON)"
+            setOnClickListener { openMemoryExportPicker() }
+        })
         val searchInput = EditText(this).apply {
             hint = "Search saved facts"
             setSingleLine(true)
@@ -702,6 +712,43 @@ class MainActivity : Activity() {
         }
         addCard("TASKS & REMINDERS", "Basic local reminders available",
             "WorkManager scheduling and notifications are wired in. Full task management and target-device background validation remain pending.")
+    }
+
+    private fun openMemoryExportPicker() {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, "zexa-personal-memory.json")
+        }
+        try {
+            startActivityForResult(intent, memoryExportRequest)
+        } catch (_: Exception) {
+            Toast.makeText(this, "No document provider is available for export.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun exportMemoryTo(uri: Uri) {
+        try {
+            val facts = memoryStore.all()
+            val payload = JSONObject()
+                .put("format", "zexa-personal-memory")
+                .put("schema_version", 1)
+                .put("exported_at_epoch_ms", System.currentTimeMillis())
+                .put("facts", JSONArray().apply {
+                    facts.forEach { item ->
+                        put(JSONObject()
+                            .put("fact", item.fact)
+                            .put("updated_at_epoch_ms", item.updatedAt))
+                    }
+                })
+            contentResolver.openOutputStream(uri, "w")?.use { stream ->
+                stream.write(payload.toString(2).toByteArray(Charsets.UTF_8))
+                stream.flush()
+            } ?: throw IllegalStateException("Could not open the selected export destination.")
+            Toast.makeText(this, "Exported ${facts.size} personal memory fact(s).", Toast.LENGTH_LONG).show()
+        } catch (error: Exception) {
+            Toast.makeText(this, "Memory export failed: " + (error.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun renderMemoryFacts(container: LinearLayout, query: String) {
