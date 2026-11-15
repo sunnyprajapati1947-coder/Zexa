@@ -24,6 +24,13 @@ class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
     private val actionApprovals = ActionApprovalRegistry()
     private val actionResults = ConcurrentHashMap<String, JSONObject>()
+    private val actionAudit by lazy {
+        val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
+        ActionAuditStore(
+            read = { prefs.getString("device_action_audit", null) },
+            write = { value -> prefs.edit().putString("device_action_audit", value).apply() },
+        )
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -58,6 +65,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
         require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
         val ticket = actionApprovals.create(action, payload.toString(), System.currentTimeMillis())
+        actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "pending_approval", ticket.createdAtEpochMs))
         notifyApprovalNeeded(ticket)
         return JSONObject()
             .put("ok", true)
@@ -131,6 +139,7 @@ class ZexaAccessibilityService : AccessibilityService() {
                 .put("error", error.message ?: "Action failed")
         }
         rememberActionResult(ticket.requestId, result)
+        actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, result.optString("status", "failed"), System.currentTimeMillis()))
         return result
     }
 
@@ -140,9 +149,14 @@ class ZexaAccessibilityService : AccessibilityService() {
             .put("ok", false)
             .put("status", if (denied) "denied" else "expired_or_not_pending")
             .put("request_id", requestId)
-        if (denied) rememberActionResult(requestId, result)
+        if (denied) {
+            rememberActionResult(requestId, result)
+            actionAudit.append(ActionAuditEntry(requestId, "back", "denied", System.currentTimeMillis()))
+        }
         return result
     }
+
+    fun actionAuditHistory(): List<ActionAuditEntry> = actionAudit.list()
 
     fun actionResult(requestId: String): JSONObject? =
         actionResults[requestId]?.let { JSONObject(it.toString()) }
