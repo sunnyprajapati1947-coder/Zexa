@@ -407,8 +407,8 @@ class MainActivity : Activity() {
                 NativeQwenRuntime.nativeLoadModel(model.absolutePath, 2048, 4)
                 nativeModelLoaded = true
                 runOnUiThread {
-                    modelLoadButton?.isEnabled = true
-                    modelLoadButton?.text = "Qwen loaded — reload model"
+                    modelLoadButton?.isEnabled = false
+                    modelLoadButton?.text = "Qwen loaded"
                     inferenceButton?.isEnabled = true
                     inferenceOutput?.text = "Qwen runtime loaded. Send a short test prompt below."
                 }
@@ -498,7 +498,7 @@ class MainActivity : Activity() {
         modelImportButton?.text = "Replace Qwen GGUF model"
         modelLoadButton?.isEnabled = !nativeModelLoaded
         if (nativeModelLoaded) {
-            modelLoadButton?.text = "Qwen loaded — reload model"
+            modelLoadButton?.text = "Qwen loaded"
             inferenceButton?.isEnabled = true
         } else {
             modelLoadButton?.text = "Load model into memory"
