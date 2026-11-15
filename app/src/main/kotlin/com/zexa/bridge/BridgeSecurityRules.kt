@@ -7,6 +7,9 @@ import java.security.MessageDigest
  * This class does not perform Android actions or access device state.
  */
 internal object BridgeSecurityRules {
+    fun validBridgeToken(value: String): Boolean =
+        value.matches(Regex("^[0-9a-f]{64}$"))
+
     fun tokenMatches(expected: String, provided: String): Boolean =
         MessageDigest.isEqual(
             expected.toByteArray(Charsets.UTF_8),
