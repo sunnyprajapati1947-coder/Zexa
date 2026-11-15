@@ -43,14 +43,14 @@ void release_runtime() {
 }
 }
 
-extern "C" JNIEXPORT jstring JNICALL
+extern "C" JNIEXPORT void JNICALL
 Java_com_zexa_bridge_NativeQwenRuntime_nativeLoadModel(
         JNIEnv * env, jobject, jstring model_path, jint context_size, jint threads) {
     std::lock_guard<std::mutex> lock(runtime_mutex);
     const std::string path = from_java(env, model_path);
     if (path.empty()) {
         throw_java(env, "Model path is empty.");
-        return nullptr;
+        return;
     }
     if (context_size < 512 || context_size > 4096 || threads < 1 || threads > 8) {
         throw_java(env, "Unsupported context or thread configuration.");
@@ -88,7 +88,13 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeLoadModel(
     release_runtime();
     model = next_model;
     context = next_context;
-    return nullptr;
+    return;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_zexa_bridge_NativeQwenRuntime_nativeUnloadModel(JNIEnv *, jobject) {
+    std::lock_guard<std::mutex> lock(runtime_mutex);
+    release_runtime();
 }
 
 extern "C" JNIEXPORT jstring JNICALL
