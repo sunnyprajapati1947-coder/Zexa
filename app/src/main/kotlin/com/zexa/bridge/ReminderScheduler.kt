@@ -96,8 +96,17 @@ object ReminderRules {
 
 data class ScheduledReminder(val id: UUID, val operation: Operation)
 
+data class PendingReminderInfo(
+    val id: UUID,
+    val state: androidx.work.WorkInfo.State,
+    val title: String,
+    val message: String
+)
+
 object ReminderScheduler {
     const val TAG = "zexa-user-reminder"
+    private const val TITLE_TAG = "zexa-reminder-title:"
+    private const val MESSAGE_TAG = "zexa-reminder-message:"
     const val MAX_DELAY_MINUTES = 10080L
 
     fun schedule(context: Context, title: String, message: String, delayMinutes: Long): ScheduledReminder {
@@ -114,6 +123,8 @@ object ReminderScheduler {
                     .build()
             )
             .addTag(TAG)
+            .addTag(TITLE_TAG + title)
+            .addTag(MESSAGE_TAG + message)
             .build()
         val operation = WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
             "zexa-reminder-${request.id}",
@@ -126,9 +137,20 @@ object ReminderScheduler {
     fun cancelAll(context: Context): Operation =
         WorkManager.getInstance(context.applicationContext).cancelAllWorkByTag(TAG)
 
-    fun pending(context: Context): List<androidx.work.WorkInfo> =
+    fun pending(context: Context): List<PendingReminderInfo> =
         WorkManager.getInstance(context.applicationContext).getWorkInfosByTag(TAG).get()
             .filter { !it.state.isFinished }
+            .map { info ->
+                PendingReminderInfo(
+                    id = info.id,
+                    state = info.state,
+                    title = info.tags.firstOrNull { it.startsWith(TITLE_TAG) }
+                        ?.removePrefix(TITLE_TAG)?.take(ReminderWorker.MAX_TITLE_LENGTH)
+                        ?.takeIf { it.isNotBlank() } ?: "Reminder",
+                    message = info.tags.firstOrNull { it.startsWith(MESSAGE_TAG) }
+                        ?.removePrefix(MESSAGE_TAG)?.take(ReminderWorker.MAX_MESSAGE_LENGTH).orEmpty()
+                )
+            }
 
     fun cancel(context: Context, id: UUID): Operation =
         WorkManager.getInstance(context.applicationContext).cancelWorkById(id)
