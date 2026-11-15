@@ -40,13 +40,29 @@ class QwenModelLoadWorker(
             ModelLoadCoordinator.publish(applicationContext, "loaded", "Qwen is loaded and ready for local inference.")
             Result.success()
         } catch (error: UnsatisfiedLinkError) {
-            val detail = "Native runtime unavailable: " + (error.message ?: "library load failed")
-            ModelLoadCoordinator.publish(applicationContext, "failed", detail)
-            Result.failure(workDataOf("error" to detail))
+            if (isStopped) {
+                ModelLoadCoordinator.publishInterruptedIfActive(
+                    applicationContext,
+                    "Loading was stopped by Android before completion."
+                )
+                Result.retry()
+            } else {
+                val detail = "Native runtime unavailable: " + (error.message ?: "library load failed")
+                ModelLoadCoordinator.publish(applicationContext, "failed", detail)
+                Result.failure(workDataOf("error" to detail))
+            }
         } catch (error: Exception) {
-            val detail = error.message ?: "Unknown model loading error."
-            ModelLoadCoordinator.publish(applicationContext, "failed", detail)
-            Result.failure(workDataOf("error" to detail))
+            if (isStopped) {
+                ModelLoadCoordinator.publishInterruptedIfActive(
+                    applicationContext,
+                    "Loading was stopped by Android before completion."
+                )
+                Result.retry()
+            } else {
+                val detail = error.message ?: "Unknown model loading error."
+                ModelLoadCoordinator.publish(applicationContext, "failed", detail)
+                Result.failure(workDataOf("error" to detail))
+            }
         }
     }
 
