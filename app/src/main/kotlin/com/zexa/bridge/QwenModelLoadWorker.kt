@@ -28,15 +28,13 @@ class QwenModelLoadWorker(
             val modelStore = LocalModelStore(File(applicationContext.filesDir, "models"))
             val model = modelStore.installedModel()
                 ?: throw IllegalStateException("No valid GGUF model is installed. Import a model first.")
-            val expectedHash = applicationContext.getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
-                .getString("model_sha256", null)
-            if (!modelStore.verifyInstalledModel(expectedHash)) {
-                throw IllegalStateException("Stored model integrity check failed. Import the GGUF again.")
-            }
-
-            ModelLoadCoordinator.publish(applicationContext, "loading", "Loading Qwen into native memory. This may take several minutes.")
+            ModelLoadCoordinator.publish(applicationContext, "loading", "Verifying and loading Qwen into native memory. This may take several minutes.")
             setProgressAsync(workDataOf("stage" to "loading")).get()
-            NativeQwenSession.load(model, 2048, 4)
+            NativeQwenSession.loadVerified(model, {
+                val expectedHash = applicationContext.getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
+                    .getString("model_sha256", null)
+                modelStore.verifyInstalledModel(expectedHash)
+            }, 2048, 4)
 
             setProgressAsync(workDataOf("stage" to "complete")).get()
             ModelLoadCoordinator.publish(applicationContext, "loaded", "Qwen is loaded and ready for local inference.")
