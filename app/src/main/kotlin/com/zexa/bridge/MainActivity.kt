@@ -680,12 +680,13 @@ class MainActivity : Activity() {
             setHintTextColor(0xFF9CA3AF.toInt())
         }
         content.addView(delayInput)
-        reminderStatus = TextView(this).apply {
+        val statusView = TextView(this).apply {
             textSize = 13f
             setTextColor(0xFFD1D5DB.toInt())
             setPadding(0, dp(10), 0, dp(10))
         }
-        content.addView(reminderStatus)
+        reminderStatus = statusView
+        content.addView(statusView)
         content.addView(Button(this).apply {
             text = "Schedule reminder"
             setOnClickListener {
