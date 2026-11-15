@@ -37,6 +37,26 @@ object NativeQwenSession {
         notifyStateChanged()
     }
 
+    /**
+     * Keep verification and native loading in the same critical section so a
+     * concurrent model replacement cannot swap the GGUF between those steps.
+     */
+    @Synchronized
+    fun loadVerified(
+        model: File,
+        verifier: () -> Boolean,
+        contextSize: Int = 2048,
+        threads: Int = 4,
+    ) {
+        val path = model.canonicalPath
+        if (loadedModelPath == path) return
+        check(verifier()) { "Stored model integrity check failed. Import the GGUF again." }
+        unloadLocked()
+        NativeQwenRuntime.nativeLoadModel(path, contextSize, threads)
+        loadedModelPath = path
+        notifyStateChanged()
+    }
+
     @Synchronized
     fun unload() {
         unloadLocked()
