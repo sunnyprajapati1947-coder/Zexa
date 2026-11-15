@@ -44,6 +44,9 @@ class MainActivity : Activity() {
     private var voiceController: OnDeviceVoiceController? = null
     private var voiceStatus: TextView? = null
     private val voicePermissionRequest = 4208
+    private val notificationPermissionRequest = 4209
+    private var pendingReminder: Triple<String, String, Long>? = null
+    private var reminderStatus: TextView? = null
     @Volatile private var chatGenerating = false
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
@@ -114,7 +117,7 @@ class MainActivity : Activity() {
             "Home" -> showHome()
             "Chat" -> showChat()
             "Brain" -> showBrain()
-            "Tasks" -> showStatusPage("Tasks", "Native task centre pending", "The current Python task queue has not yet been migrated to Android-native persistent scheduling and notifications.")
+            "Tasks" -> showTasks()
             "Memory" -> showMemory()
             "Device" -> showDevice()
         }
@@ -255,11 +258,21 @@ class MainActivity : Activity() {
     @Deprecated("Uses the Activity permission callback for compatibility with the current app foundation.")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != voicePermissionRequest) return
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            startOnDeviceVoiceInput()
-        } else {
-            voiceStatus?.text = "Microphone permission was not granted. You can continue using text chat."
+        if (requestCode == voicePermissionRequest) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                startOnDeviceVoiceInput()
+            } else {
+                voiceStatus?.text = "Microphone permission was not granted. You can continue using text chat."
+            }
+            return
+        }
+        if (requestCode == notificationPermissionRequest) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                schedulePendingReminder()
+            } else {
+                pendingReminder = null
+                reminderStatus?.text = "Notification permission was not granted. Reminder was not scheduled."
+            }
         }
     }
 
@@ -634,6 +647,99 @@ class MainActivity : Activity() {
             "Android migration pending",
             "Background scheduling and native notifications are not connected in this app build."
         )
+    }
+
+    private fun showTasks() {
+        content.removeAllViews()
+        addHeading("Tasks & reminders")
+        addCard(
+            "ANDROID BACKGROUND WORK",
+            "Persistent local reminders",
+            "Reminders are stored by Android WorkManager and can run after Zexa is closed or the device restarts. Delivery is best-effort and may be delayed by Doze, battery controls or system scheduling."
+        )
+        val titleInput = EditText(this).apply {
+            hint = "Reminder title"
+            setSingleLine(true)
+            setTextColor(0xFFF9FAFB.toInt())
+            setHintTextColor(0xFF9CA3AF.toInt())
+        }
+        content.addView(titleInput)
+        val messageInput = EditText(this).apply {
+            hint = "What should Zexa remind you about?"
+            minLines = 2
+            maxLines = 4
+            setTextColor(0xFFF9FAFB.toInt())
+            setHintTextColor(0xFF9CA3AF.toInt())
+        }
+        content.addView(messageInput)
+        val delayInput = EditText(this).apply {
+            hint = "Minutes from now (1–10080)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+            setTextColor(0xFFF9FAFB.toInt())
+            setHintTextColor(0xFF9CA3AF.toInt())
+        }
+        content.addView(delayInput)
+        reminderStatus = TextView(this).apply {
+            textSize = 13f
+            setTextColor(0xFFD1D5DB.toInt())
+            setPadding(0, dp(10), 0, dp(10))
+        }
+        content.addView(reminderStatus)
+        content.addView(Button(this).apply {
+            text = "Schedule reminder"
+            setOnClickListener {
+                val title = titleInput.text.toString().trim()
+                val message = messageInput.text.toString().trim()
+                val delay = delayInput.text.toString().trim().toLongOrNull()
+                if (title.isEmpty() || message.isEmpty() || delay == null || delay !in 1L..ReminderScheduler.MAX_DELAY_MINUTES) {
+                    reminderStatus?.text = "Enter a title, message and a delay between 1 and 10080 minutes."
+                    return@setOnClickListener
+                }
+                pendingReminder = Triple(title, message, delay)
+                if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), notificationPermissionRequest)
+                } else {
+                    schedulePendingReminder()
+                }
+            }
+        })
+        content.addView(Button(this).apply {
+            text = "Cancel all pending reminders"
+            setOnClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Cancel all reminders?")
+                    .setMessage("This cancels all pending Zexa reminders on this device.")
+                    .setNegativeButton("Keep reminders", null)
+                    .setPositiveButton("Cancel reminders") { _, _ ->
+                        ReminderScheduler.cancelAll(this@MainActivity)
+                        reminderStatus?.text = "All pending Zexa reminders were cancelled."
+                    }
+                    .show()
+            }
+        })
+        Thread {
+            try {
+                val summary = ReminderScheduler.pendingSummary(this)
+                runOnUiThread { reminderStatus?.text = summary }
+            } catch (error: Exception) {
+                runOnUiThread { reminderStatus?.text = "Could not read reminder status: " + (error.message ?: "unknown error") }
+            }
+        }.start()
+    }
+
+    private fun schedulePendingReminder() {
+        val reminder = pendingReminder ?: return
+        pendingReminder = null
+        try {
+            val id = ReminderScheduler.schedule(this, reminder.first, reminder.second, reminder.third)
+            reminderStatus?.text = "Reminder scheduled for about ${reminder.third} minute(s) from now. ID: $id"
+            Toast.makeText(this, "Local reminder scheduled.", Toast.LENGTH_LONG).show()
+        } catch (error: Exception) {
+            reminderStatus?.text = "Could not schedule reminder: " + (error.message ?: "unknown error")
+        }
     }
 
     private fun showStatusPage(title: String, status: String, detail: String) {
