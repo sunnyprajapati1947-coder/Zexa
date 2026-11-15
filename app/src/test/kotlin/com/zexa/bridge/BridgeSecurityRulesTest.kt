@@ -22,6 +22,17 @@ class BridgeSecurityRulesTest {
     }
 
     @Test
+    fun authorizationRequiresAnExactBearerSchemeAndValidToken() {
+        val token = "a".repeat(64)
+        assertEquals(token, BridgeSecurityRules.bearerToken("Bearer $token"))
+        assertEquals(null, BridgeSecurityRules.bearerToken(token))
+        assertEquals(null, BridgeSecurityRules.bearerToken("Basic $token"))
+        assertEquals(null, BridgeSecurityRules.bearerToken("bearer $token"))
+        assertEquals(null, BridgeSecurityRules.bearerToken("Bearer $token extra"))
+        assertEquals(null, BridgeSecurityRules.bearerToken(null))
+    }
+
+    @Test
     fun contentLengthIsStrictlyBounded() {
         assertEquals(1, BridgeSecurityRules.contentLength("1"))
         assertEquals(16_000, BridgeSecurityRules.contentLength("16000"))
