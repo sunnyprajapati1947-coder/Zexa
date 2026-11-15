@@ -305,14 +305,14 @@ class MainActivity : Activity() {
                     conversation.map { it.second }.toTypedArray(),
                     256,
                 )
+                val persistenceError = try {
+                    chatStore.saveCompletedConversation(conversation + ("assistant" to answer))
+                    null
+                } catch (storageError: Exception) {
+                    storageError.message ?: "database write failed"
+                }
                 runOnUiThread {
                     chatHistory.add("assistant" to answer)
-                    val persistenceError = try {
-                        chatStore.saveCompletedConversation(chatHistory)
-                        null
-                    } catch (storageError: Exception) {
-                        storageError.message ?: "database write failed"
-                    }
                     chatGenerating = false
                     chatSendButton?.isEnabled = nativeModelLoaded
                     renderChatHistory()
