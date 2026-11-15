@@ -2,16 +2,17 @@
 
 ## Standalone Android app status (2026-11-15)
 
-The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. It is not yet the full Zexa assistant: voice, durable memory, tasks, reminders, notifications and several security/lifecycle features remain incomplete. Native build CI has succeeded on an earlier integration commit; the latest changes and real-device inference still need verification. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
+The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. The latest verified CI run `43671195011` passed and produced an APK containing the arm64 native library. A follow-up change adds app-private SQLite persistence for completed chat turns and a confirmed clear-history action; that follow-up is awaiting CI. It is not yet the full Zexa assistant: voice, editable/semantic memory, tasks, reminders, notifications and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
 
 - [x] Native Android workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections; unfinished modules are explicitly marked pending.
 - [x] Android bridge action endpoint defaults to deny (HTTP 403) until native per-action approval is implemented.
-- [x] Native multi-turn chat UI wired to the local llama.cpp/Qwen adapter; recent history is bounded and kept only in the current app session.
+- [x] Native multi-turn chat UI wired to the local llama.cpp/Qwen adapter; recent history is bounded.
+- [ ] App-private SQLite persistence for completed chat turns and a confirmed clear-history action (implemented on the branch; follow-up CI and device verification pending).
 - [x] arm64 llama.cpp JNI runtime integration, GGUF import into app-private storage, 10 GiB size cap, header validation, SHA-256 verification before load, CPU inference configuration and RAM warning.
-- [ ] Verify latest native build and run actual Qwen inference on the target Android 16 device; assess memory, thermals and supported GGUF templates.
+- [ ] Verify the latest Android chat-persistence change in CI, then install the APK and run actual Qwen inference on the target Android 16 device; assess memory, thermals and supported GGUF templates.
 - [ ] Online provider setup with secure Android Keystore-backed credential storage; no API keys in source, logs, or clipboard.
 - [ ] Native push-to-talk voice input/output with visible microphone state, cancellation and Hindi/Hinglish handling.
-- [ ] Native memory and conversation history with user-controlled save, search, export and delete.
+- [ ] Editable personal-memory facts, semantic search/RAG, and user-controlled save, search, export and deletion. Persistent chat history is implemented separately; verify its CI and device behavior.
 - [ ] Native tasks, reminders, notifications and a reliable WorkManager-based background scheduler.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
 - [ ] Android execution gateway and per-action confirmation in the app; the loopback bearer token alone must not authorize a sensitive action.
@@ -41,7 +42,7 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [x] Android bridge JVM unit tests cover token comparison, body-size limits, coordinates, gesture duration, and package-name validation.
 - [x] Python CI covers 3.11, 3.12, and 3.13; Termux shell scripts are syntax-checked.
 - [x] Python CodeQL security analysis workflow.
-- [x] Android CI runs JVM unit tests and builds the debug APK.
+- [x] Android CI runs JVM unit tests and builds the debug APK; run `43671195011` passed for commit `ee4ec705eddf04d0fb7c2085ef3aefbca9f931d9` before the chat-persistence follow-up.
 - [x] Pending Dependabot action-version updates are consolidated in this branch to avoid overlapping workflow changes.
 
 ## Still requires real-device / account verification
@@ -69,7 +70,7 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [x] CodeQL #113 passed on commit `43f5882`.
 - [x] Android Bridge Build #70 passed on commit `43f5882` (Android SDK 36, JVM unit tests, and debug APK assembly).
 - [x] Community skill import #13 passed; manifest records 320 references, 0 enabled, 1 flagged for manual review.
-- [ ] Physical OPPO Android 16 validation remains outstanding, including GGUF import, SHA-256 verification, native model load, Hindi/Hinglish multi-turn chat, RAM and thermal behavior.
+- [ ] Physical OPPO Android 16 validation remains outstanding, including GGUF import, SHA-256 verification, native model load, Hindi/Hinglish multi-turn chat, chat-history persistence/clear, RAM and thermal behavior.
 
 ## Pull request state
 
