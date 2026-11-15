@@ -180,6 +180,9 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
     }
 
+    fun isScreenAccessEnabled(): Boolean =
+        getSharedPreferences("zexa_bridge", MODE_PRIVATE).getBoolean("screen_access_enabled", false)
+
     fun statusJson(): JSONObject = JSONObject()
         .put("ok", true)
         .put("accessibility_enabled", true)
