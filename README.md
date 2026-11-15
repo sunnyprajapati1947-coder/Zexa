@@ -10,7 +10,7 @@
 - **Human Hand foundation:** authenticated loopback client for an opt-in Android Accessibility Bridge (src/zexa/hand.py).
 - **Existing modules:** skills, explicit local memory, task history, planner, safe tool router, Termux notifications, voice I/O, and explicit flashlight control.
 
-The native Android companion app and its user-enabled AccessibilityService are now included in `app/`, with an Android debug-build workflow. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token; screen snapshots are read-only and each action requires explicit CLI approval. Real-device installation, permission, lifecycle, and gesture verification are still required before describing the Human Hand as fully validated. No arbitrary shell command is exposed.
+The Android project in `app/` is currently an Accessibility Bridge companion/control panel, not yet the complete standalone Zexa assistant. It does not yet provide native chat, on-device Qwen inference, voice conversation, memory, task management, or integrated notifications. Those capabilities currently live in the Python/Termux application layer and require migration into Android-native modules before Termux can be removed from daily use. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token. Treat screen snapshots as sensitive. Device actions must pass the Python execution gateway and explicit approval; the Android server currently authenticates the client token but does not independently display/collect per-action approval. This is a defense-in-depth gap being addressed before enabling autonomous device actions. Real-device lifecycle and gesture verification remain outstanding.
 
 ## Brain configuration
 
@@ -61,11 +61,11 @@ Supported modes:
 
 Auto mode falls back only when a provider cannot be reached. Authentication, quota, invalid-model, and server errors are surfaced instead of silently switching providers. Set `ZEXA_PROVIDER_ORDER=qwen,grok,groq` to prefer local inference. Provider order affects latency, privacy, and possible cloud usage; it does not guarantee that one provider is always faster.
 
-The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use the same router.
+The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use the same router. The Android app does not yet expose these commands through a native interface.
 
 ## Android Accessibility Bridge app
 
-The optional companion app is in `app/`. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. Install it manually on the device, open it, enable **Zexa Accessibility Bridge** in Android Accessibility Settings, then return to the app and explicitly start the local bridge. It is OFF by default.
+The current companion/control-panel app is in `app/`; it is not yet a standalone assistant. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. Install it manually on the device, open it, enable **Zexa Accessibility Bridge** in Android Accessibility Settings, then return to the app and explicitly start the local bridge. It is OFF by default. Native assistant features and the Termux-free daily runtime are still on the implementation roadmap.
 
 The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is displayed in the app and must be copied into the local `.env` file as `ZEXA_BRIDGE_TOKEN`. Keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots. Accessibility events are not collected or transmitted; screen data is read only when `zexa bridge screen` is explicitly run.
 
