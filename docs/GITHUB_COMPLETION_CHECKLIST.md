@@ -1,6 +1,6 @@
 # GitHub-side completion checklist
 
-## Standalone Android app status (2026-11-15)
+## Optional Android companion status (2026-11-15)
 
 The Android project includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. Latest Android CI run [43680303215](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215) passed on commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`: JVM unit tests, native CMake compilation, debug APK assembly and artifact upload all succeeded. Artifact `zexa-bridge-debug-apk` (about 6.8 MB ZIP; SHA-256 `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`) is available from the workflow run and contains the debug APK. CI verifies compilation/tests only; installation and runtime behavior on the target OPPO Android 16 device remain unverified. Voice/reminder target-device verification remains outstanding. Native Android per-action approval includes exact-payload review, one-use 60-second tickets, notification deep-linking and a Python polling client; this is CI-build verified but not physically device-tested. It is not yet the full Zexa assistant: semantic memory/RAG, full task management and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
 
@@ -27,7 +27,7 @@ The Android project includes a native workspace shell, GGUF import/integrity han
 - [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, durable request/result state and sensitive-screen redaction; one-use in-memory request IDs and replay rejection are implemented.
 - [ ] Android unit/instrumentation tests, release signing, install/upgrade tests and target-device acceptance on Android 16.
 
-Termux remains a development/migration tool until this checklist is complete. Do not advertise the current APK as a full assistant.
+Termux is the primary runtime for Zexa. This checklist tracks the optional Android companion only; its incomplete features do not block Termux-based daily use. Do not advertise the current APK as a full assistant.
 
 This file separates work that is implemented and CI-verified on the feature branch from work that requires a real Android device, external credentials, or a deliberate product decision.
 
@@ -54,7 +54,7 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [x] Android CI run `43671941890` passed for the app-private SQLite chat-history integration.
 - [x] Pending Dependabot action-version updates are consolidated in this branch to avoid overlapping workflow changes.
 
-## Still requires real-device / account verification
+## Optional Android companion: still requires real-device / account verification
 
 - [ ] Install the current branch on the OPPO Android 16 device and validate Termux commands. (Not performed by GitHub CI.)
 - [ ] Enable Accessibility manually and test the local bridge, approval prompts, and every supported action. (Not performed by GitHub CI.)
