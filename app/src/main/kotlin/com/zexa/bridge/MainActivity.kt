@@ -52,6 +52,11 @@ class MainActivity : Activity() {
     private var pendingReminderContainer: LinearLayout? = null
     private var actionApprovalContainer: LinearLayout? = null
     private val chatGenerating: Boolean get() = ChatGenerationGate.isRunning
+    private val chatGenerationCompletionListener: () -> Unit = {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) refreshChatAfterGeneration()
+        }
+    }
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
     private val modelPickerRequest = 4107
@@ -378,6 +383,17 @@ class MainActivity : Activity() {
                 }
             }
         }.start()
+    }
+
+    private fun refreshChatAfterGeneration() {
+        if (ChatGenerationGate.isRunning) {
+            chatSendButton?.isEnabled = false
+            return
+        }
+        chatHistory.clear()
+        chatHistory.addAll(chatStore.loadRecent())
+        chatSendButton?.isEnabled = nativeModelLoaded
+        if (chatLog != null) renderChatHistory()
     }
 
     private fun renderChatHistory() {
@@ -1185,6 +1201,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        ChatGenerationGate.removeCompletionListener(chatGenerationCompletionListener)
         voiceController?.stopListening()
         voiceController?.stopSpeaking()
         super.onPause()
@@ -1198,6 +1215,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        ChatGenerationGate.addCompletionListener(chatGenerationCompletionListener)
+        refreshChatAfterGeneration()
         ZexaAccessibilityService.instance?.refreshBridge()
         if (::bridgeButton.isInitialized) refreshBridgeUi()
         refreshActionApprovalUi()
