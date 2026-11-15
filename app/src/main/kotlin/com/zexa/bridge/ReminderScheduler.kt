@@ -52,11 +52,16 @@ class ReminderWorker(context: Context, parameters: WorkerParameters) : Worker(co
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        NotificationManagerCompat.from(applicationContext).notify(
-            (id.toString().hashCode() and 0x7fffffff),
-            notification
-        )
-        return Result.success()
+        return try {
+            NotificationManagerCompat.from(applicationContext).notify(
+                (id.toString().hashCode() and 0x7fffffff),
+                notification
+            )
+            Result.success()
+        } catch (_: SecurityException) {
+            // Notification permission may be revoked after scheduling.
+            Result.failure()
+        }
     }
 
     companion object {
@@ -101,8 +106,8 @@ object ReminderScheduler {
 
     fun pendingSummary(context: Context): String {
         val infos = WorkManager.getInstance(context.applicationContext).getWorkInfosByTag(TAG).get()
-        val pending = infos.count { !it.state.isFinished }
+        val active = infos.count { !it.state.isFinished }
         val running = infos.count { it.state == androidx.work.WorkInfo.State.RUNNING }
-        return "$pending reminder job(s) pending; $running currently running."
+        return "$active active reminder job(s); $running currently running."
     }
 }
