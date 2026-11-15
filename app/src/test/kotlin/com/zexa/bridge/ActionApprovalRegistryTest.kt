@@ -44,6 +44,15 @@ class ActionApprovalRegistryTest {
     }
 
     @Test
+    fun clearingRegistryInvalidatesAllPendingTickets() {
+        val registry = ActionApprovalRegistry(idFactory = { "cleared" })
+        registry.create("tap", """{"x":10,"y":20}""", 100L)
+        registry.clear()
+        assertTrue(registry.list(101L).isEmpty())
+        assertNull(registry.approve("cleared", 102L))
+    }
+
+    @Test
     fun rejectsUnknownActionsAndOversizedPayloads() {
         val registry = ActionApprovalRegistry()
         assertRejected { registry.create("delete_everything", "{}", 1L) }
