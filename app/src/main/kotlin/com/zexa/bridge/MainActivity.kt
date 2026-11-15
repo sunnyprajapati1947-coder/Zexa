@@ -32,6 +32,12 @@ class MainActivity : Activity() {
     private var inferenceButton: Button? = null
     private var inferencePrompt: EditText? = null
     private var inferenceOutput: TextView? = null
+    private var chatLog: LinearLayout? = null
+    private var chatInput: EditText? = null
+    private var chatSendButton: Button? = null
+    private var chatScroll: ScrollView? = null
+    private val chatHistory = ArrayList<Pair<String, String>>()
+    @Volatile private var chatGenerating = false
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
     private val modelPickerRequest = 4107
@@ -97,7 +103,7 @@ class MainActivity : Activity() {
     private fun showSection(section: String) {
         when (section) {
             "Home" -> showHome()
-            "Chat" -> showStatusPage("Chat", "Native chat interface foundation", "The Android chat screen is being connected to the Zexa brain. No demo replies are generated or presented as real AI output.")
+            "Chat" -> showChat()
             "Brain" -> showBrain()
             "Tasks" -> showStatusPage("Tasks", "Native task centre pending", "The current Python task queue has not yet been migrated to Android-native persistent scheduling and notifications.")
             "Memory" -> showStatusPage("Memory", "Private memory centre pending", "Conversation history and explicit memory controls are not yet connected to Android storage.")
@@ -116,6 +122,150 @@ class MainActivity : Activity() {
         addButton("Open device settings") { showDevice() }
     }
 
+
+
+    private fun showChat() {
+        content.removeAllViews()
+        addHeading("Zexa chat")
+        if (!nativeModelLoaded) {
+            addCard("LOCAL BRAIN", "Qwen is not loaded", "Open Brain, import a compatible GGUF model and load it before chatting.")
+            addButton("Open Brain") { showBrain() }
+        } else {
+            addCard("LOCAL BRAIN", "Qwen ready in this app session", "Messages are processed on-device by the loaded local model.")
+        }
+        chatScroll = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(0xFF17191F.toInt())
+        }
+        chatLog = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        chatScroll?.addView(chatLog, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        content.addView(chatScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(300)))
+        renderChatHistory()
+        chatInput = EditText(this).apply {
+            hint = "Message Zexa…"
+            setHintTextColor(0xFF9CA3AF.toInt())
+            setTextColor(0xFFF9FAFB.toInt())
+            textSize = 15f
+            minLines = 2
+            maxLines = 4
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setBackgroundColor(0xFF20232B.toInt())
+        }
+        content.addView(chatInput)
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        chatSendButton = Button(this).apply {
+            text = "Send"
+            isEnabled = nativeModelLoaded && !chatGenerating
+            setOnClickListener { sendChatMessage() }
+        }
+        actions.addView(chatSendButton, LinearLayout.LayoutParams(0, dp(48), 1f))
+        actions.addView(Button(this).apply {
+            text = "New chat"
+            setOnClickListener {
+                chatHistory.clear()
+                renderChatHistory()
+            }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        content.addView(actions)
+        addCard("SESSION PRIVACY", "Not saved yet", "This conversation stays in the current app session only. Persistent chat history and memory controls are still being built.")
+    }
+
+    private fun sendChatMessage() {
+        if (chatGenerating) return
+        if (!nativeModelLoaded) {
+            Toast.makeText(this, "Load Qwen from Brain first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val message = chatInput?.text?.toString()?.trim().orEmpty()
+        if (message.isEmpty()) return
+        chatHistory.add("user" to message)
+        while (chatHistory.size > 15) {
+            if (chatHistory.size >= 3) {
+                chatHistory.removeAt(0)
+                chatHistory.removeAt(0)
+            } else break
+        }
+        chatInput?.setText("")
+        chatGenerating = true
+        chatSendButton?.isEnabled = false
+        renderChatHistory()
+        val conversation = chatHistory.toList()
+        Thread {
+            try {
+                val answer = NativeQwenRuntime.nativeGenerate(
+                    "You are Zexa, a helpful assistant. Reply in the user's language, including Hindi or Hinglish when appropriate.",
+                    conversation.map { it.first }.toTypedArray(),
+                    conversation.map { it.second }.toTypedArray(),
+                    256,
+                )
+                runOnUiThread {
+                    chatHistory.add("assistant" to answer)
+                    chatGenerating = false
+                    chatSendButton?.isEnabled = nativeModelLoaded
+                    renderChatHistory()
+                }
+            } catch (error: UnsatisfiedLinkError) {
+                runOnUiThread {
+                    if (chatHistory.lastOrNull()?.first == "user") chatHistory.removeAt(chatHistory.lastIndex)
+                    chatGenerating = false
+                    chatSendButton?.isEnabled = false
+                    renderChatHistory()
+                    addChatNotice("Native runtime unavailable: " + (error.message ?: "library load failed"))
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    if (chatHistory.lastOrNull()?.first == "user") chatHistory.removeAt(chatHistory.lastIndex)
+                    chatGenerating = false
+                    chatSendButton?.isEnabled = nativeModelLoaded
+                    renderChatHistory()
+                    addChatNotice("Local response failed: " + (error.message ?: "unknown error"))
+                }
+            }
+        }.start()
+    }
+
+    private fun renderChatHistory() {
+        val log = chatLog ?: return
+        log.removeAllViews()
+        if (chatHistory.isEmpty()) {
+            log.addView(TextView(this).apply {
+                text = "Your local conversation will appear here."
+                textSize = 14f
+                setTextColor(0xFF9CA3AF.toInt())
+                setPadding(dp(8), dp(18), dp(8), dp(18))
+            })
+        }
+        chatHistory.forEach { item ->
+            val role = item.first
+            val message = item.second
+            val bubble = TextView(this).apply {
+                text = (if (role == "user") "YOU" else "ZEXA") + "\n" + message
+                textSize = 14f
+                setTextColor(0xFFF9FAFB.toInt())
+                textIsSelectable = true
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                setBackgroundColor(if (role == "user") 0xFF303744.toInt() else 0xFF20232B.toInt())
+            }
+            val params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            params.bottomMargin = dp(8)
+            log.addView(bubble, params)
+        }
+        chatScroll?.post { chatScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun addChatNotice(message: String) {
+        val log = chatLog ?: return
+        log.addView(TextView(this).apply {
+            text = message
+            textSize = 12f
+            setTextColor(0xFFFFC4A8.toInt())
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        })
+        chatScroll?.post { chatScroll?.fullScroll(View.FOCUS_DOWN) }
+    }
 
     private fun showBrain() {
         content.removeAllViews()
