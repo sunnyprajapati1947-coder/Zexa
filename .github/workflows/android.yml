@@ -15,6 +15,7 @@ on:
       - "app/**"
       - "*.gradle.kts"
       - "settings.gradle.kts"
+      - "gradle.properties"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
