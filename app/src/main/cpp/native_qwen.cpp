@@ -290,10 +290,19 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
         throw_java(env, "Could not initialize the text sampler.");
         return nullptr;
     }
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
-    llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.9f, 1));
-    llama_sampler_chain_add(sampler, llama_sampler_init_temp(0.7f));
-    llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    const auto add_sampler = [sampler](llama_sampler * component) {
+        if (component == nullptr) return false;
+        llama_sampler_chain_add(sampler, component);
+        return true;
+    };
+    if (!add_sampler(llama_sampler_init_top_k(40)) ||
+        !add_sampler(llama_sampler_init_top_p(0.9f, 1)) ||
+        !add_sampler(llama_sampler_init_temp(0.7f)) ||
+        !add_sampler(llama_sampler_init_dist(LLAMA_DEFAULT_SEED))) {
+        llama_sampler_free(sampler);
+        throw_java(env, "Could not allocate all text sampling components.");
+        return nullptr;
+    }
 
     std::string answer;
     for (int32_t index = 0; index < max_tokens; ++index) {
