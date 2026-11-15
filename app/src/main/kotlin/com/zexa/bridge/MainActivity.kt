@@ -603,7 +603,8 @@ class MainActivity : Activity() {
         val hash = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
             .getString("model_sha256", null)
         status.text = "Model imported: " + String.format("%.2f", size) + " GiB\nSHA-256: " +
-            (hash ?: "not recorded") + "\nInference status: not connected (native llama.cpp runtime pending)."
+            (hash ?: "not recorded") + "\nInference status: " +
+            if (nativeModelLoaded) "Qwen is loaded in this app process." else "Model is imported; load it to start local inference."
         modelImportButton?.text = "Replace Qwen GGUF model"
         modelLoadButton?.isEnabled = !nativeModelLoaded
         if (nativeModelLoaded) {
