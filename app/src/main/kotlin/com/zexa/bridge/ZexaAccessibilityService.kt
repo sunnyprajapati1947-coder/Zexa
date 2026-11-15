@@ -144,6 +144,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     fun denyAction(requestId: String): JSONObject {
+        val ticket = actionApprovals.list(System.currentTimeMillis()).firstOrNull { it.requestId == requestId }
         val denied = actionApprovals.deny(requestId)
         val result = JSONObject()
             .put("ok", false)
@@ -151,7 +152,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             .put("request_id", requestId)
         if (denied) {
             rememberActionResult(requestId, result)
-            actionAudit.append(ActionAuditEntry(requestId, "back", "denied", System.currentTimeMillis()))
+            ticket?.let { actionAudit.append(ActionAuditEntry(requestId, it.action, "denied", System.currentTimeMillis())) }
         }
         return result
     }
