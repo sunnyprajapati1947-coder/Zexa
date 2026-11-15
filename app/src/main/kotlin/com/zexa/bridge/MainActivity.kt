@@ -109,7 +109,7 @@ class MainActivity : Activity() {
         content.removeAllViews()
         addHeading("Your assistant, in progress")
         addCard("APP STATUS", "Android foundation active", "This build is the first native workspace shell. Brain, chat, voice, memory and tasks are not falsely marked as ready.")
-        addCard("AI BRAIN", "Not connected", "Qwen on-device inference is the next core integration.")
+        addCard("AI BRAIN", "Native Qwen integration under validation", "GGUF import and llama.cpp JNI inference code are in place; CI and real-device inference still need verification.")
         addCard("VOICE", "Not connected", "Microphone capture and speech output will be added with visible controls.")
         addCard("MEMORY & TASKS", "Migration pending", "These modules need Android-native storage and scheduling.")
         addCard("DEVICE HAND", "Optional and OFF by default", "Accessibility access is separate from AI chat and remains user-controlled.")
@@ -120,7 +120,7 @@ class MainActivity : Activity() {
     private fun showBrain() {
         content.removeAllViews()
         addHeading("AI brain")
-        addCard("INFERENCE", "Runtime not connected", "This app can import and validate a GGUF model, but it cannot run Qwen inference yet. Model import does not mean the AI brain is ready.")
+        addCard("INFERENCE", "Native runtime integration — validation pending", "Import a GGUF model, load it into memory, then run a single-turn local inference test. Successful import alone does not prove inference works.")
         brainStatus = TextView(this).apply {
             textSize = 13f
             setTextColor(0xFFD1D5DB.toInt())
