@@ -1,5 +1,22 @@
 # GitHub-side completion checklist
 
+## Standalone Android app status (2026-11-15)
+
+The current APK is still a bridge control panel, not the full Zexa assistant. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
+
+- [ ] Native chat UI wired to a real brain adapter (not a placeholder).
+- [ ] On-device Qwen/llama.cpp runtime packaged or installed/managed from inside the app, with model download/import, integrity check, storage and RAM checks.
+- [ ] Online provider setup with secure Android Keystore-backed credential storage; no API keys in source, logs, or clipboard.
+- [ ] Native push-to-talk voice input/output with visible microphone state, cancellation and Hindi/Hinglish handling.
+- [ ] Native memory and conversation history with user-controlled save, search, export and delete.
+- [ ] Native tasks, reminders, notifications and a reliable WorkManager-based background scheduler.
+- [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
+- [ ] Android execution gateway and per-action confirmation in the app; the loopback bearer token alone must not authorize a sensitive action.
+- [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, request IDs, replay protection and sensitive-screen redaction.
+- [ ] Android unit/instrumentation tests, release signing, install/upgrade tests and target-device acceptance on Android 16.
+
+Termux remains a development/migration tool until this checklist is complete. Do not advertise the current APK as a full assistant.
+
 This file separates work that is implemented and CI-verified on the feature branch from work that requires a real Android device, external credentials, or a deliberate product decision.
 
 ## Implemented on this branch
@@ -53,6 +70,6 @@ This file separates work that is implemented and CI-verified on the feature bran
 
 ## Pull request state
 
-- PR #16 is a draft against `main`; no merge has been performed.
+- PR #17 (`fix/reviewed-security-and-integrity`) is a draft against `feature/qwen-xai-multi-brain`; no merge has been performed.
 - The separate Dependabot PRs remain open. Their action-version changes are included in this branch; they can be closed as superseded after PR #16 is merged.
 - Imported skill references remain disabled. A skill becomes executable only after an individual review, trusted native handler, permission definition, tests, and explicit enablement path.
