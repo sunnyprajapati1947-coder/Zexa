@@ -210,7 +210,8 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             or "\x00" in source_path
         ):
             raise ValueError("Imported skill manifest contains an invalid source path.")
-        if ".." in source_path.split("/") or ".." in Path(source_path).parts:
+        source_parts = source_path.split("/")
+        if any(part in {"", ".", ".."} for part in source_parts):
             raise ValueError("Imported skill manifest contains a path traversal.")
         if not isinstance(license_id, str) or license_id not in ALLOWED_LICENSES:
             raise ValueError("Imported skill manifest contains an unapproved license.")
@@ -237,8 +238,8 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             or "\x00" in imported_path
         ):
             raise ValueError("Imported skill manifest contains an invalid imported path.")
-        imported_parts = Path(imported_path).parts
-        if ".." in imported_parts or "." in imported_parts:
+        imported_parts = imported_path.split("/")
+        if any(part in {"", ".", ".."} for part in imported_parts):
             raise ValueError("Imported skill manifest contains an imported path traversal.")
         pack_root = manifest_path.parent.resolve()
         skill_file = (pack_root / imported_path / "SKILL.md").resolve()
