@@ -21,8 +21,11 @@ class LocalModelStore(private val directory: File) {
         private val MAGIC = byteArrayOf('G'.code.toByte(), 'G'.code.toByte(), 'U'.code.toByte(), 'F'.code.toByte())
     }
 
+    @Synchronized
     fun installedModel(): File? {
         val file = File(directory, MODEL_NAME)
+        val backup = File(directory, "$MODEL_NAME.previous")
+        if (!file.exists() && backup.exists() && !backup.renameTo(file)) return null
         if (!file.isFile || file.length() < 4L) return null
         FileInputStream(file).use { input ->
             val header = ByteArray(4)
