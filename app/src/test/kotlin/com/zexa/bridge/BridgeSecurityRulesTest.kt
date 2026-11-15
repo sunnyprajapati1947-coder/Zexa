@@ -43,6 +43,15 @@ class BridgeSecurityRulesTest {
     }
 
     @Test
+    fun screenAccessRequiresExplicitBooleanOptIn() {
+        assertFalse(BridgeSecurityRules.screenAccessEnabled(null))
+        assertFalse(BridgeSecurityRules.screenAccessEnabled(false))
+        assertTrue(BridgeSecurityRules.screenAccessEnabled(true))
+        assertFalse(BridgeSecurityRules.screenAccessEnabled("true"))
+        assertFalse(BridgeSecurityRules.screenAccessEnabled(1))
+    }
+
+    @Test
     fun coordinatesRejectNonFiniteAndOutOfRangeValues() {
         assertTrue(BridgeSecurityRules.coordinate(0.0))
         assertTrue(BridgeSecurityRules.coordinate(10_000.0))
