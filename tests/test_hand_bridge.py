@@ -25,7 +25,7 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         self.assertEqual(calls[0][0:2], ("POST", "/v1/action"))
         self.assertEqual(calls[1][0:2], ("GET", "/v1/action/request-123"))
         self.assertEqual(calls[2][0:2], ("GET", "/v1/action/request-123"))
-        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(sleep.call_count, 1)
 
     def test_native_denial_raises_permission_error(self):
         bridge = self.make_bridge()
