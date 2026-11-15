@@ -2,7 +2,7 @@
 
 ## Standalone Android app status (2026-11-15)
 
-The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. The latest verified CI run `43671195011` passed and produced an APK containing the arm64 native library. Android CI run `43671941890` passed for app-private SQLite persistence of completed chat turns and a confirmed clear-history action. A subsequent change adds explicit on-device speech input, optional Android TTS output and a WorkManager-backed local reminder screen with notification permission, cancel-all control and reminder validation tests. The first CI attempt exposed a missing `android.useAndroidX=true` setting; `gradle.properties` now enables AndroidX and the workflow watches that file. Android CI run `43672962839` completed successfully, including JVM tests, native CMake compilation and debug APK assembly. Voice/reminder target-device verification remains outstanding. Native Android per-action approval now includes an exact-payload review screen, one-use 60-second tickets, a notification when permission is available, and a Python polling client; Android CI is running for this integration and physical-device validation remains outstanding. It is not yet the full Zexa assistant: semantic memory/RAG, full task management and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
+The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. Android CI run `43675903149` passed on commit `6f258774744496a06378b61699413066d50c8bde`, including JVM tests, native CMake compilation and debug APK assembly. The `zexa-bridge-debug-apk` artifact (6.8 MB ZIP; SHA-256 `fa4a3087ac648527d0a88dd3abde00d2a0da84738758446174d229e30f909538`) was uploaded successfully and contains `app-debug.apk` with `lib/arm64-v8a/libzexa_llama.so`. This verifies CI assembly only; the APK has not been installed or exercised on the target OPPO Android 16 device. Voice/reminder target-device verification remains outstanding. Native Android per-action approval includes an exact-payload review screen, one-use 60-second tickets, notification deep-linking and a Python polling client; this integration is now CI-build verified, while physical-device validation remains outstanding. It is not yet the full Zexa assistant: semantic memory/RAG, full task management and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
 
 - [x] Native Android workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections; unfinished modules are explicitly marked pending.
 - [x] Android bridge action requests are queued with HTTP 202 and require exact-payload native confirmation; a bearer token alone never executes an action.
@@ -22,7 +22,7 @@ The Android project now includes a native workspace shell, GGUF import/integrity
 - [ ] Full task management, reminder editing/history, reminder notification deep links and target-device Doze/reboot validation.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
 - [ ] Android execution gateway, durable approval/audit state, and physical-device confirmation-flow validation.
-- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, Python client wait flow, and notification deep-linking to the matching approval dialog (latest Android CI and physical-device validation outstanding; Device refresh remains available as fallback).
+- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, Python client wait flow, and notification deep-linking to the matching approval dialog (latest Android CI passed; physical-device validation outstanding; Device refresh remains available as fallback).
 - [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, durable request/result state and sensitive-screen redaction; one-use in-memory request IDs and replay rejection are implemented.
 - [ ] Android unit/instrumentation tests, release signing, install/upgrade tests and target-device acceptance on Android 16.
 
@@ -74,6 +74,8 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [ ] Signed release build, release provenance/SBOM, and repository-level secret-scanning configuration.
 
 ## Latest GitHub Actions verification
+
+- [x] Android Bridge Build #317 passed on commit `6f258774744496a06378b61699413066d50c8bde`; run `43675903149` uploaded `zexa-bridge-debug-apk` (contains `app-debug.apk` and `lib/arm64-v8a/libzexa_llama.so`).
 
 - [x] Zexa CI #284 passed on commit `43f5882` (Python 3.11/3.12/3.13; tests, byte-compilation, and Termux shell syntax).
 - [x] CodeQL #113 passed on commit `43f5882`.
