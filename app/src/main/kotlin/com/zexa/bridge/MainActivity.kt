@@ -1166,5 +1166,6 @@ class MainActivity : Activity() {
         super.onResume()
         ZexaAccessibilityService.instance?.refreshBridge()
         if (::bridgeButton.isInitialized) refreshBridgeUi()
+        refreshActionApprovalUi()
     }
 }
