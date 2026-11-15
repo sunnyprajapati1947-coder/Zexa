@@ -125,7 +125,14 @@ class MainActivity : Activity() {
 
     private fun handleApprovalIntent(source: Intent?) {
         val requestId = source?.getStringExtra(EXTRA_ACTION_APPROVAL_REQUEST_ID)
-            ?.takeIf { it.isNotBlank() } ?: return
+            ?.takeIf { it.isNotBlank() }
+        if (requestId == null) {
+            if (source?.getBooleanExtra(EXTRA_OPEN_TASKS_FROM_REMINDER, false) == true) {
+                source.removeExtra(EXTRA_OPEN_TASKS_FROM_REMINDER)
+                showTasks()
+            }
+            return
+        }
         source.removeExtra(EXTRA_ACTION_APPROVAL_REQUEST_ID)
         showDevice()
         val request = ZexaAccessibilityService.instance
@@ -1174,6 +1181,7 @@ class MainActivity : Activity() {
 
     companion object {
         const val EXTRA_ACTION_APPROVAL_REQUEST_ID = "com.zexa.bridge.extra.ACTION_APPROVAL_REQUEST_ID"
+        const val EXTRA_OPEN_TASKS_FROM_REMINDER = "com.zexa.bridge.extra.OPEN_TASKS_FROM_REMINDER"
     }
 
     override fun onPause() {
