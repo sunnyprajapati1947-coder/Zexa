@@ -122,7 +122,7 @@ class BridgeServer(
             if (headers.containsKey("transfer-encoding")) {
                 return respond(client, 400, JSONObject().put("error", "Transfer-Encoding is not supported"))
             }
-            val provided = headers["authorization"]?.removePrefix("Bearer ") ?: ""
+            val provided = BridgeSecurityRules.bearerToken(headers["authorization"]) ?: ""
             if (!BridgeSecurityRules.tokenMatches(token, provided)) {
                 return respond(client, 401, JSONObject().put("error", "Unauthorized"))
             }
