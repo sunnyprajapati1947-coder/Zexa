@@ -19,10 +19,11 @@ The Android project now includes a native workspace shell, GGUF import/integrity
 - [ ] Semantic search/RAG and physical-device memory persistence verification.
 - [x] User-initiated personal memory JSON export through Android's document picker (Android CI verification pending).
 - [x] Basic local reminder scheduling via WorkManager, pending-reminder list, individual confirmed cancellation and cancel-all, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (Android build verification pending; physical-device delivery verification outstanding).
-- [x] Reminder notification deep link opens the Tasks section, including when the activity is already running (latest change awaits Android CI and physical-device verification).\n- [ ] Full task management, reminder editing/history, and target-device Doze/reboot validation.
+- [x] Reminder notification deep link opens the Tasks section, including when the activity is already running (latest change awaits a successful Android CI run and physical-device verification).
+- [ ] Full task management, reminder editing/history, and target-device Doze/reboot validation.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
 - [ ] Android execution gateway, durable approval/audit state, and physical-device confirmation-flow validation.
-- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, Python client wait flow, and notification deep-linking to the matching approval dialog (latest Android CI passed; physical-device validation outstanding; Device refresh remains available as fallback).
+- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, Python client wait flow, and notification deep-linking to the matching approval dialog (Android CI verification pending after the latest Kotlin compile failure; physical-device validation outstanding; Device refresh remains available as fallback).
 - [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, durable request/result state and sensitive-screen redaction; one-use in-memory request IDs and replay rejection are implemented.
 - [ ] Android unit/instrumentation tests, release signing, install/upgrade tests and target-device acceptance on Android 16.
 
@@ -74,6 +75,8 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [ ] Signed release build, release provenance/SBOM, and repository-level secret-scanning configuration.
 
 ## Latest GitHub Actions verification
+
+- [ ] Android Bridge Build run `43679262981` failed at `MainActivity.kt:1322` due to malformed escaped newlines in the companion-object declaration. The syntax has been corrected in the follow-up commit; a fresh Android CI run is required before marking this integration verified.
 
 - [x] Android Bridge Build #317 passed on commit `6f258774744496a06378b61699413066d50c8bde`; run `43675903149` uploaded `zexa-bridge-debug-apk` (contains `app-debug.apk` and `lib/arm64-v8a/libzexa_llama.so`).
 
