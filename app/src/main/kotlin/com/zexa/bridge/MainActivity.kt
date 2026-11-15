@@ -1319,7 +1319,9 @@ class MainActivity : Activity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    companion object {\n        private const val MAX_MEMORY_BACKUP_BYTES = 128 * 1024\n
+    companion object {
+        private const val MAX_MEMORY_BACKUP_BYTES = 128 * 1024
+
         const val QWEN_MODEL_LOAD_WORK = "zexa-qwen-model-load"
         const val EXTRA_ACTION_APPROVAL_REQUEST_ID = "com.zexa.bridge.extra.ACTION_APPROVAL_REQUEST_ID"
         const val EXTRA_OPEN_TASKS_FROM_REMINDER = "com.zexa.bridge.extra.OPEN_TASKS_FROM_REMINDER"
