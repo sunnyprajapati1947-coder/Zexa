@@ -57,7 +57,7 @@ class MainActivity : Activity() {
             if (!isFinishing && !isDestroyed) refreshChatAfterGeneration()
         }
     }
-    @Volatile private var nativeModelLoaded = false
+    private val nativeModelLoaded: Boolean get() = NativeQwenSession.isLoaded
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
     private val modelPickerRequest = 4107
     private val memoryExportRequest = 4110
@@ -346,7 +346,7 @@ class MainActivity : Activity() {
                         append(savedFacts)
                     }
                 }
-                val answer = NativeQwenRuntime.nativeGenerate(
+                val answer = NativeQwenSession.generate(
                     systemPrompt,
                     conversation.map { it.first }.toTypedArray(),
                     conversation.map { it.second }.toTypedArray(),
@@ -520,14 +520,12 @@ class MainActivity : Activity() {
         brainStatus?.text = "Import in progress. Keep Zexa open until it finishes."
         Thread {
             try {
-                if (nativeModelLoaded) {
-                    NativeQwenRuntime.nativeUnloadModel()
-                    nativeModelLoaded = false
-                }
                 val expectedSize = queryModelSize(uri)
                 val stream = contentResolver.openInputStream(uri)
                     ?: throw IllegalStateException("Could not open the selected model file.")
-                val imported = modelStore.importModel(stream, expectedSize)
+                val imported = NativeQwenSession.replaceModel {
+                    modelStore.importModel(stream, expectedSize)
+                }
                 getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE).edit()
                     .putLong("model_size_bytes", imported.sizeBytes)
                     .putString("model_sha256", imported.sha256)
@@ -571,11 +569,9 @@ class MainActivity : Activity() {
                 if (!modelStore.verifyInstalledModel(expectedHash)) {
                     throw IllegalStateException("Stored model integrity check failed. Import the GGUF again.")
                 }
-                // Activity recreation can reset this Activity's flag while the process-level
-                // JNI model remains loaded. Release it before loading again to avoid doubling RAM.
-                NativeQwenRuntime.nativeUnloadModel()
-                NativeQwenRuntime.nativeLoadModel(model.absolutePath, 2048, 4)
-                nativeModelLoaded = true
+                // The process-scoped session preserves model ownership across Activity recreation
+                // and avoids loading the same GGUF into native memory twice.
+                NativeQwenSession.load(model, 2048, 4)
                 runOnUiThread {
                     modelLoadButton?.isEnabled = false
                     modelLoadButton?.text = "Qwen loaded"
