@@ -10,7 +10,7 @@
 - **Human Hand foundation:** authenticated loopback client for an opt-in Android Accessibility Bridge (src/zexa/hand.py).
 - **Existing modules:** skills, explicit local memory, task history, planner, safe tool router, Termux notifications, voice I/O, and explicit flashlight control.
 
-The Android project in `app/` is currently an Accessibility Bridge companion/control panel, not yet the complete standalone Zexa assistant. It does not yet provide native chat, on-device Qwen inference, voice conversation, memory, task management, or integrated notifications. Those capabilities currently live in the Python/Termux application layer and require migration into Android-native modules before Termux can be removed from daily use. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token. Treat screen snapshots as sensitive. Device actions must pass the Python execution gateway and explicit approval; the Android server currently authenticates the client token but does not independently display/collect per-action approval. This is a defense-in-depth gap being addressed before enabling autonomous device actions. Real-device lifecycle and gesture verification remain outstanding.
+The Android project in `app/` now has a native Zexa workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections. It is still an early UI foundation: native chat, on-device Qwen inference, voice conversation, memory, task scheduling and integrated notifications are not connected yet. The app labels these modules as pending instead of showing fake AI output. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token. Treat screen snapshots as sensitive. **Device-action POST requests are currently denied by the Android server** because there is not yet a native per-action confirmation UI. This deliberately fail-closed state replaces reliance on Python-side approval alone. Real-device lifecycle and accessibility validation remain outstanding.
 
 ## Brain configuration
 
@@ -65,9 +65,9 @@ The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use
 
 ## Android Accessibility Bridge app
 
-The current companion/control-panel app is in `app/`; it is not yet a standalone assistant. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. Install it manually on the device, open it, enable **Zexa Accessibility Bridge** in Android Accessibility Settings, then return to the app and explicitly start the local bridge. It is OFF by default. Native assistant features and the Termux-free daily runtime are still on the implementation roadmap.
+The Android app is in `app/` and now opens a native Zexa workspace dashboard. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. The optional Accessibility Bridge remains OFF by default. Native assistant features and the Termux-free daily runtime are still being implemented.
 
-The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is displayed in the app and must be copied into the local `.env` file as `ZEXA_BRIDGE_TOKEN`. Keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots. Accessibility events are not collected or transmitted; screen data is read only when `zexa bridge screen` is explicitly run.
+The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is available only through an explicit copy action in the Device section; keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots, but other private on-screen information may still appear. Accessibility events are not collected or transmitted. Screen snapshots should be requested only when needed.
 
 Commands:
 
@@ -77,7 +77,7 @@ Commands:
     zexa bridge action back '{}'
     zexa bridge action input_text '{"text":"Hello"}'
 
-Every action requires typing the exact word `APPROVE` in the CLI. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
+Although the Python client has a CLI approval callback, the Android server currently rejects all POST `/v1/action` requests with HTTP 403 until native per-action approval is implemented. Device actions are therefore unavailable in this build. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
 
 ## Human Hand bridge protocol
 
