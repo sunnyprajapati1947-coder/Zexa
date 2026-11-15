@@ -16,6 +16,13 @@ internal object BridgeSecurityRules {
             provided.toByteArray(Charsets.UTF_8),
         )
 
+    fun bearerToken(header: String?): String? {
+        val value = header ?: return null
+        if (!value.startsWith("Bearer ")) return null
+        val token = value.removePrefix("Bearer ")
+        return token.takeIf { validBridgeToken(it) }
+    }
+
     fun contentLength(raw: String?): Int? {
         val length = raw?.toIntOrNull() ?: return null
         return length.takeIf { it in 1..16_000 }
