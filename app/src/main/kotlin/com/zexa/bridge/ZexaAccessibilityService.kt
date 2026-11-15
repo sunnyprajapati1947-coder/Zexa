@@ -95,7 +95,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         val notification = NotificationCompat.Builder(this, APPROVAL_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Zexa needs your approval")
-            .setContentText("Review the \${ticket.action} request in Device. Nothing runs until you approve.")
+            .setContentText("Review the " + ticket.action + " request in Device. Nothing runs until you approve.")
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
