@@ -472,7 +472,7 @@ class MainActivity : Activity() {
             cursor = contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
             if (cursor != null && cursor.moveToFirst()) {
                 val index = cursor.getColumnIndex(OpenableColumns.SIZE)
-                if (index >= 0 && !cursor.isNull(index)) cursor.getLong(index) else null
+                if (index >= 0 && !cursor.isNull(index)) cursor.getLong(index).takeIf { it > 0L } else null
             } else null
         } catch (_: Exception) {
             null
