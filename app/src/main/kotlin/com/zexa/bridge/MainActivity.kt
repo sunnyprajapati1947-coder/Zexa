@@ -845,6 +845,12 @@ class MainActivity : Activity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
+    override fun onPause() {
+        voiceController?.stopListening()
+        voiceController?.stopSpeaking()
+        super.onPause()
+    }
+
     override fun onDestroy() {
         voiceController?.shutdown()
         voiceController = null
