@@ -14,7 +14,8 @@ The Android project now includes a native workspace shell, GGUF import/integrity
 - [x] Explicit Android on-device speech recognition wired into Chat, with runtime microphone permission, visible status, cancellation on navigation, Hindi locale preference and review-before-send.
 - [ ] Verify voice input with Hindi/Hinglish offline language packs on the target Android 16 device; confirm installed TTS voice behavior and lifecycle.
 - [ ] Verify WorkManager reminder delivery, cancellation, reboot recovery, notification permission denial and Doze/battery behavior on the target Android 16 device.
-- [x] Explicit personal-memory facts with local SQLite save, edit, case-insensitive search, individual delete and confirmed clear-all; up to 100 facts of 500 characters each. Up to 10 facts/3,000 characters are supplied as reference context to local chat.\n- [ ] Semantic search/RAG, memory export and physical-device persistence verification.
+- [x] Explicit personal-memory facts with local SQLite save, edit, case-insensitive search, individual delete and confirmed clear-all; up to 100 facts of 500 characters each. Up to 10 facts/3,000 characters are supplied as reference context to local chat.\n- [ ] Semantic search/RAG and physical-device memory persistence verification.
+- [x] User-initiated personal memory JSON export through Android's document picker (Android CI verification pending).
 - [x] Basic local reminder scheduling via WorkManager, pending-reminder list, individual confirmed cancellation and cancel-all, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (Android build verification pending; physical-device delivery verification outstanding).
 - [ ] Full task management, reminder editing/history, notification deep links and target-device Doze/reboot validation.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
