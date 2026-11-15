@@ -131,6 +131,10 @@ class OnDeviceVoiceController(
         textToSpeech?.speak(safeText, TextToSpeech.QUEUE_FLUSH, null, "zexa-answer")
     }
 
+    fun stopSpeaking() {
+        textToSpeech?.stop()
+    }
+
     fun shutdown() {
         stopListening()
         recognizer?.destroy()
