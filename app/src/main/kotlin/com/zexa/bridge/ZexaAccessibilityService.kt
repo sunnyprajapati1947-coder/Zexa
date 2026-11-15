@@ -3,6 +3,14 @@ package com.zexa.bridge
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Bundle
@@ -50,11 +58,53 @@ class ZexaAccessibilityService : AccessibilityService() {
     fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
         require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
         val ticket = actionApprovals.create(action, payload.toString(), System.currentTimeMillis())
+        notifyApprovalNeeded(ticket)
         return JSONObject()
             .put("ok", true)
             .put("status", "pending_approval")
             .put("request_id", ticket.requestId)
             .put("expires_at_epoch_ms", ticket.expiresAtEpochMs)
+    }
+
+    private fun notifyApprovalNeeded(ticket: PendingDeviceAction) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+        val manager = NotificationManagerCompat.from(this)
+        if (!manager.areNotificationsEnabled()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val system = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            system.createNotificationChannel(
+                NotificationChannel(
+                    APPROVAL_CHANNEL_ID,
+                    "Device action approvals",
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = "Alerts that a device action is waiting for your review"
+                }
+            )
+        }
+        val openApp = PendingIntent.getActivity(
+            this,
+            ticket.requestId.hashCode(),
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, APPROVAL_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Zexa needs your approval")
+            .setContentText("Review the \${ticket.action} request in Device. Nothing runs until you approve.")
+            .setContentIntent(openApp)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        try {
+            manager.notify(ticket.requestId.hashCode(), notification)
+        } catch (_: SecurityException) {
+            // Notification permission may be revoked while the bridge is running.
+        }
     }
 
     fun pendingActionApprovals(): List<PendingDeviceAction> =
@@ -214,6 +264,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val MAX_ACTION_RESULTS = 64
+        private const val APPROVAL_CHANNEL_ID = "zexa_action_approvals"
         @Volatile var instance: ZexaAccessibilityService? = null
             private set
     }
