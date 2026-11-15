@@ -950,8 +950,8 @@ class MainActivity : Activity() {
                         })
                     }
                     pending.forEach { info ->
-                        val title = info.inputData.getString(ReminderWorker.KEY_TITLE) ?: "Reminder"
-                        val message = info.inputData.getString(ReminderWorker.KEY_MESSAGE).orEmpty()
+                        val title = info.title
+                        val message = info.message
                         val card = LinearLayout(this).apply {
                             orientation = LinearLayout.VERTICAL
                             setPadding(dp(10), dp(8), dp(10), dp(8))
