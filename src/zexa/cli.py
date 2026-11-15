@@ -528,11 +528,13 @@ Sources:")
                         break
                     torch_state = _explicit_torch_request(transcript)
                     if torch_state:
-                        try:
-                            TermuxAndroidHand().set_torch(torch_state)
-                            answer = "Flashlight on kar di." if torch_state == "on" else "Flashlight band kar di."
-                        except (RuntimeError, OSError, ValueError) as exc:
-                            answer = f"Flashlight control available nahi hai: {exc}"
+                        # Voice recognition is not an approval channel. Keep device
+                        # actions disabled here until they are routed through the
+                        # trusted ExecutionGateway and a separate confirmation flow.
+                        answer = (
+                            "Flashlight request samajh gaya. Voice mode se phone action "
+                            "abhi execute nahi hoga; approved bridge action flow use karein."
+                        )
                         print(f"Zexa: {answer}")
                         voice.speak(answer)
                         continue
