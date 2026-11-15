@@ -12,6 +12,7 @@ std::mutex runtime_mutex;
 llama_model * model = nullptr;
 llama_context * context = nullptr;
 bool backend_initialized = false;
+uint32_t loaded_context_size = 0;
 
 void throw_java(JNIEnv * env, const char * message) {
     jclass error_class = env->FindClass("java/lang/IllegalStateException");
@@ -88,6 +89,7 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeLoadModel(
     release_runtime();
     model = next_model;
     context = next_context;
+    loaded_context_size = static_cast<uint32_t>(context_size);
     return;
 }
 
@@ -95,6 +97,7 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_zexa_bridge_NativeQwenRuntime_nativeUnloadModel(JNIEnv *, jobject) {
     std::lock_guard<std::mutex> lock(runtime_mutex);
     release_runtime();
+    loaded_context_size = 0;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -150,7 +153,8 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
         return nullptr;
     }
     token_count = -token_count;
-    if (token_count <= 0 || token_count > 4096) {
+    if (token_count <= 0 || token_count > 4096 ||
+        static_cast<uint32_t>(token_count) + static_cast<uint32_t>(max_tokens) > loaded_context_size) {
         throw_java(env, "Prompt exceeds the supported context size.");
         return nullptr;
     }
