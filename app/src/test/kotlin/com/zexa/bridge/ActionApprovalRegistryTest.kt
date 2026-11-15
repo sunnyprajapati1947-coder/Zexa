@@ -52,6 +52,12 @@ class ActionApprovalRegistryTest {
     }
 
     @Test
+    fun rejectsTimestampOverflow() {
+        val registry = ActionApprovalRegistry()
+        assertRejected { registry.create("back", "{}", Long.MAX_VALUE) }
+    }
+
+    @Test
     fun pendingQueueIsBounded() {
         val registry = ActionApprovalRegistry(idFactory = { UUIDs.next() })
         repeat(ActionApprovalRegistry.MAX_PENDING) { index ->
