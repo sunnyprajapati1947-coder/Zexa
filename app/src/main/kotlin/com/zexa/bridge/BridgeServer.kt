@@ -130,7 +130,12 @@ class BridgeServer(
             val response = try {
                 when {
                     method == "GET" && path == "/v1/status" -> service.statusJson()
-                    method == "GET" && path == "/v1/screen" -> service.screenJson()
+                    method == "GET" && path == "/v1/screen" -> {
+                        if (!service.isScreenAccessEnabled()) {
+                            responseStatus = 403
+                            JSONObject().put("ok", false).put("error", "Screen access is disabled in Zexa settings.")
+                        } else service.screenJson()
+                    }
                     method == "POST" && path == "/v1/action" -> {
                         val length = BridgeSecurityRules.contentLength(headers["content-length"])
                             ?: error("Invalid request body length.")
