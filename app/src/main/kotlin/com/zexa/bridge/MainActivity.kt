@@ -165,8 +165,12 @@ class MainActivity : Activity() {
         actions.addView(Button(this).apply {
             text = "New chat"
             setOnClickListener {
-                chatHistory.clear()
-                renderChatHistory()
+                if (chatGenerating) {
+                    Toast.makeText(this@MainActivity, "Wait for the current response to finish.", Toast.LENGTH_SHORT).show()
+                } else {
+                    chatHistory.clear()
+                    renderChatHistory()
+                }
             }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         content.addView(actions)
@@ -338,6 +342,11 @@ class MainActivity : Activity() {
     }
 
     private fun importSelectedModel(uri: Uri) {
+        if (chatGenerating) {
+            Toast.makeText(this, "Wait for the current chat response before replacing the model.", Toast.LENGTH_LONG).show()
+            return
+        }
+        chatHistory.clear()
         modelImportButton?.isEnabled = false
         inferenceButton?.isEnabled = false
         modelImportButton?.text = "Validating and importing…"
@@ -376,6 +385,10 @@ class MainActivity : Activity() {
 
 
     private fun loadLocalModel() {
+        if (chatGenerating) {
+            Toast.makeText(this, "Wait for the current chat response before reloading the model.", Toast.LENGTH_LONG).show()
+            return
+        }
         val model = modelStore.installedModel()
         if (model == null) {
             Toast.makeText(this, "Import a valid GGUF model first.", Toast.LENGTH_LONG).show()
