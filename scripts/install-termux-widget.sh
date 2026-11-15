@@ -3,7 +3,6 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 SHORTCUT_DIR="$HOME/.shortcuts"
 ZEXA_BIN="$ROOT/.venv/bin/zexa"
 
@@ -24,8 +23,9 @@ install_shortcut() {
   local body="$2"
   local target="$SHORTCUT_DIR/$name"
   if [ -e "$target" ]; then
-    cp -p "$target" "$target.zexa-backup"
-    echo "Backed up existing shortcut: $target.zexa-backup"
+    backup="$target.zexa-backup.$(date +%s).$"
+    cp -p "$target" "$backup"
+    echo "Backed up existing shortcut: $backup"
   fi
   printf '%s\n' "$body" > "$target"
   chmod 700 "$target"
