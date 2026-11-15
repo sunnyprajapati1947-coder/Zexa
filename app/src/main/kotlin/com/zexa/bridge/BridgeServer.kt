@@ -126,17 +126,12 @@ class BridgeServer(
             if (!BridgeSecurityRules.tokenMatches(token, provided)) {
                 return respond(client, 401, JSONObject().put("error", "Unauthorized"))
             }
+            var responseStatus = 200
             val response = try {
                 when {
                     method == "GET" && path == "/v1/status" -> service.statusJson()
                     method == "GET" && path == "/v1/screen" -> service.screenJson()
                     method == "POST" && path == "/v1/action" -> {
-                        if (!BridgeSecurityRules.nativeActionApprovalEnabled) {
-                            return respond(client, 403, JSONObject().put(
-                                "error",
-                                "Device actions are disabled until native per-action approval is available.",
-                            ))
-                        }
                         val length = BridgeSecurityRules.contentLength(headers["content-length"])
                             ?: error("Invalid request body length.")
                         val body = ByteArray(length)
@@ -148,15 +143,23 @@ class BridgeServer(
                         }
                         val json = JSONObject(String(body, StandardCharsets.UTF_8))
                         val action = json.optString("action", "")
-                        val payload = json.optJSONObject("payload") ?: JSONObject()
-                        service.perform(action, payload)
+                        val payload = json.optJSONObject("payload")
+                            ?: error("Action payload must be a JSON object.")
+                        responseStatus = 202
+                        service.queueActionForApproval(action, payload)
+                    }
+                    method == "GET" && path.startsWith("/v1/action/") -> {
+                        val requestId = path.removePrefix("/v1/action/")
+                        require(requestId.matches(Regex("^[A-Za-z0-9-]{1,64}$"))) { "Invalid action request ID." }
+                        service.actionResult(requestId)
+                            ?: JSONObject().put("ok", true).put("status", "pending_or_expired").put("request_id", requestId)
                     }
                     else -> return respond(client, 404, JSONObject().put("error", "Not found"))
                 }
             } catch (error: Exception) {
                 return respond(client, 400, JSONObject().put("error", error.message ?: "Invalid request"))
             }
-            respond(client, 200, response)
+            respond(client, responseStatus, response)
         }
     }
 
@@ -181,6 +184,7 @@ class BridgeServer(
         val bytes = body.toString().toByteArray(StandardCharsets.UTF_8)
         val reason = when (status) {
             200 -> "OK"
+            202 -> "Accepted"
             400 -> "Bad Request"
             401 -> "Unauthorized"
             403 -> "Forbidden"
