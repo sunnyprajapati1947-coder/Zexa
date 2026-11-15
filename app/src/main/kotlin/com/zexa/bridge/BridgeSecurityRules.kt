@@ -7,9 +7,6 @@ import java.security.MessageDigest
  * This class does not perform Android actions or access device state.
  */
 internal object BridgeSecurityRules {
-    // Device actions remain denied until exact-action native approval is implemented.
-    const val nativeActionApprovalEnabled = false
-
     fun validBridgeToken(value: String): Boolean =
         value.matches(Regex("^[0-9a-f]{64}$"))
 
