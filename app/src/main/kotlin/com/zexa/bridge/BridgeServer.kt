@@ -131,6 +131,12 @@ class BridgeServer(
                     method == "GET" && path == "/v1/status" -> service.statusJson()
                     method == "GET" && path == "/v1/screen" -> service.screenJson()
                     method == "POST" && path == "/v1/action" -> {
+                        if (!BridgeSecurityRules.nativeActionApprovalEnabled) {
+                            return respond(client, 403, JSONObject().put(
+                                "error",
+                                "Device actions are disabled until native per-action approval is available.",
+                            ))
+                        }
                         val length = BridgeSecurityRules.contentLength(headers["content-length"])
                             ?: error("Invalid request body length.")
                         val body = ByteArray(length)
@@ -177,6 +183,7 @@ class BridgeServer(
             200 -> "OK"
             400 -> "Bad Request"
             401 -> "Unauthorized"
+            403 -> "Forbidden"
             503 -> "Service Unavailable"
             else -> "Not Found"
         }
