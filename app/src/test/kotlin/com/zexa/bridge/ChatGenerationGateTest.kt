@@ -1,8 +1,10 @@
 package com.zexa.bridge
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.atomic.AtomicInteger
 
 class ChatGenerationGateTest {
     @Test
