@@ -588,12 +588,19 @@ class MainActivity : Activity() {
         modelLoadButton?.isEnabled = false
         modelLoadButton?.text = "Queued…"
         inferenceOutput?.text = "Qwen loading is managed by Android WorkManager and can continue across screen changes."
-        val request = OneTimeWorkRequestBuilder<QwenModelLoadWorker>().build()
-        WorkManager.getInstance(applicationContext).enqueueUniqueWork(
-            QWEN_MODEL_LOAD_WORK,
-            ExistingWorkPolicy.KEEP,
-            request,
-        )
+        try {
+            val request = OneTimeWorkRequestBuilder<QwenModelLoadWorker>().build()
+            WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                QWEN_MODEL_LOAD_WORK,
+                ExistingWorkPolicy.KEEP,
+                request,
+            )
+        } catch (error: Exception) {
+            val detail = "Could not queue model loading: " + (error.message ?: "WorkManager unavailable")
+            ModelLoadCoordinator.publish(this, "failed", detail)
+            refreshModelStatus()
+            inferenceOutput?.text = detail
+        }
     }
 
     private fun runLocalInference() {
