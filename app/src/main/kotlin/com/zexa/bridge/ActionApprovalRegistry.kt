@@ -1,6 +1,5 @@
 package com.zexa.bridge
 
-import java.security.SecureRandom
 import java.util.UUID
 
 /**
@@ -35,7 +34,7 @@ class ActionApprovalRegistry(
         require(payloadJson.isNotBlank() && payloadJson.length <= MAX_PAYLOAD_CHARS) {
             "Device action payload is empty or too large."
         }
-        require(nowMs >= 0L)
+        require(nowMs >= 0L && nowMs <= Long.MAX_VALUE - ttlMs) { "Invalid approval timestamp." }
         expire(nowMs)
         require(pending.size < maxPending) { "Too many pending device-action approvals." }
         val id = idFactory()
