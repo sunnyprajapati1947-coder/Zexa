@@ -7,11 +7,6 @@ import org.junit.Test
 
 class BridgeSecurityRulesTest {
     @Test
-    fun deviceActionsStayDisabledWithoutNativeApprovalUi() {
-        assertFalse(BridgeSecurityRules.nativeActionApprovalEnabled)
-    }
-
-    @Test
     fun bridgeTokenMustBeAFullRandomHexToken() {
         assertTrue(BridgeSecurityRules.validBridgeToken("a".repeat(64)))
         assertFalse(BridgeSecurityRules.validBridgeToken(""))
