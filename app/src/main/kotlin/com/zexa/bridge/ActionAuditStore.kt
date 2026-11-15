@@ -32,8 +32,12 @@ class ActionAuditStore(
         entries.removeAll { it.requestId == entry.requestId }
         entries.add(entry)
         val bounded = entries.takeLast(maxEntries)
+        writeEntries(bounded)
+    }
+
+    private fun writeEntries(entries: List<ActionAuditEntry>) {
         val json = JSONArray()
-        bounded.forEach {
+        entries.takeLast(maxEntries).forEach {
             json.put(JSONObject()
                 .put("request_id", it.requestId)
                 .put("action", it.action)
@@ -41,6 +45,20 @@ class ActionAuditStore(
                 .put("timestamp_epoch_ms", it.timestampEpochMs))
         }
         write(json.toString())
+    }
+
+    @Synchronized
+    fun markPendingAsInterrupted(nowMs: Long) {
+        require(nowMs >= 0L)
+        val entries = readEntries().toMutableList()
+        var changed = false
+        for (index in entries.indices) {
+            if (entries[index].status == "pending_approval") {
+                entries[index] = entries[index].copy(status = "interrupted", timestampEpochMs = nowMs)
+                changed = true
+            }
+        }
+        if (changed) writeEntries(entries)
     }
 
     @Synchronized
@@ -70,6 +88,6 @@ class ActionAuditStore(
 
     companion object {
         const val MAX_ENTRIES = 100
-        val ALLOWED_STATUSES = setOf("pending_approval", "completed", "failed", "denied")
+        val ALLOWED_STATUSES = setOf("pending_approval", "completed", "failed", "denied", "interrupted")
     }
 }
