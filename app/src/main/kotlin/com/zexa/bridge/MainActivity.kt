@@ -12,6 +12,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -27,6 +28,11 @@ class MainActivity : Activity() {
     private lateinit var content: LinearLayout
     private var brainStatus: TextView? = null
     private var modelImportButton: Button? = null
+    private var modelLoadButton: Button? = null
+    private var inferenceButton: Button? = null
+    private var inferencePrompt: EditText? = null
+    private var inferenceOutput: TextView? = null
+    @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
     private val modelPickerRequest = 4107
 
@@ -126,6 +132,35 @@ class MainActivity : Activity() {
             setOnClickListener { openModelPicker() }
         }
         content.addView(modelImportButton)
+        modelLoadButton = Button(this).apply {
+            text = "Load model into memory"
+            isEnabled = false
+            setOnClickListener { loadLocalModel() }
+        }
+        content.addView(modelLoadButton)
+        inferencePrompt = EditText(this).apply {
+            hint = "Ask Qwen a short question…"
+            setHintTextColor(0xFF9CA3AF.toInt())
+            setTextColor(0xFFF9FAFB.toInt())
+            textSize = 15f
+            minLines = 2
+            maxLines = 4
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setBackgroundColor(0xFF20232B.toInt())
+        }
+        content.addView(inferencePrompt)
+        inferenceButton = Button(this).apply {
+            text = "Run local Qwen test"
+            isEnabled = false
+            setOnClickListener { runLocalInference() }
+        }
+        content.addView(inferenceButton)
+        inferenceOutput = TextView(this).apply {
+            textSize = 14f
+            setTextColor(0xFFE5E7EB.toInt())
+            setPadding(0, dp(12), 0, dp(8))
+        }
+        content.addView(inferenceOutput)
         addCard("PRIVACY", "Stored privately on this device", "The selected model is copied into Zexa's app-private storage. No model file is uploaded to a server.")
         refreshModelStatus()
     }
@@ -157,6 +192,10 @@ class MainActivity : Activity() {
         brainStatus?.text = "Import in progress. Keep Zexa open until it finishes."
         Thread {
             try {
+                if (nativeModelLoaded) {
+                    NativeQwenRuntime.nativeUnloadModel()
+                    nativeModelLoaded = false
+                }
                 val expectedSize = queryModelSize(uri)
                 val stream = contentResolver.openInputStream(uri)
                     ?: throw IllegalStateException("Could not open the selected model file.")
@@ -182,6 +221,79 @@ class MainActivity : Activity() {
         }.start()
     }
 
+
+    private fun loadLocalModel() {
+        val model = modelStore.installedModel()
+        if (model == null) {
+            Toast.makeText(this, "Import a valid GGUF model first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        modelLoadButton?.isEnabled = false
+        modelLoadButton?.text = "Loading model…"
+        inferenceOutput?.text = "Loading Qwen into native memory. This can take time and use substantial RAM."
+        Thread {
+            try {
+                NativeQwenRuntime.nativeLoadModel(model.absolutePath, 2048, 4)
+                nativeModelLoaded = true
+                runOnUiThread {
+                    modelLoadButton?.isEnabled = true
+                    modelLoadButton?.text = "Qwen loaded — reload model"
+                    inferenceButton?.isEnabled = true
+                    inferenceOutput?.text = "Qwen runtime loaded. Send a short test prompt below."
+                }
+            } catch (error: UnsatisfiedLinkError) {
+                runOnUiThread {
+                    modelLoadButton?.isEnabled = true
+                    modelLoadButton?.text = "Load model into memory"
+                    inferenceOutput?.text = "Native runtime is unavailable in this APK: " + (error.message ?: "library load failed")
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    modelLoadButton?.isEnabled = true
+                    modelLoadButton?.text = "Retry model load"
+                    inferenceOutput?.text = "Model load failed: " + (error.message ?: "unknown error")
+                }
+            }
+        }.start()
+    }
+
+    private fun runLocalInference() {
+        val prompt = inferencePrompt?.text?.toString()?.trim().orEmpty()
+        if (!nativeModelLoaded) {
+            Toast.makeText(this, "Load the Qwen model first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (prompt.isEmpty()) {
+            Toast.makeText(this, "Enter a question first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        inferenceButton?.isEnabled = false
+        inferenceOutput?.text = "Generating local response…"
+        Thread {
+            try {
+                val answer = NativeQwenRuntime.nativeGenerate(
+                    "You are Zexa, a helpful assistant. Reply clearly in the user's language, including Hindi or Hinglish when appropriate.",
+                    prompt,
+                    256,
+                )
+                runOnUiThread {
+                    inferenceButton?.isEnabled = nativeModelLoaded
+                    inferenceOutput?.text = if (answer.isBlank()) "The model returned an empty response." else answer
+                }
+            } catch (error: UnsatisfiedLinkError) {
+                runOnUiThread {
+                    inferenceButton?.isEnabled = false
+                    inferenceOutput?.text = "Native runtime is unavailable: " + (error.message ?: "library load failed")
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    inferenceButton?.isEnabled = nativeModelLoaded
+                    inferenceOutput?.text = "Inference failed: " + (error.message ?: "unknown error")
+                }
+            }
+        }.start()
+    }
+
     private fun queryModelSize(uri: Uri): Long? {
         var cursor: Cursor? = null
         return try {
@@ -202,6 +314,8 @@ class MainActivity : Activity() {
         val model = modelStore.installedModel()
         if (model == null) {
             status.text = "No GGUF model imported yet. Select a compatible GGUF file to copy it into private app storage."
+            modelLoadButton?.isEnabled = false
+            inferenceButton?.isEnabled = false
             return
         }
         val size = model.length() / (1024.0 * 1024.0 * 1024.0)
@@ -210,6 +324,14 @@ class MainActivity : Activity() {
         status.text = "Model imported: " + String.format("%.2f", size) + " GiB\nSHA-256: " +
             (hash ?: "not recorded") + "\nInference status: not connected (native llama.cpp runtime pending)."
         modelImportButton?.text = "Replace Qwen GGUF model"
+        modelLoadButton?.isEnabled = !nativeModelLoaded
+        if (nativeModelLoaded) {
+            modelLoadButton?.text = "Qwen loaded — reload model"
+            inferenceButton?.isEnabled = true
+        } else {
+            modelLoadButton?.text = "Load model into memory"
+            inferenceButton?.isEnabled = false
+        }
     }
 
     private fun showStatusPage(title: String, status: String, detail: String) {
