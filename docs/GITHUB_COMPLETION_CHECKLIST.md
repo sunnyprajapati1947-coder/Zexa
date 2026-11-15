@@ -2,7 +2,7 @@
 
 ## Standalone Android app status (2026-11-15)
 
-The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. Android CI run `43675903149` passed on commit `6f258774744496a06378b61699413066d50c8bde`, including JVM tests, native CMake compilation and debug APK assembly. The `zexa-bridge-debug-apk` artifact (6.8 MB ZIP; SHA-256 `fa4a3087ac648527d0a88dd3abde00d2a0da84738758446174d229e30f909538`) was uploaded successfully and contains `app-debug.apk` with `lib/arm64-v8a/libzexa_llama.so`. This verifies CI assembly only; the APK has not been installed or exercised on the target OPPO Android 16 device. Voice/reminder target-device verification remains outstanding. Native Android per-action approval includes an exact-payload review screen, one-use 60-second tickets, notification deep-linking and a Python polling client; this integration is now CI-build verified, while physical-device validation remains outstanding. It is not yet the full Zexa assistant: semantic memory/RAG, full task management and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
+The Android project includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. Latest Android CI run [43680303215](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215) passed on commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`: JVM unit tests, native CMake compilation, debug APK assembly and artifact upload all succeeded. Artifact `zexa-bridge-debug-apk` (about 6.8 MB ZIP; SHA-256 `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`) is available from the workflow run and contains the debug APK. CI verifies compilation/tests only; installation and runtime behavior on the target OPPO Android 16 device remain unverified. Voice/reminder target-device verification remains outstanding. Native Android per-action approval includes exact-payload review, one-use 60-second tickets, notification deep-linking and a Python polling client; this is CI-build verified but not physically device-tested. It is not yet the full Zexa assistant: semantic memory/RAG, full task management and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
 
 - [x] Native Android workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections; unfinished modules are explicitly marked pending.
 - [x] Android bridge action requests are queued with HTTP 202 and require exact-payload native confirmation; a bearer token alone never executes an action.
@@ -17,13 +17,13 @@ The Android project now includes a native workspace shell, GGUF import/integrity
 - [ ] Verify WorkManager reminder delivery, cancellation, reboot recovery, notification permission denial and Doze/battery behavior on the target Android 16 device.
 - [x] Explicit personal-memory facts with local SQLite save, edit, case-insensitive search, individual delete and confirmed clear-all; up to 100 facts of 500 characters each. Up to 10 facts/3,000 characters are supplied as reference context to local chat.
 - [ ] Semantic search/RAG and physical-device memory persistence verification.
-- [x] User-initiated personal memory JSON export through Android's document picker (Android CI verification pending).
-- [x] Basic local reminder scheduling via WorkManager, pending-reminder list, individual confirmed cancellation and cancel-all, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (Android build verification pending; physical-device delivery verification outstanding).
-- [x] Reminder notification deep link opens the Tasks section, including when the activity is already running (latest change awaits a successful Android CI run and physical-device verification).
+- [x] User-initiated personal memory JSON export through Android's document picker (latest Android CI run `43680303215` passed; physical-device export/restore verification remains outstanding).
+- [x] Basic local reminder scheduling via WorkManager, pending-reminder list, individual confirmed cancellation and cancel-all, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (latest Android CI passed; physical-device delivery verification outstanding).
+- [x] Reminder notification deep link opens the Tasks section, including when the activity is already running (latest Android CI passed; physical-device verification outstanding).
 - [ ] Full task management, reminder editing/history, and target-device Doze/reboot validation.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
 - [ ] Android execution gateway, durable approval/audit state, and physical-device confirmation-flow validation.
-- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, Python client wait flow, and notification deep-linking to the matching approval dialog (Android CI verification pending after the latest Kotlin compile failure; physical-device validation outstanding; Device refresh remains available as fallback).
+- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, Python client wait flow, and notification deep-linking to the matching approval dialog (latest Android CI passed; physical-device validation outstanding; Device refresh remains available as fallback).
 - [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, durable request/result state and sensitive-screen redaction; one-use in-memory request IDs and replay rejection are implemented.
 - [ ] Android unit/instrumentation tests, release signing, install/upgrade tests and target-device acceptance on Android 16.
 
@@ -76,7 +76,8 @@ This file separates work that is implemented and CI-verified on the feature bran
 
 ## Latest GitHub Actions verification
 
-- [ ] Android Bridge Build run `43679262981` failed at `MainActivity.kt:1322` due to malformed escaped newlines in the companion-object declaration. The syntax has been corrected in the follow-up commit; a fresh Android CI run is required before marking this integration verified.
+- [x] Android Bridge Build run `43680303215` passed on commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`; JVM tests, native CMake build, debug APK assembly and artifact upload succeeded. Artifact ID `14147249453`; SHA-256 `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`. [Open the workflow run](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215).
+- [x] The previous Kotlin syntax failure and local-JVM Android `org.json` test-stub issue were corrected and the latest Android CI is green.
 
 - [x] Android Bridge Build #317 passed on commit `6f258774744496a06378b61699413066d50c8bde`; run `43675903149` uploaded `zexa-bridge-debug-apk` (contains `app-debug.apk` and `lib/arm64-v8a/libzexa_llama.so`).
 
