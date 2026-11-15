@@ -206,8 +206,8 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             not isinstance(source_path, str)
             or not source_path
             or source_path.startswith("/")
-            or "\\\\" in source_path
-            or "\\x00" in source_path
+            or "\\" in source_path
+            or "\x00" in source_path
         ):
             raise ValueError("Imported skill manifest contains an invalid source path.")
         if ".." in source_path.split("/") or ".." in Path(source_path).parts:
@@ -234,7 +234,7 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             or not imported_path
             or imported_path.startswith("/")
             or "\\" in imported_path
-            or "\\x00" in imported_path
+            or "\x00" in imported_path
         ):
             raise ValueError("Imported skill manifest contains an invalid imported path.")
         imported_parts = Path(imported_path).parts
