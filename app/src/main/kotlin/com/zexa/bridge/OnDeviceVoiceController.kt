@@ -22,6 +22,7 @@ class OnDeviceVoiceController(
     private var recognizer: SpeechRecognizer? = null
     private var textToSpeech: TextToSpeech? = null
     private var ttsReady = false
+    private var pendingSpeech: String? = null
 
     fun startListening() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
@@ -102,6 +103,7 @@ class OnDeviceVoiceController(
             onStatus("There is no assistant response to read aloud yet.")
             return
         }
+        pendingSpeech = safeText
         if (textToSpeech == null) {
             onStatus("Preparing the installed text-to-speech engine…")
             textToSpeech = TextToSpeech(activity) { result ->
@@ -112,26 +114,37 @@ class OnDeviceVoiceController(
                         languageResult != TextToSpeech.LANG_MISSING_DATA &&
                         languageResult != TextToSpeech.LANG_NOT_SUPPORTED
                     if (ttsReady) {
-                        onStatus("Speaking with the installed Hindi voice.")
-                        engine?.speak(safeText, TextToSpeech.QUEUE_FLUSH, null, "zexa-answer")
+                        val queued = pendingSpeech
+                        pendingSpeech = null
+                        if (queued != null) {
+                            onStatus("Speaking with the installed Hindi voice.")
+                            engine?.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "zexa-answer")
+                        }
                     } else {
+                        pendingSpeech = null
                         onStatus("Hindi voice is unavailable in the installed TTS engine. Install a Hindi voice or use text chat.")
                     }
                 } else {
+                    pendingSpeech = null
                     onStatus("Text-to-speech engine initialization failed.")
                 }
             }
             return
         }
         if (!ttsReady) {
-            onStatus("The installed Hindi text-to-speech voice is not ready or is unavailable.")
+            onStatus("The installed Hindi text-to-speech voice is still preparing or unavailable.")
             return
         }
-        onStatus("Speaking with the installed Hindi voice.")
-        textToSpeech?.speak(safeText, TextToSpeech.QUEUE_FLUSH, null, "zexa-answer")
+        val queued = pendingSpeech
+        pendingSpeech = null
+        if (queued != null) {
+            onStatus("Speaking with the installed Hindi voice.")
+            textToSpeech?.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "zexa-answer")
+        }
     }
 
     fun stopSpeaking() {
+        pendingSpeech = null
         textToSpeech?.stop()
     }
 
@@ -143,5 +156,6 @@ class OnDeviceVoiceController(
         textToSpeech?.shutdown()
         textToSpeech = null
         ttsReady = false
+        pendingSpeech = null
     }
 }
