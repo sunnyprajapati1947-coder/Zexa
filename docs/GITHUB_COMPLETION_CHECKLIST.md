@@ -4,6 +4,8 @@
 
 The current APK is still a bridge control panel, not the full Zexa assistant. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
 
+- [x] Native Android workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections; unfinished modules are explicitly marked pending.
+- [x] Android bridge action endpoint defaults to deny (HTTP 403) until native per-action approval is implemented.
 - [ ] Native chat UI wired to a real brain adapter (not a placeholder).
 - [ ] On-device Qwen/llama.cpp runtime packaged or installed/managed from inside the app, with model download/import, integrity check, storage and RAM checks.
 - [ ] Online provider setup with secure Android Keystore-backed credential storage; no API keys in source, logs, or clipboard.
