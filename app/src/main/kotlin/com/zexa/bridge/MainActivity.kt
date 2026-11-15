@@ -47,6 +47,7 @@ class MainActivity : Activity() {
     private val notificationPermissionRequest = 4209
     private var pendingReminder: Triple<String, String, Long>? = null
     private var reminderStatus: TextView? = null
+    private var pendingReminderContainer: LinearLayout? = null
     @Volatile private var chatGenerating = false
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
@@ -856,7 +857,9 @@ class MainActivity : Activity() {
     }
 
     private fun renderPendingReminders() {
+        pendingReminderContainer?.let { content.removeView(it) }
         val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        pendingReminderContainer = container
         content.addView(TextView(this).apply {
             text = "PENDING REMINDERS"
             textSize = 12f
