@@ -36,6 +36,7 @@ class QwenModelLoadWorker(
                 modelStore.verifyInstalledModel(expectedHash)
             }, 2048, 4)
 
+            setProgressAsync(workDataOf("stage" to "complete")).get()
             if (isStopped || !ModelLoadCoordinator.publishLoadedIfActive(
                     applicationContext,
                     "Qwen is loaded and ready for local inference."
@@ -52,7 +53,6 @@ class QwenModelLoadWorker(
                 return Result.retry()
             }
 
-            setProgressAsync(workDataOf("stage" to "complete")).get()
             Result.success()
         } catch (error: UnsatisfiedLinkError) {
             if (isStopped) {
