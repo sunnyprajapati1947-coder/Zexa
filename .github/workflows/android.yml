@@ -2,14 +2,14 @@ name: Android Bridge Build
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main, "feature/**", "fix/**"]
     paths:
       - "app/**"
       - "*.gradle.kts"
       - "settings.gradle.kts"
       - ".github/workflows/android.yml"
   pull_request:
-    branches: [main]
+    branches: [main, "feature/**"]
     paths:
       - "app/**"
       - "*.gradle.kts"
