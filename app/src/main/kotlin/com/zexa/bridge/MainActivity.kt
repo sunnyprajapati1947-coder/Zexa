@@ -1141,6 +1141,29 @@ class MainActivity : Activity() {
         content.addView(bridgeStatus)
         bridgeButton = Button(this).apply { setOnClickListener { toggleBridge() } }
         content.addView(bridgeButton)
+        val screenAccessStatus = TextView(this).apply {
+            textSize = 12f
+            setTextColor(0xFFD1D5DB.toInt())
+            setPadding(0, dp(8), 0, dp(4))
+        }
+        val screenAccessButton = Button(this)
+        fun refreshScreenAccessUi() {
+            val allowed = preferences().getBoolean("screen_access_enabled", false)
+            screenAccessStatus.text = if (allowed) {
+                "Screen data access is ON. The local bridge can read visible, non-password screen text."
+            } else {
+                "Screen data access is OFF. Visible screen text is not exposed to the local bridge."
+            }
+            screenAccessButton.text = if (allowed) "Disable screen data access" else "Enable screen data access"
+        }
+        screenAccessButton.setOnClickListener {
+            val next = !preferences().getBoolean("screen_access_enabled", false)
+            preferences().edit().putBoolean("screen_access_enabled", next).apply()
+            refreshScreenAccessUi()
+        }
+        content.addView(screenAccessStatus)
+        content.addView(screenAccessButton)
+        refreshScreenAccessUi()
         content.addView(Button(this).apply {
             text = "Copy local bridge token"
             setOnClickListener {
