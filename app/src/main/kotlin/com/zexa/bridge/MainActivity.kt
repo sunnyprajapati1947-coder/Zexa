@@ -1113,7 +1113,7 @@ class MainActivity : Activity() {
                 setOnClickListener { reviewActionApproval(request) }
             })
         }
-        val history = service.actionAuditHistory()
+        val history = service?.actionAuditHistory().orEmpty()
         container.addView(TextView(this).apply {
             text = "RECENT ACTION HISTORY"
             textSize = 12f
