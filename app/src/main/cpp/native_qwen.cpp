@@ -54,7 +54,7 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeLoadModel(
     }
     if (context_size < 512 || context_size > 4096 || threads < 1 || threads > 8) {
         throw_java(env, "Unsupported context or thread configuration.");
-        return nullptr;
+        return;
     }
 
     if (!backend_initialized) {
@@ -67,7 +67,7 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeLoadModel(
     llama_model * next_model = llama_model_load_from_file(path.c_str(), model_params);
     if (next_model == nullptr) {
         throw_java(env, "llama.cpp could not load this GGUF model.");
-        return nullptr;
+        return;
     }
 
     llama_context_params context_params = llama_context_default_params();
@@ -82,7 +82,7 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeLoadModel(
     if (next_context == nullptr) {
         llama_model_free(next_model);
         throw_java(env, "llama.cpp could not allocate the inference context. Try a smaller context or model.");
-        return nullptr;
+        return;
     }
 
     release_runtime();
