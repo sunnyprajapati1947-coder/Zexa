@@ -51,7 +51,7 @@ class MainActivity : Activity() {
     private var reminderStatus: TextView? = null
     private var pendingReminderContainer: LinearLayout? = null
     private var actionApprovalContainer: LinearLayout? = null
-    @Volatile private var chatGenerating = false
+    private val chatGenerating: Boolean get() = ChatGenerationGate.isRunning
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
     private val modelPickerRequest = 4107
@@ -319,6 +319,7 @@ class MainActivity : Activity() {
         }
         val message = chatInput?.text?.toString()?.trim().orEmpty()
         if (message.isEmpty()) return
+        if (!ChatGenerationGate.tryStart()) return
         chatHistory.add("user" to message)
         while (chatHistory.size > 15) {
             if (chatHistory.size >= 3) {
@@ -327,7 +328,6 @@ class MainActivity : Activity() {
             } else break
         }
         chatInput?.setText("")
-        chatGenerating = true
         chatSendButton?.isEnabled = false
         renderChatHistory()
         val conversation = chatHistory.toList()
@@ -355,7 +355,7 @@ class MainActivity : Activity() {
                 }
                 runOnUiThread {
                     chatHistory.add("assistant" to answer)
-                    chatGenerating = false
+                    ChatGenerationGate.finish()
                     chatSendButton?.isEnabled = nativeModelLoaded
                     renderChatHistory()
                     if (persistenceError != null) addChatNotice("Chat is active, but local history could not be saved: $persistenceError")
