@@ -28,6 +28,8 @@ internal object BridgeSecurityRules {
         return length.takeIf { it in 1..16_000 }
     }
 
+    fun screenAccessEnabled(value: Any?): Boolean = value == true
+
     fun coordinate(value: Double): Boolean =
         value.isFinite() && value in 0.0..10_000.0
 
