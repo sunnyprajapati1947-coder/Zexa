@@ -510,6 +510,9 @@ class MainActivity : Activity() {
                 if (!modelStore.verifyInstalledModel(expectedHash)) {
                     throw IllegalStateException("Stored model integrity check failed. Import the GGUF again.")
                 }
+                // Activity recreation can reset this Activity's flag while the process-level
+                // JNI model remains loaded. Release it before loading again to avoid doubling RAM.
+                NativeQwenRuntime.nativeUnloadModel()
                 NativeQwenRuntime.nativeLoadModel(model.absolutePath, 2048, 4)
                 nativeModelLoaded = true
                 runOnUiThread {
