@@ -35,6 +35,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
         refreshBridge()
     }
 
