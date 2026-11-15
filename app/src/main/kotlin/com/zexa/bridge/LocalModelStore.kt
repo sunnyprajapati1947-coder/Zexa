@@ -113,8 +113,14 @@ class LocalModelStore(private val directory: File) {
 
             val destination = File(directory, MODEL_NAME)
             val backup = File(directory, "$MODEL_NAME.previous")
-            if (backup.exists() && !backup.delete()) {
-                throw IllegalStateException("Could not rotate the previous model file.")
+            if (backup.exists()) {
+                if (destination.exists()) {
+                    if (!backup.delete()) {
+                        throw IllegalStateException("Could not rotate the previous model file.")
+                    }
+                } else if (!backup.renameTo(destination)) {
+                    throw IllegalStateException("Could not recover the previous model file.")
+                }
             }
             if (destination.exists() && !destination.renameTo(backup)) {
                 throw IllegalStateException("Could not safely replace the previous model.")
