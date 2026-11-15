@@ -1,6 +1,7 @@
 package com.zexa.bridge
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -37,6 +38,7 @@ class MainActivity : Activity() {
     private var chatSendButton: Button? = null
     private var chatScroll: ScrollView? = null
     private val chatHistory = ArrayList<Pair<String, String>>()
+    private val chatStore by lazy { ChatHistoryStore(this) }
     @Volatile private var chatGenerating = false
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
@@ -57,6 +59,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         getOrCreateToken()
+        chatHistory.addAll(chatStore.loadRecent())
         val page = ScrollView(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -106,7 +109,7 @@ class MainActivity : Activity() {
             "Chat" -> showChat()
             "Brain" -> showBrain()
             "Tasks" -> showStatusPage("Tasks", "Native task centre pending", "The current Python task queue has not yet been migrated to Android-native persistent scheduling and notifications.")
-            "Memory" -> showStatusPage("Memory", "Private memory centre pending", "Conversation history and explicit memory controls are not yet connected to Android storage.")
+            "Memory" -> showMemory()
             "Device" -> showDevice()
         }
     }
@@ -117,7 +120,7 @@ class MainActivity : Activity() {
         addCard("APP STATUS", "Android foundation active", "This build is the first native workspace shell. Brain, chat, voice, memory and tasks are not falsely marked as ready.")
         addCard("AI BRAIN", "Native Qwen integration under validation", "GGUF import and llama.cpp JNI inference code are in place; CI and real-device inference still need verification.")
         addCard("VOICE", "Not connected", "Microphone capture and speech output will be added with visible controls.")
-        addCard("MEMORY & TASKS", "Migration pending", "These modules need Android-native storage and scheduling.")
+        addCard("CHAT HISTORY", "Saved privately on this device", "The latest completed local chat messages are stored in Zexa's app-private database. Tasks and reminders are still pending.")
         addCard("DEVICE HAND", "Optional and OFF by default", "Accessibility access is separate from AI chat and remains user-controlled.")
         addButton("Open device settings") { showDevice() }
     }
@@ -169,12 +172,13 @@ class MainActivity : Activity() {
                     Toast.makeText(this@MainActivity, "Wait for the current response to finish.", Toast.LENGTH_SHORT).show()
                 } else {
                     chatHistory.clear()
+                    chatStore.clear()
                     renderChatHistory()
                 }
             }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         content.addView(actions)
-        addCard("SESSION PRIVACY", "Not saved yet", "This conversation stays in the current app session only. Persistent chat history and memory controls are still being built.")
+        addCard("LOCAL HISTORY", "Saved on this device", "The latest completed conversation is stored in Zexa's private app database. Open Memory to clear it.")
     }
 
     private fun sendChatMessage() {
@@ -207,9 +211,16 @@ class MainActivity : Activity() {
                 )
                 runOnUiThread {
                     chatHistory.add("assistant" to answer)
+                    val persistenceError = try {
+                        chatStore.saveCompletedConversation(chatHistory)
+                        null
+                    } catch (storageError: Exception) {
+                        storageError.message ?: "database write failed"
+                    }
                     chatGenerating = false
                     chatSendButton?.isEnabled = nativeModelLoaded
                     renderChatHistory()
+                    if (persistenceError != null) addChatNotice("Chat is active, but local history could not be saved: $persistenceError")
                 }
             } catch (error: UnsatisfiedLinkError) {
                 runOnUiThread {
@@ -346,7 +357,6 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Wait for the current chat response before replacing the model.", Toast.LENGTH_LONG).show()
             return
         }
-        chatHistory.clear()
         modelImportButton?.isEnabled = false
         inferenceButton?.isEnabled = false
         modelImportButton?.text = "Validating and importing…"
@@ -504,6 +514,44 @@ class MainActivity : Activity() {
             modelLoadButton?.text = "Load model into memory"
             inferenceButton?.isEnabled = false
         }
+    }
+
+    private fun showMemory() {
+        content.removeAllViews()
+        addHeading("Private memory")
+        val savedCount = chatStore.loadRecent(ChatHistoryStore.MAX_HISTORY_LIMIT).size
+        addCard(
+            "LOCAL CHAT HISTORY",
+            "$savedCount messages saved",
+            "Only completed local conversations are stored in Zexa's app-private database. They are not uploaded or synced."
+        )
+        addButton("Clear saved chat history") {
+            if (chatGenerating) {
+                Toast.makeText(this, "Wait for the current response to finish.", Toast.LENGTH_LONG).show()
+            } else {
+                AlertDialog.Builder(this)
+                    .setTitle("Clear local chat history?")
+                    .setMessage("This permanently deletes the saved conversations from this app on this device.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Clear") { _, _ ->
+                        chatStore.clear()
+                        chatHistory.clear()
+                        showMemory()
+                        Toast.makeText(this, "Local chat history cleared.", Toast.LENGTH_SHORT).show()
+                    }
+                    .show()
+            }
+        }
+        addCard(
+            "MEMORY STATUS",
+            "Conversation history only",
+            "Automatic personal-memory extraction, semantic search, and editable memory facts are not implemented yet."
+        )
+        addCard(
+            "TASKS & REMINDERS",
+            "Android migration pending",
+            "Background scheduling and native notifications are not connected in this app build."
+        )
     }
 
     private fun showStatusPage(title: String, status: String, detail: String) {
