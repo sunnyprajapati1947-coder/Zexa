@@ -11,6 +11,13 @@ object MemoryFactRules {
     const val MAX_FACT_LENGTH = 500
     const val MAX_FACTS = 100
     fun normalize(value: String): String? = value.trim().takeIf { it.isNotEmpty() && it.length <= MAX_FACT_LENGTH }
+
+    fun normalizeImportFacts(values: List<String>): List<String> {
+        if (values.size > MAX_FACTS) throw IllegalArgumentException("Backup contains more than $MAX_FACTS facts.")
+        return values.map { value ->
+            normalize(value) ?: throw IllegalArgumentException("Backup contains a blank or oversized memory fact.")
+        }.distinctBy { it.lowercase() }
+    }
 }
 
 /** Explicitly user-managed facts. Nothing is extracted from chat automatically. */
@@ -65,6 +72,33 @@ class MemoryFactStore(context: Context) :
             val changed = db.update(TABLE_FACTS, values, "id = ?", arrayOf(id.toString()))
             if (changed == 0) throw IllegalArgumentException("This memory fact no longer exists.")
             id
+        }
+    }
+
+    /** Merge a validated backup atomically. Existing facts are kept; case-insensitive duplicates are skipped. */
+    @Synchronized fun mergeImportedFacts(facts: List<String>): Int {
+        val normalized = MemoryFactRules.normalizeImportFacts(facts)
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val existing = db.rawQuery("SELECT COUNT(*) FROM $TABLE_FACTS", null).use { it.moveToFirst(); it.getInt(0) }
+            val additions = normalized.filterNot { fact ->
+                db.rawQuery("SELECT 1 FROM $TABLE_FACTS WHERE fact = ? COLLATE NOCASE LIMIT 1", arrayOf(fact)).use { it.moveToFirst() }
+            }
+            if (existing + additions.size > MemoryFactRules.MAX_FACTS) {
+                throw IllegalStateException("Restore would exceed the " + MemoryFactRules.MAX_FACTS + "-fact memory limit. No changes were made.")
+            }
+            val now = System.currentTimeMillis()
+            additions.forEach { fact ->
+                val values = ContentValues().apply { put("fact", fact); put("updated_at", now) }
+                if (db.insertWithOnConflict(TABLE_FACTS, null, values, SQLiteDatabase.CONFLICT_IGNORE) == -1L) {
+                    throw IllegalStateException("Could not restore a memory fact. No changes were made.")
+                }
+            }
+            db.setTransactionSuccessful()
+            return additions.size
+        } finally {
+            db.endTransaction()
         }
     }
 
