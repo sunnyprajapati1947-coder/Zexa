@@ -43,7 +43,10 @@ class ZexaAccessibilityService : AccessibilityService() {
         // Intentionally do not collect, store, or transmit events.
     }
 
-    override fun onInterrupt() = Unit
+    override fun onInterrupt() {
+        markPendingApprovalsInterrupted()
+        actionApprovals.clear()
+    }
 
     private fun markPendingApprovalsInterrupted() {
         actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
