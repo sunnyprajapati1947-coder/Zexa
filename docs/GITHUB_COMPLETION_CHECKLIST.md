@@ -2,12 +2,13 @@
 
 ## Standalone Android app status (2026-11-15)
 
-The current APK is still a bridge control panel, not the full Zexa assistant. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
+The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. It is not yet the full Zexa assistant: voice, durable memory, tasks, reminders, notifications and several security/lifecycle features remain incomplete. Native build CI has succeeded on an earlier integration commit; the latest changes and real-device inference still need verification. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
 
 - [x] Native Android workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections; unfinished modules are explicitly marked pending.
 - [x] Android bridge action endpoint defaults to deny (HTTP 403) until native per-action approval is implemented.
-- [ ] Native chat UI wired to a real brain adapter (not a placeholder).
-- [ ] On-device Qwen/llama.cpp runtime packaged or installed/managed from inside the app, with model download/import, integrity check, storage and RAM checks.
+- [x] Native multi-turn chat UI wired to the local llama.cpp/Qwen adapter; recent history is bounded and kept only in the current app session.
+- [x] arm64 llama.cpp JNI runtime integration, GGUF import into app-private storage, 10 GiB size cap, header validation, SHA-256 verification before load, CPU inference configuration and RAM warning.
+- [ ] Verify latest native build and run actual Qwen inference on the target Android 16 device; assess memory, thermals and supported GGUF templates.
 - [ ] Online provider setup with secure Android Keystore-backed credential storage; no API keys in source, logs, or clipboard.
 - [ ] Native push-to-talk voice input/output with visible microphone state, cancellation and Hindi/Hinglish handling.
 - [ ] Native memory and conversation history with user-controlled save, search, export and delete.
@@ -68,7 +69,7 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [x] CodeQL #113 passed on commit `43f5882`.
 - [x] Android Bridge Build #70 passed on commit `43f5882` (Android SDK 36, JVM unit tests, and debug APK assembly).
 - [x] Community skill import #13 passed; manifest records 320 references, 0 enabled, 1 flagged for manual review.
-- [ ] Physical OPPO Android 16 validation remains outstanding.
+- [ ] Physical OPPO Android 16 validation remains outstanding, including GGUF import, SHA-256 verification, native model load, Hindi/Hinglish multi-turn chat, RAM and thermal behavior.
 
 ## Pull request state
 
