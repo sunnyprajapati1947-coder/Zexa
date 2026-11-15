@@ -236,6 +236,11 @@ class MainActivity : Activity() {
         inferenceOutput?.text = "Loading Qwen into native memory. This can take time and use substantial RAM."
         Thread {
             try {
+                val expectedHash = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
+                    .getString("model_sha256", null)
+                if (!modelStore.verifyInstalledModel(expectedHash)) {
+                    throw IllegalStateException("Stored model integrity check failed. Import the GGUF again.")
+                }
                 NativeQwenRuntime.nativeLoadModel(model.absolutePath, 2048, 4)
                 nativeModelLoaded = true
                 runOnUiThread {
