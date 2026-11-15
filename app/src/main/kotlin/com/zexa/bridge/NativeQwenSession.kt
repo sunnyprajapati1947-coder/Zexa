@@ -1,6 +1,7 @@
 package com.zexa.bridge
 
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Process-scoped owner for the single llama.cpp model/context.
@@ -11,9 +12,20 @@ import java.io.File
  */
 object NativeQwenSession {
     private var loadedModelPath: String? = null
+    private val stateListeners = CopyOnWriteArrayList<() -> Unit>()
 
     val isLoaded: Boolean
         @Synchronized get() = loadedModelPath != null
+
+    fun addStateListener(listener: () -> Unit) { stateListeners.addIfAbsent(listener) }
+
+    fun removeStateListener(listener: () -> Unit) { stateListeners.remove(listener) }
+
+    private fun notifyStateChanged() {
+        stateListeners.forEach { listener ->
+            try { listener() } catch (_: Exception) { /* UI observers cannot break runtime ownership. */ }
+        }
+    }
 
     @Synchronized
     fun load(model: File, contextSize: Int = 2048, threads: Int = 4) {
@@ -22,6 +34,7 @@ object NativeQwenSession {
         unloadLocked()
         NativeQwenRuntime.nativeLoadModel(path, contextSize, threads)
         loadedModelPath = path
+        notifyStateChanged()
     }
 
     @Synchronized
@@ -36,7 +49,9 @@ object NativeQwenSession {
     @Synchronized
     fun replaceModel(importer: () -> ImportedModel): ImportedModel {
         unloadLocked()
-        return importer()
+        val imported = importer()
+        notifyStateChanged()
+        return imported
     }
 
     @Synchronized
@@ -54,5 +69,6 @@ object NativeQwenSession {
         if (loadedModelPath == null) return
         NativeQwenRuntime.nativeUnloadModel()
         loadedModelPath = null
+        notifyStateChanged()
     }
 }
