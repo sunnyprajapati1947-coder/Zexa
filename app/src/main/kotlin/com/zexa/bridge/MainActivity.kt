@@ -126,7 +126,7 @@ class MainActivity : Activity() {
     private fun showHome() {
         content.removeAllViews()
         addHeading("Your assistant, in progress")
-        addCard("APP STATUS", "Android foundation active", "This build is the first native workspace shell. Brain, chat, voice, memory and tasks are not falsely marked as ready.")
+        addCard("APP STATUS", "Native assistant foundation active", "Local Qwen chat, saved chat history, user-started voice controls and basic local reminders are implemented on this branch. Device validation and several advanced modules remain.")
         addCard("AI BRAIN", "Native Qwen integration under validation", "GGUF import and llama.cpp JNI inference code are in place; CI and real-device inference still need verification.")
         addCard("VOICE", "On-device voice controls added", "Chat offers explicit microphone input using Android's on-device recognizer and optional spoken replies using the installed Hindi TTS voice. Device language packs may be required.")
         addCard("CHAT HISTORY", "Saved privately on this device", "The latest completed local chat messages are stored in Zexa's app-private database.")
@@ -645,8 +645,8 @@ class MainActivity : Activity() {
         )
         addCard(
             "TASKS & REMINDERS",
-            "Android migration pending",
-            "Background scheduling and native notifications are not connected in this app build."
+            "Basic local reminders available",
+            "WorkManager scheduling and notifications are wired in. Full task management, editing and target-device background validation remain pending."
         )
     }
 
