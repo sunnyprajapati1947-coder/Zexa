@@ -201,6 +201,14 @@ class MainActivity : Activity() {
             }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         content.addView(voiceActions)
+        content.addView(Button(this).apply {
+            text = "Stop voice input / audio"
+            setOnClickListener {
+                voiceController?.stopListening()
+                voiceController?.stopSpeaking()
+                voiceStatus?.text = "Voice activity stopped."
+            }
+        })
         voiceStatus = TextView(this).apply {
             text = "Voice is off. Tap the microphone button to start; recognized text will be placed in the message box for your review."
             textSize = 12f
