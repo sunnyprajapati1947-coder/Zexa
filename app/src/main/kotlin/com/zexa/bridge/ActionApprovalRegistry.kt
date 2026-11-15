@@ -4,9 +4,8 @@ import java.util.UUID
 
 /**
  * In-memory, one-use approval tickets for exact device-action requests.
- * This registry is deliberately not wired to execution yet: bridge actions
- * remain fail-closed until the foreground confirmation UI and timeout handoff
- * are integrated and tested end-to-end.
+ * Tickets are consumed once by the native confirmation UI. The registry is
+ * process-local; callers must not treat a bearer token as user approval.
  */
 data class PendingDeviceAction(
     val requestId: String,
