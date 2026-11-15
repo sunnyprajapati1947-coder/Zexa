@@ -32,6 +32,20 @@ class LocalModelStoreTest {
     }
 
     @Test
+    fun verifiesInstalledModelDigestAndDetectsTampering() {
+        val directory = temporaryFolder.newFolder("digest")
+        val store = LocalModelStore(directory)
+        val bytes = byteArrayOf(0x47, 0x47, 0x55, 0x46, 1, 3, 5, 7)
+        val imported = store.importModel(ByteArrayInputStream(bytes))
+
+        assertTrue(store.verifyInstalledModel(imported.sha256))
+        assertFalse(store.verifyInstalledModel("a".repeat(64)))
+
+        imported.file.appendBytes(byteArrayOf(9))
+        assertFalse(store.verifyInstalledModel(imported.sha256))
+    }
+
+    @Test
     fun acceptsStreamsThatReturnShortReads() {
         val bytes = byteArrayOf(0x47, 0x47, 0x55, 0x46, 9, 8, 7)
         val shortReadStream = object : InputStream() {
