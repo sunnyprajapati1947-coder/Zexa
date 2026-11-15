@@ -716,8 +716,17 @@ class MainActivity : Activity() {
                     .setMessage("This cancels all pending Zexa reminders on this device.")
                     .setNegativeButton("Keep reminders", null)
                     .setPositiveButton("Cancel reminders") { _, _ ->
-                        ReminderScheduler.cancelAll(this@MainActivity)
-                        reminderStatus?.text = "All pending Zexa reminders were cancelled."
+                        reminderStatus?.text = "Cancelling pending reminders…"
+                        Thread {
+                            try {
+                                ReminderScheduler.cancelAll(this@MainActivity).result.get()
+                                runOnUiThread { reminderStatus?.text = "All pending Zexa reminders were cancelled." }
+                            } catch (error: Exception) {
+                                runOnUiThread {
+                                    reminderStatus?.text = "Could not cancel reminders: " + (error.message ?: "unknown error")
+                                }
+                            }
+                        }.start()
                     }
                     .show()
             }
@@ -735,13 +744,21 @@ class MainActivity : Activity() {
     private fun schedulePendingReminder() {
         val reminder = pendingReminder ?: return
         pendingReminder = null
-        try {
-            val id = ReminderScheduler.schedule(this, reminder.first, reminder.second, reminder.third)
-            reminderStatus?.text = "Reminder scheduled for about ${reminder.third} minute(s) from now. ID: $id"
-            Toast.makeText(this, "Local reminder scheduled.", Toast.LENGTH_LONG).show()
-        } catch (error: Exception) {
-            reminderStatus?.text = "Could not schedule reminder: " + (error.message ?: "unknown error")
-        }
+        reminderStatus?.text = "Saving reminder…"
+        Thread {
+            try {
+                val scheduled = ReminderScheduler.schedule(this, reminder.first, reminder.second, reminder.third)
+                scheduled.operation.result.get()
+                runOnUiThread {
+                    reminderStatus?.text = "Reminder scheduled for about ${reminder.third} minute(s) from now. ID: ${scheduled.id}"
+                    Toast.makeText(this, "Local reminder scheduled.", Toast.LENGTH_LONG).show()
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    reminderStatus?.text = "Could not schedule reminder: " + (error.message ?: "unknown error")
+                }
+            }
+        }.start()
     }
 
     private fun showStatusPage(title: String, status: String, detail: String) {
