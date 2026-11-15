@@ -40,6 +40,25 @@ class LocalModelStore(private val directory: File) {
         return file
     }
 
+    fun verifyInstalledModel(expectedSha256: String?): Boolean {
+        if (expectedSha256 == null || !expectedSha256.matches(Regex("[0-9a-f]{64}"))) return false
+        val file = installedModel() ?: return false
+        val digest = MessageDigest.getInstance("SHA-256")
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (count > 0) digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it) }
+        return MessageDigest.isEqual(
+            actual.toByteArray(Charsets.US_ASCII),
+            expectedSha256.toByteArray(Charsets.US_ASCII),
+        )
+    }
+
     @Synchronized
     fun importModel(input: InputStream, expectedSize: Long? = null): ImportedModel {
         try {
