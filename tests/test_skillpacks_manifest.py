@@ -31,7 +31,7 @@ class ImportedManifestTests(unittest.TestCase):
     def write_manifest(self, entry=None):
         content_dir = self.path.parent / "example__skills" / "meeting-notes"
         content_dir.mkdir(parents=True, exist_ok=True)
-        content = b"---\\nname: meeting_notes\\ndescription: Organize user-provided meeting notes.\\n---\\n\\nSummarize supplied notes.\\n"
+        content = b"---\nname: meeting_notes\ndescription: Organize user-provided meeting notes.\n---\n\nSummarize supplied notes.\n"
         (content_dir / "SKILL.md").write_bytes(content)
         item = dict(entry or self.entry)
         item["sha256"] = hashlib.sha256(content).hexdigest()
