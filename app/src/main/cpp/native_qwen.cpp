@@ -169,7 +169,8 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeUnloadModel(JNIEnv *, jobject) {
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
-        JNIEnv * env, jobject, jstring system_prompt, jstring user_prompt, jint max_tokens) {
+        JNIEnv * env, jobject, jstring system_prompt, jobjectArray history_roles,
+        jobjectArray history_contents, jint max_tokens) {
     std::lock_guard<std::mutex> lock(runtime_mutex);
     if (model == nullptr || context == nullptr) {
         throw_java(env, "Load a local GGUF model before starting a conversation.");
@@ -181,58 +182,96 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
     }
 
     const std::string system_text = from_java(env, system_prompt);
-    const std::string user_text = from_java(env, user_prompt);
-    if (user_text.empty()) {
-        throw_java(env, "The user message is empty.");
+    const jsize history_count = history_roles == nullptr ? 0 : env->GetArrayLength(history_roles);
+    if (history_contents == nullptr || history_count < 1 || history_count > 16 ||
+        env->GetArrayLength(history_contents) != history_count) {
+        throw_java(env, "Chat history must contain between 1 and 16 matching messages.");
         return nullptr;
     }
+
+    std::vector<std::string> roles;
+    std::vector<std::string> contents;
+    roles.reserve(static_cast<size_t>(history_count));
+    contents.reserve(static_cast<size_t>(history_count));
+    for (jsize index = 0; index < history_count; ++index) {
+        auto role_value = static_cast<jstring>(env->GetObjectArrayElement(history_roles, index));
+        auto content_value = static_cast<jstring>(env->GetObjectArrayElement(history_contents, index));
+        const std::string role = from_java(env, role_value);
+        const std::string content = from_java(env, content_value);
+        if (role_value != nullptr) env->DeleteLocalRef(role_value);
+        if (content_value != nullptr) env->DeleteLocalRef(content_value);
+        const bool expected_user = (index % 2) == 0;
+        if ((expected_user && role != "user") || (!expected_user && role != "assistant") ||
+            content.empty() || content.size() > 16 * 1024) {
+            throw_java(env, "Chat history roles or message sizes are invalid.");
+            return nullptr;
+        }
+        roles.push_back(role);
+        contents.push_back(content);
+    }
+
     const char * chat_template = llama_model_chat_template(model, nullptr);
     if (chat_template == nullptr) {
         throw_java(env, "This GGUF model does not provide a chat template.");
         return nullptr;
     }
 
-    std::vector<llama_chat_message> messages;
-    if (!system_text.empty()) {
-        messages.push_back({"system", system_text.c_str()});
-    }
-    messages.push_back({"user", user_text.c_str()});
-    int32_t prompt_length = llama_chat_apply_template(
-        chat_template, messages.data(), messages.size(), true, nullptr, 0);
-    if (prompt_length <= 0 || prompt_length > 256 * 1024) {
-        throw_java(env, "Could not format the prompt using the model chat template.");
-        return nullptr;
-    }
-    std::vector<char> prompt(static_cast<size_t>(prompt_length) + 1);
-    const int32_t formatted = llama_chat_apply_template(
-        chat_template, messages.data(), messages.size(), true,
-        prompt.data(), static_cast<int32_t>(prompt.size()));
-    if (formatted < 0 || formatted > prompt_length) {
-        throw_java(env, "Model chat template formatting failed.");
-        return nullptr;
-    }
-
     const llama_vocab * vocab = llama_model_get_vocab(model);
-    int32_t token_count = llama_tokenize(
-        vocab, prompt.data(), formatted, nullptr, 0, true, true);
-    if (token_count == INT32_MIN || token_count >= 0) {
-        throw_java(env, "Could not determine prompt token count.");
-        return nullptr;
+    std::vector<char> prompt;
+    std::vector<llama_token> tokens;
+    int32_t formatted = 0;
+    while (true) {
+        std::vector<llama_chat_message> messages;
+        messages.reserve(roles.size() + (system_text.empty() ? 0 : 1));
+        if (!system_text.empty()) messages.push_back({"system", system_text.c_str()});
+        for (size_t index = 0; index < roles.size(); ++index) {
+            messages.push_back({roles[index].c_str(), contents[index].c_str()});
+        }
+
+        const int32_t prompt_length = llama_chat_apply_template(
+            chat_template, messages.data(), messages.size(), true, nullptr, 0);
+        if (prompt_length <= 0 || prompt_length > 256 * 1024) {
+            throw_java(env, "Could not format the prompt using the model chat template.");
+            return nullptr;
+        }
+        prompt.assign(static_cast<size_t>(prompt_length) + 1, '\\0');
+        formatted = llama_chat_apply_template(
+            chat_template, messages.data(), messages.size(), true,
+            prompt.data(), static_cast<int32_t>(prompt.size()));
+        if (formatted < 0 || formatted > prompt_length) {
+            throw_java(env, "Model chat template formatting failed.");
+            return nullptr;
+        }
+
+        int32_t token_count = llama_tokenize(
+            vocab, prompt.data(), formatted, nullptr, 0, true, true);
+        if (token_count == INT32_MIN) {
+            throw_java(env, "Could not determine prompt token count.");
+            return nullptr;
+        }
+        if (token_count < 0) token_count = -token_count;
+        if (token_count <= 0 || token_count > 4096) {
+            throw_java(env, "Prompt tokenization failed.");
+            return nullptr;
+        }
+        if (static_cast<uint32_t>(token_count) + static_cast<uint32_t>(max_tokens) <= loaded_context_size) {
+            tokens.resize(static_cast<size_t>(token_count));
+            const int32_t actual_tokens = llama_tokenize(
+                vocab, prompt.data(), formatted, tokens.data(), token_count, true, true);
+            if (actual_tokens < 0 || actual_tokens > token_count) {
+                throw_java(env, "Prompt tokenization failed.");
+                return nullptr;
+            }
+            tokens.resize(static_cast<size_t>(actual_tokens));
+            break;
+        }
+        if (roles.size() <= 1) {
+            throw_java(env, "The latest message exceeds the model context size.");
+            return nullptr;
+        }
+        roles.erase(roles.begin(), roles.begin() + 2);
+        contents.erase(contents.begin(), contents.begin() + 2);
     }
-    token_count = -token_count;
-    if (token_count <= 0 || token_count > 4096 ||
-        static_cast<uint32_t>(token_count) + static_cast<uint32_t>(max_tokens) > loaded_context_size) {
-        throw_java(env, "Prompt exceeds the supported context size.");
-        return nullptr;
-    }
-    std::vector<llama_token> tokens(static_cast<size_t>(token_count));
-    const int32_t actual_tokens = llama_tokenize(
-        vocab, prompt.data(), formatted, tokens.data(), token_count, true, true);
-    if (actual_tokens < 0 || actual_tokens > token_count) {
-        throw_java(env, "Prompt tokenization failed.");
-        return nullptr;
-    }
-    tokens.resize(static_cast<size_t>(actual_tokens));
 
     llama_memory_clear(llama_get_memory(context), true);
     const int32_t batch_size = 512;
