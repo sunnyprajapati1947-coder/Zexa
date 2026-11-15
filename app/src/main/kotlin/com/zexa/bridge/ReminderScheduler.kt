@@ -13,6 +13,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequest
+import androidx.work.Operation
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
@@ -93,11 +94,13 @@ object ReminderRules {
             delayMinutes in 1L..ReminderScheduler.MAX_DELAY_MINUTES
 }
 
+data class ScheduledReminder(val id: UUID, val operation: Operation)
+
 object ReminderScheduler {
     const val TAG = "zexa-user-reminder"
     const val MAX_DELAY_MINUTES = 10080L
 
-    fun schedule(context: Context, title: String, message: String, delayMinutes: Long): UUID {
+    fun schedule(context: Context, title: String, message: String, delayMinutes: Long): ScheduledReminder {
         require(ReminderRules.isValid(title, message, delayMinutes)) {
             "Reminder title, message or delay is invalid."
         }
@@ -112,17 +115,16 @@ object ReminderScheduler {
             )
             .addTag(TAG)
             .build()
-        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+        val operation = WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
             "zexa-reminder-${request.id}",
             ExistingWorkPolicy.KEEP,
             request
         )
-        return request.id
+        return ScheduledReminder(request.id, operation)
     }
 
-    fun cancelAll(context: Context) {
+    fun cancelAll(context: Context): Operation =
         WorkManager.getInstance(context.applicationContext).cancelAllWorkByTag(TAG)
-    }
 
     fun pendingSummary(context: Context): String {
         val infos = WorkManager.getInstance(context.applicationContext).getWorkInfosByTag(TAG).get()
