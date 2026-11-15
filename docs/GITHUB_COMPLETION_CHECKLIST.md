@@ -9,13 +9,13 @@ The Android project now includes a native workspace shell, GGUF import/integrity
 - [x] Native multi-turn chat UI wired to the local llama.cpp/Qwen adapter; recent history is bounded.
 - [x] App-private SQLite persistence for completed chat turns and a confirmed clear-history action (Android CI run `43671941890` passed; physical-device persistence check remains outstanding).
 - [x] arm64 llama.cpp JNI runtime integration, GGUF import into app-private storage, 10 GiB size cap, header validation, SHA-256 verification before load, CPU inference configuration and RAM warning.
-- [x] Verify the voice/reminder integration build in CI (run `43672962839`); install the APK and run actual Qwen inference on the target Android 16 device; assess memory, thermals, voice language-pack availability and supported GGUF templates.
+- [x] Verify the voice/reminder integration build in CI (run `43672962839`); JVM tests, native CMake compilation and debug APK assembly passed.\n- [ ] Install the APK and run actual Qwen inference on the target Android 16 device; assess memory, thermals, voice language-pack availability and supported GGUF templates.
 - [ ] Online provider setup with secure Android Keystore-backed credential storage; no API keys in source, logs, or clipboard.
 - [x] Explicit Android on-device speech recognition wired into Chat, with runtime microphone permission, visible status, cancellation on navigation, Hindi locale preference and review-before-send.
 - [ ] Verify voice input with Hindi/Hinglish offline language packs on the target Android 16 device; confirm installed TTS voice behavior and lifecycle.
 - [ ] Verify WorkManager reminder delivery, cancellation, reboot recovery, notification permission denial and Doze/battery behavior on the target Android 16 device.
 - [ ] Editable personal-memory facts, semantic search/RAG, and user-controlled save, search, export and deletion. Persistent chat history is implemented separately; verify its CI and device behavior.
-- [x] Basic local reminder scheduling/cancellation via WorkManager, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (CI and device verification pending).
+- [x] Basic local reminder scheduling/cancellation via WorkManager, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (CI passed; physical-device delivery verification pending).
 - [ ] Full task management, reminder editing/history, notification deep links and target-device Doze/reboot validation.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
 - [ ] Android execution gateway and per-action confirmation in the app; the loopback bearer token alone must not authorize a sensitive action.
