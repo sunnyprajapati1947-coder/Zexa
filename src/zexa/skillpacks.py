@@ -219,10 +219,37 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             raise ValueError("Imported skill references cannot be enabled by this loader.")
         if not isinstance(item.get("review_required"), bool):
             raise ValueError("Imported skill manifest has invalid review metadata.")
-        if not isinstance(item.get("warnings"), list) or not all(
-            isinstance(warning, str) for warning in item["warnings"]
+        warnings = item.get("warnings")
+        if not isinstance(warnings, list) or not all(
+            isinstance(warning, str) for warning in warnings
         ):
             raise ValueError("Imported skill manifest has invalid warning metadata.")
+        if warnings and item.get("review_required") is not True:
+            raise ValueError("Flagged imported skills must require manual review.")
+
+        imported_path = item.get("imported_path")
+        if (
+            not isinstance(imported_path, str)
+            or not imported_path
+            or imported_path.startswith("/")
+            or "\\" in imported_path
+            or "\\x00" in imported_path
+        ):
+            raise ValueError("Imported skill manifest contains an invalid imported path.")
+        imported_parts = Path(imported_path).parts
+        if ".." in imported_parts or "." in imported_parts:
+            raise ValueError("Imported skill manifest contains an imported path traversal.")
+        pack_root = manifest_path.parent.resolve()
+        skill_file = (pack_root / imported_path / "SKILL.md").resolve()
+        if pack_root not in skill_file.parents or not skill_file.is_file():
+            raise ValueError("Imported skill content is missing or escapes the pack directory.")
+        raw = skill_file.read_bytes()
+        if not raw or len(raw) > MAX_SKILL_BYTES:
+            raise ValueError("Imported skill content is empty or exceeds the 64 KiB limit.")
+        actual_hash = hashlib.sha256(raw).hexdigest()
+        if not hashlib.compare_digest(actual_hash, sha256):
+            raise ValueError("Imported skill content hash does not match its manifest.")
+
         seen.add(name)
 
     return data
