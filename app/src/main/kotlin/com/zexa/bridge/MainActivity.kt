@@ -281,7 +281,8 @@ class MainActivity : Activity() {
             try {
                 val answer = NativeQwenRuntime.nativeGenerate(
                     "You are Zexa, a helpful assistant. Reply clearly in the user's language, including Hindi or Hinglish when appropriate.",
-                    prompt,
+                    arrayOf("user"),
+                    arrayOf(prompt),
                     256,
                 )
                 runOnUiThread {
