@@ -524,7 +524,7 @@ class MainActivity : Activity() {
                 val stream = contentResolver.openInputStream(uri)
                     ?: throw IllegalStateException("Could not open the selected model file.")
                 val imported = NativeQwenSession.replaceModel {
-                    modelStore.importModel(stream, expectedSize)
+                    stream.use { modelStore.importModel(it, expectedSize) }
                 }
                 getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE).edit()
                     .putLong("model_size_bytes", imported.sizeBytes)
@@ -608,7 +608,7 @@ class MainActivity : Activity() {
         inferenceOutput?.text = "Generating local response…"
         Thread {
             try {
-                val answer = NativeQwenRuntime.nativeGenerate(
+                val answer = NativeQwenSession.generate(
                     "You are Zexa, a helpful assistant. Reply clearly in the user's language, including Hindi or Hinglish when appropriate.",
                     arrayOf("user"),
                     arrayOf(prompt),
