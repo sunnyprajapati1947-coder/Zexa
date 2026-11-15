@@ -58,6 +58,14 @@ class MainActivity : Activity() {
         }
     }
     private val nativeModelLoaded: Boolean get() = NativeQwenSession.isLoaded
+    private val qwenStateListener: () -> Unit = {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                if (brainStatus != null) refreshModelStatus()
+                if (chatLog != null) chatSendButton?.isEnabled = nativeModelLoaded && !chatGenerating
+            }
+        }
+    }
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
     private val modelPickerRequest = 4107
     private val memoryExportRequest = 4110
@@ -1197,6 +1205,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        NativeQwenSession.removeStateListener(qwenStateListener)
         ChatGenerationGate.removeCompletionListener(chatGenerationCompletionListener)
         voiceController?.stopListening()
         voiceController?.stopSpeaking()
@@ -1211,8 +1220,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        NativeQwenSession.addStateListener(qwenStateListener)
         ChatGenerationGate.addCompletionListener(chatGenerationCompletionListener)
         refreshChatAfterGeneration()
+        if (brainStatus != null) refreshModelStatus()
         ZexaAccessibilityService.instance?.refreshBridge()
         if (::bridgeButton.isInitialized) refreshBridgeUi()
         refreshActionApprovalUi()
