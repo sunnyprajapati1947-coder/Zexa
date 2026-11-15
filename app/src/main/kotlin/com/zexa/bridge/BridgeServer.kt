@@ -15,6 +15,12 @@ class BridgeServer(
     private val token: String,
     private val service: ZexaAccessibilityService,
 ) {
+    init {
+        require(BridgeSecurityRules.validBridgeToken(token)) {
+            "Bridge token must be a 32-byte lowercase hexadecimal value."
+        }
+    }
+
     @Volatile private var running = false
     @Volatile private var ready = false
     @Volatile private var server: ServerSocket? = null
