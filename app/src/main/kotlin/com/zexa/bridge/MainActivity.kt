@@ -50,6 +50,7 @@ class MainActivity : Activity() {
     private var pendingReminder: Triple<String, String, Long>? = null
     private var reminderStatus: TextView? = null
     private var pendingReminderContainer: LinearLayout? = null
+    private var actionApprovalContainer: LinearLayout? = null
     @Volatile private var chatGenerating = false
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
@@ -1024,8 +1025,63 @@ class MainActivity : Activity() {
                 Toast.makeText(this@MainActivity, "Token copied. Keep it private.", Toast.LENGTH_LONG).show()
             }
         })
-        addCard("SAFETY", "Remote actions are temporarily disabled", "The bridge currently has no native per-action confirmation screen. Requests to perform device actions are denied until that approval flow is implemented. Screen snapshots may contain private information; do not share them.")
+        addCard("SAFETY", "Every device action requires your confirmation", "Requests are shown with their exact action and payload. Nothing runs unless you choose Approve & execute. Requests expire after 60 seconds. Do not approve actions you do not recognize.")
+        addHeading("Pending action approvals")
+        actionApprovalContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        content.addView(actionApprovalContainer)
+        addButton("Refresh pending approvals") { refreshActionApprovalUi() }
+        refreshActionApprovalUi()
         refreshBridgeUi()
+    }
+
+    private fun refreshActionApprovalUi() {
+        val container = actionApprovalContainer ?: return
+        container.removeAllViews()
+        val service = ZexaAccessibilityService.instance
+        val requests = service?.pendingActionApprovals().orEmpty()
+        if (requests.isEmpty()) {
+            container.addView(TextView(this).apply {
+                text = "No pending device actions."
+                textSize = 13f
+                setTextColor(0xFFD1D5DB.toInt())
+                setPadding(0, dp(6), 0, dp(12))
+            })
+            return
+        }
+        requests.forEach { request ->
+            container.addView(Button(this).apply {
+                text = "Review ${request.action} · ${request.requestId.take(8)}"
+                setOnClickListener { reviewActionApproval(request) }
+            })
+        }
+    }
+
+    private fun reviewActionApproval(request: PendingDeviceAction) {
+        val payloadText = try {
+            JSONObject(request.payloadJson).toString(2)
+        } catch (_: Exception) {
+            request.payloadJson
+        }
+        val remainingSeconds = ((request.expiresAtEpochMs - System.currentTimeMillis()).coerceAtLeast(0L) + 999L) / 1000L
+        AlertDialog.Builder(this)
+            .setTitle("Review device action")
+            .setMessage(
+                "Action: ${request.action}\nRequest: ${request.requestId}\nExpires in: ${remainingSeconds}s\n\nExact payload:\n$payloadText\n\nOnly approve if you intended this exact action."
+            )
+            .setPositiveButton("Approve & execute") { _, _ ->
+                val result = ZexaAccessibilityService.instance?.approveAction(request.requestId)
+                val status = result?.optString("status", "unavailable") ?: "service_unavailable"
+                Toast.makeText(this, "Action result: $status", Toast.LENGTH_LONG).show()
+                refreshActionApprovalUi()
+            }
+            .setNegativeButton("Deny") { _, _ ->
+                ZexaAccessibilityService.instance?.denyAction(request.requestId)
+                refreshActionApprovalUi()
+            }
+            .setNeutralButton("Cancel", null)
+            .show()
     }
 
     private fun toggleBridge() {
