@@ -13,5 +13,8 @@ object NativeQwenRuntime {
     external fun nativeLoadModel(modelPath: String, contextSize: Int, threads: Int)
 
     @JvmStatic
+    external fun nativeUnloadModel()
+
+    @JvmStatic
     external fun nativeGenerate(systemPrompt: String, userPrompt: String, maxTokens: Int): String
 }
