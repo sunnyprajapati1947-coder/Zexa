@@ -1106,7 +1106,6 @@ class MainActivity : Activity() {
                 setTextColor(0xFFD1D5DB.toInt())
                 setPadding(0, dp(6), 0, dp(12))
             })
-            return
         }
         requests.forEach { request ->
             container.addView(Button(this).apply {
