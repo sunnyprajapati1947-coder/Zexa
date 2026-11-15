@@ -49,8 +49,10 @@ object NativeQwenSession {
         threads: Int = 4,
     ) {
         val path = model.canonicalPath
-        if (loadedModelPath == path) return
+        // Verify even when this path is already loaded: the on-disk file may
+        // have been modified since the current native session was initialized.
         check(verifier()) { "Stored model integrity check failed. Import the GGUF again." }
+        if (loadedModelPath == path) return
         unloadLocked()
         NativeQwenRuntime.nativeLoadModel(path, contextSize, threads)
         loadedModelPath = path
