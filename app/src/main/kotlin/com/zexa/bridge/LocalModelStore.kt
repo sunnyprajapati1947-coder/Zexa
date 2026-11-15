@@ -58,6 +58,20 @@ class LocalModelStore(private val directory: File) {
         try {
             BufferedInputStream(input).use { source ->
                 FileOutputStream(temporary).use { output ->
+                    val header = ByteArray(4)
+                    var headerBytes = 0
+                    while (headerBytes < header.size) {
+                        val count = source.read(header, headerBytes, header.size - headerBytes)
+                        if (count < 0) break
+                        headerBytes += count
+                    }
+                    if (headerBytes != 4 || !header.contentEquals(MAGIC)) {
+                        throw IllegalArgumentException("Selected file is not a GGUF model.")
+                    }
+                    headerChecked = true
+                    total = 4L
+                    digest.update(header)
+                    output.write(header)
                     while (true) {
                         val count = source.read(buffer)
                         if (count < 0) break
@@ -65,12 +79,6 @@ class LocalModelStore(private val directory: File) {
                         total += count
                         if (total > MAX_MODEL_BYTES) {
                             throw IllegalArgumentException("Model exceeds the 10 GiB import limit.")
-                        }
-                        if (!headerChecked) {
-                            if (count < 4 || !buffer.copyOfRange(0, 4).contentEquals(MAGIC)) {
-                                throw IllegalArgumentException("Selected file is not a GGUF model.")
-                            }
-                            headerChecked = true
                         }
                         digest.update(buffer, 0, count)
                         output.write(buffer, 0, count)
