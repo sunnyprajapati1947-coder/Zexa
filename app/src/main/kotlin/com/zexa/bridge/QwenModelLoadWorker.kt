@@ -23,7 +23,7 @@ class QwenModelLoadWorker(
             }
 
             ModelLoadCoordinator.publish(applicationContext, "checking", "Checking the installed GGUF integrity…")
-            setProgressAsync(workDataOf("stage" to "checking", "percent" to 10)).get()
+            setProgressAsync(workDataOf("stage" to "checking")).get()
 
             val modelStore = LocalModelStore(File(applicationContext.filesDir, "models"))
             val model = modelStore.installedModel()
@@ -35,10 +35,10 @@ class QwenModelLoadWorker(
             }
 
             ModelLoadCoordinator.publish(applicationContext, "loading", "Loading Qwen into native memory. This may take several minutes.")
-            setProgressAsync(workDataOf("stage" to "loading", "percent" to 25)).get()
+            setProgressAsync(workDataOf("stage" to "loading")).get()
             NativeQwenSession.load(model, 2048, 4)
 
-            setProgressAsync(workDataOf("stage" to "complete", "percent" to 100)).get()
+            setProgressAsync(workDataOf("stage" to "complete")).get()
             ModelLoadCoordinator.publish(applicationContext, "loaded", "Qwen is loaded and ready for local inference.")
             Result.success()
         } catch (error: UnsatisfiedLinkError) {
