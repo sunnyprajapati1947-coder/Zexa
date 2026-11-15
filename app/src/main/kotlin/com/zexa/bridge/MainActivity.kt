@@ -22,6 +22,9 @@ import android.widget.TextView
 import android.widget.Toast
 import android.database.Cursor
 import android.provider.OpenableColumns
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import java.io.File
 import java.security.SecureRandom
 import org.json.JSONArray
@@ -58,6 +61,16 @@ class MainActivity : Activity() {
         }
     }
     private val nativeModelLoaded: Boolean get() = NativeQwenSession.isLoaded
+    private val modelLoadStateListener: (String, String?) -> Unit = { state, detail ->
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                val message = detail ?: "Model load status: $state"
+                brainStatus?.text = message
+                inferenceOutput?.text = message
+                if (brainStatus != null) refreshModelStatus()
+            }
+        }
+    }
     private val qwenStateListener: () -> Unit = {
         runOnUiThread {
             if (!isFinishing && !isDestroyed) {
@@ -559,47 +572,28 @@ class MainActivity : Activity() {
 
     private fun loadLocalModel() {
         if (chatGenerating) {
-            Toast.makeText(this, "Wait for the current chat response before reloading the model.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Wait for the current chat response before loading the model.", Toast.LENGTH_LONG).show()
             return
         }
-        val model = modelStore.installedModel()
-        if (model == null) {
+        if (modelStore.installedModel() == null) {
             Toast.makeText(this, "Import a valid GGUF model first.", Toast.LENGTH_LONG).show()
             return
         }
+        if (nativeModelLoaded) {
+            refreshModelStatus()
+            return
+        }
+
+        ModelLoadCoordinator.publish(this, "queued", "Qwen loading has been queued.")
         modelLoadButton?.isEnabled = false
-        modelLoadButton?.text = "Loading model…"
-        inferenceOutput?.text = "Loading Qwen into native memory. This can take time and use substantial RAM."
-        Thread {
-            try {
-                val expectedHash = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
-                    .getString("model_sha256", null)
-                if (!modelStore.verifyInstalledModel(expectedHash)) {
-                    throw IllegalStateException("Stored model integrity check failed. Import the GGUF again.")
-                }
-                // The process-scoped session preserves model ownership across Activity recreation
-                // and avoids loading the same GGUF into native memory twice.
-                NativeQwenSession.load(model, 2048, 4)
-                runOnUiThread {
-                    modelLoadButton?.isEnabled = false
-                    modelLoadButton?.text = "Qwen loaded"
-                    inferenceButton?.isEnabled = true
-                    inferenceOutput?.text = "Qwen runtime loaded. Send a short test prompt below."
-                }
-            } catch (error: UnsatisfiedLinkError) {
-                runOnUiThread {
-                    modelLoadButton?.isEnabled = true
-                    modelLoadButton?.text = "Load model into memory"
-                    inferenceOutput?.text = "Native runtime is unavailable in this APK: " + (error.message ?: "library load failed")
-                }
-            } catch (error: Exception) {
-                runOnUiThread {
-                    modelLoadButton?.isEnabled = true
-                    modelLoadButton?.text = "Retry model load"
-                    inferenceOutput?.text = "Model load failed: " + (error.message ?: "unknown error")
-                }
-            }
-        }.start()
+        modelLoadButton?.text = "Queued…"
+        inferenceOutput?.text = "Qwen loading is managed by Android WorkManager and can continue across screen changes."
+        val request = OneTimeWorkRequestBuilder<QwenModelLoadWorker>().build()
+        WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+            QWEN_MODEL_LOAD_WORK,
+            ExistingWorkPolicy.KEEP,
+            request,
+        )
     }
 
     private fun runLocalInference() {
@@ -667,16 +661,29 @@ class MainActivity : Activity() {
         val size = model.length() / (1024.0 * 1024.0 * 1024.0)
         val hash = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
             .getString("model_sha256", null)
+        val loadState = ModelLoadCoordinator.savedState(this)
+        val stateLabel = when (loadState.first) {
+            "queued" -> "Queued"
+            "checking" -> "Checking model integrity"
+            "loading" -> "Loading into native memory"
+            "waiting" -> "Waiting for current chat"
+            "loaded" -> "Loaded"
+            "failed" -> "Failed: " + (loadState.second ?: "unknown error")
+            "interrupted" -> "Interrupted: " + (loadState.second ?: "tap retry")
+            else -> if (nativeModelLoaded) "Loaded" else "Not loaded"
+        }
         status.text = "Model imported: " + String.format("%.2f", size) + " GiB\nSHA-256: " +
             (hash ?: "not recorded") + "\nInference status: " +
-            if (nativeModelLoaded) "Qwen is loaded in this app process." else "Model is imported; load it to start local inference."
+            (if (nativeModelLoaded) "Qwen is loaded in this app process." else "Model is imported; load it to start local inference.") +
+            "\nLoad job: " + stateLabel
         modelImportButton?.text = "Replace Qwen GGUF model"
-        modelLoadButton?.isEnabled = !nativeModelLoaded
+        val loadInProgress = loadState.first in setOf("queued", "checking", "loading", "waiting")
+        modelLoadButton?.isEnabled = !nativeModelLoaded && !loadInProgress
         if (nativeModelLoaded) {
             modelLoadButton?.text = "Qwen loaded"
             inferenceButton?.isEnabled = true
         } else {
-            modelLoadButton?.text = "Load model into memory"
+            modelLoadButton?.text = if (loadInProgress) "Loading…" else if (loadState.first == "failed" || loadState.first == "interrupted") "Retry model load" else "Load model into memory"
             inferenceButton?.isEnabled = false
         }
     }
@@ -1200,11 +1207,13 @@ class MainActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        const val QWEN_MODEL_LOAD_WORK = "zexa-qwen-model-load"
         const val EXTRA_ACTION_APPROVAL_REQUEST_ID = "com.zexa.bridge.extra.ACTION_APPROVAL_REQUEST_ID"
         const val EXTRA_OPEN_TASKS_FROM_REMINDER = "com.zexa.bridge.extra.OPEN_TASKS_FROM_REMINDER"
     }
 
     override fun onPause() {
+        ModelLoadCoordinator.removeListener(modelLoadStateListener)
         NativeQwenSession.removeStateListener(qwenStateListener)
         ChatGenerationGate.removeCompletionListener(chatGenerationCompletionListener)
         voiceController?.stopListening()
@@ -1220,6 +1229,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        ModelLoadCoordinator.addListener(modelLoadStateListener)
         NativeQwenSession.addStateListener(qwenStateListener)
         ChatGenerationGate.addCompletionListener(chatGenerationCompletionListener)
         refreshChatAfterGeneration()
