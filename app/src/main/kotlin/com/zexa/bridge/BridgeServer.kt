@@ -152,7 +152,10 @@ class BridgeServer(
                         val requestId = path.removePrefix("/v1/action/")
                         require(requestId.matches(Regex("^[A-Za-z0-9-]{1,64}$"))) { "Invalid action request ID." }
                         service.actionResult(requestId)
-                            ?: JSONObject().put("ok", true).put("status", "pending_or_expired").put("request_id", requestId)
+                            ?: JSONObject()
+                                .put("ok", true)
+                                .put("status", if (service.isActionPending(requestId)) "pending_approval" else "expired_or_unknown")
+                                .put("request_id", requestId)
                     }
                     else -> return respond(client, 404, JSONObject().put("error", "Not found"))
                 }
