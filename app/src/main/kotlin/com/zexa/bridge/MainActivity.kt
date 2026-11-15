@@ -161,6 +161,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(12), 0, dp(8))
         }
         content.addView(inferenceOutput)
+        addCard("DEVICE MEMORY", "Inference uses substantial RAM", "Loading a multi-gigabyte model and its context needs free memory. Close other heavy apps first; Android may still stop inference if memory is insufficient.")
         addCard("PRIVACY", "Stored privately on this device", "The selected model is copied into Zexa's app-private storage. No model file is uploaded to a server.")
         refreshModelStatus()
     }
