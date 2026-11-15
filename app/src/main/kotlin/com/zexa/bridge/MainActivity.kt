@@ -2,9 +2,11 @@ package com.zexa.bridge
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -39,6 +41,9 @@ class MainActivity : Activity() {
     private var chatScroll: ScrollView? = null
     private val chatHistory = ArrayList<Pair<String, String>>()
     private val chatStore by lazy { ChatHistoryStore(this) }
+    private var voiceController: OnDeviceVoiceController? = null
+    private var voiceStatus: TextView? = null
+    private val voicePermissionRequest = 4208
     @Volatile private var chatGenerating = false
     @Volatile private var nativeModelLoaded = false
     private val modelStore by lazy { LocalModelStore(File(filesDir, "models")) }
@@ -104,6 +109,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSection(section: String) {
+        if (section != "Chat") voiceController?.stopListening()
         when (section) {
             "Home" -> showHome()
             "Chat" -> showChat()
@@ -119,7 +125,7 @@ class MainActivity : Activity() {
         addHeading("Your assistant, in progress")
         addCard("APP STATUS", "Android foundation active", "This build is the first native workspace shell. Brain, chat, voice, memory and tasks are not falsely marked as ready.")
         addCard("AI BRAIN", "Native Qwen integration under validation", "GGUF import and llama.cpp JNI inference code are in place; CI and real-device inference still need verification.")
-        addCard("VOICE", "Not connected", "Microphone capture and speech output will be added with visible controls.")
+        addCard("VOICE", "On-device voice controls added", "Chat offers explicit microphone input using Android's on-device recognizer and optional spoken replies using the installed Hindi TTS voice. Device language packs may be required.")
         addCard("CHAT HISTORY", "Saved privately on this device", "The latest completed local chat messages are stored in Zexa's app-private database. Tasks and reminders are still pending.")
         addCard("DEVICE HAND", "Optional and OFF by default", "Accessibility access is separate from AI chat and remains user-controlled.")
         addButton("Open device settings") { showDevice() }
@@ -178,7 +184,75 @@ class MainActivity : Activity() {
             }
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         content.addView(actions)
+        val voiceActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        voiceActions.addView(Button(this).apply {
+            text = "On-device voice input"
+            setOnClickListener { requestVoiceInput() }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        voiceActions.addView(Button(this).apply {
+            text = "Speak latest reply"
+            setOnClickListener {
+                val latest = chatHistory.lastOrNull { it.first == "assistant" }?.second
+                if (latest == null) {
+                    voiceStatus?.text = "No assistant response is available to read aloud."
+                } else {
+                    ensureVoiceController().speak(latest)
+                }
+            }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        content.addView(voiceActions)
+        voiceStatus = TextView(this).apply {
+            text = "Voice is off. Tap the microphone button to start; recognized text will be placed in the message box for your review."
+            textSize = 12f
+            setTextColor(0xFFD1D5DB.toInt())
+            setPadding(dp(4), dp(8), dp(4), dp(10))
+        }
+        content.addView(voiceStatus)
+        addCard("VOICE PRIVACY", "Microphone is user-started", "Recognition uses Android's on-device speech recognizer only; Zexa does not fall back to a network recognizer. Spoken output uses the installed Android TTS engine, whose voice data and privacy behavior are controlled by that engine.")
         addCard("LOCAL HISTORY", "Saved on this device", "The latest completed conversation is stored in Zexa's private app database. Open Memory to clear it.")
+    }
+
+    private fun requestVoiceInput() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), voicePermissionRequest)
+            return
+        }
+        startOnDeviceVoiceInput()
+    }
+
+    private fun startOnDeviceVoiceInput() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+            voiceStatus?.text = "On-device speech recognition requires Android 12 or newer."
+            return
+        }
+        ensureVoiceController().startListening()
+    }
+
+    private fun ensureVoiceController(): OnDeviceVoiceController {
+        val existing = voiceController
+        if (existing != null) return existing
+        return OnDeviceVoiceController(
+            this,
+            onStatus = { message -> runOnUiThread { voiceStatus?.text = message } },
+            onRecognized = { recognized ->
+                runOnUiThread {
+                    chatInput?.setText(recognized)
+                    chatInput?.setSelection(recognized.length)
+                    voiceStatus?.text = "Recognized text inserted. Review it, then tap Send when ready."
+                }
+            },
+        ).also { voiceController = it }
+    }
+
+    @Deprecated("Uses the Activity permission callback for compatibility with the current app foundation.")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != voicePermissionRequest) return
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            startOnDeviceVoiceInput()
+        } else {
+            voiceStatus?.text = "Microphone permission was not granted. You can continue using text chat."
+        }
     }
 
     private fun sendChatMessage() {
@@ -654,6 +728,12 @@ class MainActivity : Activity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    override fun onDestroy() {
+        voiceController?.shutdown()
+        voiceController = null
+        super.onDestroy()
+    }
 
     override fun onResume() {
         super.onResume()
