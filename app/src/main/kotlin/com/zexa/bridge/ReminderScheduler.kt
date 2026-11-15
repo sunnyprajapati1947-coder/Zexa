@@ -126,10 +126,17 @@ object ReminderScheduler {
     fun cancelAll(context: Context): Operation =
         WorkManager.getInstance(context.applicationContext).cancelAllWorkByTag(TAG)
 
+    fun pending(context: Context): List<androidx.work.WorkInfo> =
+        WorkManager.getInstance(context.applicationContext).getWorkInfosByTag(TAG).get()
+            .filter { !it.state.isFinished }
+            .sortedBy { it.nextScheduleTimeMillis }
+
+    fun cancel(context: Context, id: UUID): Operation =
+        WorkManager.getInstance(context.applicationContext).cancelWorkById(id)
+
     fun pendingSummary(context: Context): String {
-        val infos = WorkManager.getInstance(context.applicationContext).getWorkInfosByTag(TAG).get()
-        val active = infos.count { !it.state.isFinished }
+        val infos = pending(context)
         val running = infos.count { it.state == androidx.work.WorkInfo.State.RUNNING }
-        return "$active active reminder job(s); $running currently running."
+        return "${infos.size} active reminder job(s); $running currently running."
     }
 }
