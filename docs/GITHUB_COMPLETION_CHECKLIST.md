@@ -20,7 +20,7 @@ The Android project now includes a native workspace shell, GGUF import/integrity
 - [ ] Full task management, reminder editing/history, notification deep links and target-device Doze/reboot validation.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
 - [ ] Android execution gateway, durable approval/audit state, and physical-device confirmation-flow validation.
-- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, and Python client wait flow (CI verification pending; user must open Device and refresh; no approval notification yet).
+- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, and Python client wait flow (CI verification pending; posts a privacy-minimal notification when permission is available; Device refresh remains available as fallback).
 - [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, durable request/result state and sensitive-screen redaction; one-use in-memory request IDs and replay rejection are implemented.
 - [ ] Android unit/instrumentation tests, release signing, install/upgrade tests and target-device acceptance on Android 16.
 
