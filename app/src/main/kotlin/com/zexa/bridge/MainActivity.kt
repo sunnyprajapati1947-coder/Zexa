@@ -852,12 +852,72 @@ class MainActivity : Activity() {
                     .show()
             }
         })
+        renderPendingReminders()
+    }
+
+    private fun renderPendingReminders() {
+        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(TextView(this).apply {
+            text = "PENDING REMINDERS"
+            textSize = 12f
+            setTextColor(0xFF9CA3AF.toInt())
+            setPadding(0, dp(16), 0, dp(8))
+        })
+        content.addView(container)
         Thread {
             try {
-                val summary = ReminderScheduler.pendingSummary(this)
-                runOnUiThread { reminderStatus?.text = summary }
+                val pending = ReminderScheduler.pending(this)
+                runOnUiThread {
+                    reminderStatus?.text = ReminderScheduler.pendingSummary(this)
+                    container.removeAllViews()
+                    if (pending.isEmpty()) {
+                        container.addView(TextView(this).apply {
+                            text = "No pending reminders."
+                            setTextColor(0xFFD1D5DB.toInt())
+                        })
+                    }
+                    pending.forEach { info ->
+                        val title = info.inputData.getString(ReminderWorker.KEY_TITLE) ?: "Reminder"
+                        val message = info.inputData.getString(ReminderWorker.KEY_MESSAGE).orEmpty()
+                        val card = LinearLayout(this).apply {
+                            orientation = LinearLayout.VERTICAL
+                            setPadding(dp(10), dp(8), dp(10), dp(8))
+                            setBackgroundColor(0xFF20232B.toInt())
+                        }
+                        card.addView(TextView(this).apply {
+                            text = title + "\\n" + message + "\\nStatus: " + info.state.name
+                            setTextColor(0xFFF9FAFB.toInt())
+                            textSize = 13f
+                        })
+                        card.addView(Button(this).apply {
+                            text = "Cancel this reminder"
+                            setOnClickListener {
+                                AlertDialog.Builder(this@MainActivity)
+                                    .setTitle("Cancel this reminder?")
+                                    .setMessage("Only this reminder will be cancelled.")
+                                    .setNegativeButton("Keep", null)
+                                    .setPositiveButton("Cancel reminder") { _, _ ->
+                                        Thread {
+                                            try {
+                                                ReminderScheduler.cancel(this@MainActivity, info.id).result.get()
+                                                runOnUiThread { renderPendingReminders() }
+                                            } catch (error: Exception) {
+                                                runOnUiThread {
+                                                    reminderStatus?.text = "Could not cancel reminder: " + (error.message ?: "unknown error")
+                                                }
+                                            }
+                                        }.start()
+                                    }
+                                    .show()
+                            }
+                        })
+                        val params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                        params.bottomMargin = dp(8)
+                        container.addView(card, params)
+                    }
+                }
             } catch (error: Exception) {
-                runOnUiThread { reminderStatus?.text = "Could not read reminder status: " + (error.message ?: "unknown error") }
+                runOnUiThread { reminderStatus?.text = "Could not read reminders: " + (error.message ?: "unknown error") }
             }
         }.start()
     }
