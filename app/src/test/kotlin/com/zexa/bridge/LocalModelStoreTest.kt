@@ -91,6 +91,21 @@ class LocalModelStoreTest {
     }
 
     @Test
+    fun recoversPreviousModelAfterInterruptedReplacement() {
+        val directory = temporaryFolder.newFolder("recover")
+        val previous = byteArrayOf(0x47, 0x47, 0x55, 0x46, 5, 4, 3, 2)
+        File(directory, "zexa-qwen.gguf.previous").writeBytes(previous)
+        val store = LocalModelStore(directory)
+
+        val recovered = store.installedModel()
+
+        assertNotNull(recovered)
+        assertTrue(recovered!!.isFile)
+        assertEquals(previous.toList(), recovered.readBytes().toList())
+        assertFalse(File(directory, "zexa-qwen.gguf.previous").exists())
+    }
+
+    @Test
     fun rejectsDeclaredFilesLargerThanImportLimit() {
         val store = LocalModelStore(temporaryFolder.newFolder("too-large"))
         try {
