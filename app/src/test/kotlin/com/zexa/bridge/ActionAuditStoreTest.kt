@@ -46,4 +46,22 @@ class ActionAuditStoreTest {
     fun rejectsUnknownAuditStatus() {
         store.append(ActionAuditEntry("req", "tap", "executed_without_approval", 1L))
     }
+    @Test
+    fun pendingRequestsBecomeInterruptedAfterProcessRestart() {
+        store.append(ActionAuditEntry("req-2", "launch_app", "pending_approval", 100L))
+        val restored = ActionAuditStore({ saved }, { saved = it })
+        restored.markPendingAsInterrupted(200L)
+        assertEquals(
+            listOf(ActionAuditEntry("req-2", "launch_app", "interrupted", 200L)),
+            restored.list(),
+        )
+    }
+
+    @Test
+    fun terminalEntriesAreNotChangedDuringRecovery() {
+        store.append(ActionAuditEntry("req-3", "home", "completed", 100L))
+        store.markPendingAsInterrupted(200L)
+        assertEquals("completed", store.list().single().status)
+    }
+
 }
