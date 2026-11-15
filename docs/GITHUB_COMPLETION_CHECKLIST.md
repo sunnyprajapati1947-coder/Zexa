@@ -2,16 +2,17 @@
 
 ## Standalone Android app status (2026-11-15)
 
-The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. The latest verified CI run `43671195011` passed and produced an APK containing the arm64 native library. A follow-up change adds app-private SQLite persistence for completed chat turns and a confirmed clear-history action; that follow-up is awaiting CI. It is not yet the full Zexa assistant: voice, editable/semantic memory, tasks, reminders, notifications and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
+The Android project now includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. The latest verified CI run `43671195011` passed and produced an APK containing the arm64 native library. Android CI run `43671941890` passed for app-private SQLite persistence of completed chat turns and a confirmed clear-history action. A subsequent change adds explicit on-device speech input and optional Android TTS output; its CI and target-device verification are pending. It is not yet the full Zexa assistant: editable/semantic memory, tasks, reminders, notifications and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
 
 - [x] Native Android workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections; unfinished modules are explicitly marked pending.
 - [x] Android bridge action endpoint defaults to deny (HTTP 403) until native per-action approval is implemented.
 - [x] Native multi-turn chat UI wired to the local llama.cpp/Qwen adapter; recent history is bounded.
-- [ ] App-private SQLite persistence for completed chat turns and a confirmed clear-history action (implemented on the branch; follow-up CI and device verification pending).
+- [x] App-private SQLite persistence for completed chat turns and a confirmed clear-history action (Android CI run `43671941890` passed; physical-device persistence check remains outstanding).
 - [x] arm64 llama.cpp JNI runtime integration, GGUF import into app-private storage, 10 GiB size cap, header validation, SHA-256 verification before load, CPU inference configuration and RAM warning.
-- [ ] Verify the latest Android chat-persistence change in CI, then install the APK and run actual Qwen inference on the target Android 16 device; assess memory, thermals and supported GGUF templates.
+- [ ] Verify the latest voice integration build in CI, then install the APK and run actual Qwen inference on the target Android 16 device; assess memory, thermals, voice language-pack availability and supported GGUF templates.
 - [ ] Online provider setup with secure Android Keystore-backed credential storage; no API keys in source, logs, or clipboard.
-- [ ] Native push-to-talk voice input/output with visible microphone state, cancellation and Hindi/Hinglish handling.
+- [x] Explicit Android on-device speech recognition wired into Chat, with runtime microphone permission, visible status, cancellation on navigation, Hindi locale preference and review-before-send.
+- [ ] Verify voice input with Hindi/Hinglish offline language packs on the target Android 16 device; confirm installed TTS voice behavior and lifecycle.
 - [ ] Editable personal-memory facts, semantic search/RAG, and user-controlled save, search, export and deletion. Persistent chat history is implemented separately; verify its CI and device behavior.
 - [ ] Native tasks, reminders, notifications and a reliable WorkManager-based background scheduler.
 - [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
@@ -42,7 +43,8 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [x] Android bridge JVM unit tests cover token comparison, body-size limits, coordinates, gesture duration, and package-name validation.
 - [x] Python CI covers 3.11, 3.12, and 3.13; Termux shell scripts are syntax-checked.
 - [x] Python CodeQL security analysis workflow.
-- [x] Android CI runs JVM unit tests and builds the debug APK; run `43671195011` passed for commit `ee4ec705eddf04d0fb7c2085ef3aefbca9f931d9` before the chat-persistence follow-up.
+- [x] Android CI runs JVM unit tests and builds the debug APK; run `43671195011` passed for commit `ee4ec705eddf04d0fb7c2085ef3aefbca9f931d9`.
+- [x] Android CI run `43671941890` passed for the app-private SQLite chat-history integration.
 - [x] Pending Dependabot action-version updates are consolidated in this branch to avoid overlapping workflow changes.
 
 ## Still requires real-device / account verification
@@ -52,6 +54,7 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [ ] Validate Termux:Services and optional Termux:Boot across app restart and device reboot. (Not performed by GitHub CI.)
 - [ ] Verify notifications, Doze/battery restrictions, process recovery, and queue persistence on-device. (Not performed by GitHub CI.)
 - [ ] Confirm the installed APK on the physical device; CI assembly is not a device test.
+- [ ] Test microphone permission, on-device speech recognition, Hindi/Hinglish language pack behavior and installed TTS voice on the OPPO Android 16 device.
 
 ## Product integrations not yet implemented
 
