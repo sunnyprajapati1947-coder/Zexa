@@ -36,8 +36,23 @@ class QwenModelLoadWorker(
                 modelStore.verifyInstalledModel(expectedHash)
             }, 2048, 4)
 
+            if (isStopped || !ModelLoadCoordinator.publishLoadedIfActive(
+                    applicationContext,
+                    "Qwen is loaded and ready for local inference."
+                )
+            ) {
+                // Native loading may finish after WorkManager has stopped this
+                // worker. Do not leave a cancelled job's model resident or
+                // overwrite the interrupted state with a false success.
+                NativeQwenSession.unload()
+                ModelLoadCoordinator.publishInterruptedIfActive(
+                    applicationContext,
+                    "Loading was interrupted before completion. Tap Retry to start again."
+                )
+                return Result.retry()
+            }
+
             setProgressAsync(workDataOf("stage" to "complete")).get()
-            ModelLoadCoordinator.publish(applicationContext, "loaded", "Qwen is loaded and ready for local inference.")
             Result.success()
         } catch (error: UnsatisfiedLinkError) {
             if (isStopped) {
