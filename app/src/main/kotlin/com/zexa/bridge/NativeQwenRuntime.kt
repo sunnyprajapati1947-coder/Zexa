@@ -16,5 +16,5 @@ object NativeQwenRuntime {
     external fun nativeUnloadModel()
 
     @JvmStatic
-    external fun nativeGenerate(systemPrompt: String, userPrompt: String, maxTokens: Int): String
+    external fun nativeGenerate(systemPrompt: String, roles: Array<String>, contents: Array<String>, maxTokens: Int): String
 }
