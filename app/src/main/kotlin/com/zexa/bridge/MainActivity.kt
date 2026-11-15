@@ -114,6 +114,28 @@ class MainActivity : Activity() {
         }
         root.addView(nav)
         setContentView(page)
+        handleApprovalIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleApprovalIntent(intent)
+    }
+
+    private fun handleApprovalIntent(source: Intent?) {
+        val requestId = source?.getStringExtra(EXTRA_ACTION_APPROVAL_REQUEST_ID)
+            ?.takeIf { it.isNotBlank() } ?: return
+        source.removeExtra(EXTRA_ACTION_APPROVAL_REQUEST_ID)
+        showDevice()
+        val request = ZexaAccessibilityService.instance
+            ?.pendingActionApprovals()
+            ?.firstOrNull { it.requestId == requestId }
+        if (request != null) {
+            reviewActionApproval(request)
+        } else {
+            Toast.makeText(this, "That device request is no longer pending.", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun showSection(section: String) {
@@ -1149,6 +1171,10 @@ class MainActivity : Activity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    companion object {
+        const val EXTRA_ACTION_APPROVAL_REQUEST_ID = "com.zexa.bridge.extra.ACTION_APPROVAL_REQUEST_ID"
+    }
 
     override fun onPause() {
         voiceController?.stopListening()
