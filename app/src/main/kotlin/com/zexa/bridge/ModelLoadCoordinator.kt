@@ -49,5 +49,17 @@ object ModelLoadCoordinator {
     internal fun shouldPublishInterrupted(state: String): Boolean =
         state in ACTIVE_STATES
 
+    internal fun stateLabel(state: String, nativeLoaded: Boolean, detail: String?): String =
+        when (state) {
+            "queued" -> "Queued"
+            "checking" -> "Checking model integrity"
+            "loading" -> "Loading into native memory"
+            "waiting" -> "Waiting for current chat"
+            "loaded" -> if (nativeLoaded) "Loaded" else "Previously loaded; native runtime restarted"
+            "failed" -> "Failed: " + (detail ?: "unknown error")
+            "interrupted" -> "Interrupted: " + (detail ?: "tap retry")
+            else -> if (nativeLoaded) "Loaded" else "Not loaded"
+        }
+
     private val ACTIVE_STATES = setOf("queued", "waiting", "checking", "loading")
 }
