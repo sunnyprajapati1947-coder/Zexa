@@ -26,13 +26,31 @@ class LocalModelStore(private val directory: File) {
         if (!file.isFile || file.length() < 4L) return null
         FileInputStream(file).use { input ->
             val header = ByteArray(4)
-            if (input.read(header) != 4 || !header.contentEquals(MAGIC)) return null
+            var offset = 0
+            while (offset < header.size) {
+                val count = input.read(header, offset, header.size - offset)
+                if (count < 0) return null
+                offset += count
+            }
+            if (!header.contentEquals(MAGIC)) return null
         }
         return file
     }
 
     @Synchronized
     fun importModel(input: InputStream, expectedSize: Long? = null): ImportedModel {
+        try {
+            return importModelInternal(input, expectedSize)
+        } finally {
+            try {
+                input.close()
+            } catch (_: Exception) {
+                // Closing an already-closed stream is harmless.
+            }
+        }
+    }
+
+    private fun importModelInternal(input: InputStream, expectedSize: Long?): ImportedModel {
         if (expectedSize != null && expectedSize <= 0L) {
             throw IllegalArgumentException("The selected model has an invalid file size.")
         }
@@ -107,7 +125,7 @@ class LocalModelStore(private val directory: File) {
             }
             if (backup.exists()) backup.delete()
             return ImportedModel(destination, total, digest.digest().joinToString("") { "%02x".format(it) })
-        } catch (error: Throwable) {
+        } catch (error: Exception) {
             temporary.delete()
             throw error
         }
