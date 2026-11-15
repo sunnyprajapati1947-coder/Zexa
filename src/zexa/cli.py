@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .agents import AgentOrchestrator
-from .config import get_groq_config, get_xai_config, load_env_file
+from .config import get_config, get_groq_config, get_xai_config, load_env_file
 from .approvals import ApprovalManager
 from .audit import AuditLog
 from .gateway import ExecutionGateway
