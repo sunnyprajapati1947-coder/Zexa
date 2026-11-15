@@ -35,7 +35,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
+        markPendingApprovalsInterrupted()
         refreshBridge()
     }
 
@@ -44,6 +44,10 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
+
+    private fun markPendingApprovalsInterrupted() {
+        actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
+    }
 
     @Synchronized
     fun refreshBridge() {
@@ -57,6 +61,7 @@ class ZexaAccessibilityService : AccessibilityService() {
                 bridgeServer = BridgeServer(token, this).also { it.start() }
             }
         } else {
+            markPendingApprovalsInterrupted()
             bridgeServer?.stop()
             bridgeServer = null
             actionApprovals.clear()
@@ -273,6 +278,8 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        markPendingApprovalsInterrupted()
+        actionApprovals.clear()
         bridgeServer?.stop()
         bridgeServer = null
         instance = null
