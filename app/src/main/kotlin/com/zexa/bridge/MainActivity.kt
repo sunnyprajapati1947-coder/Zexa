@@ -188,6 +188,7 @@ class MainActivity : Activity() {
 
     private fun importSelectedModel(uri: Uri) {
         modelImportButton?.isEnabled = false
+        inferenceButton?.isEnabled = false
         modelImportButton?.text = "Validating and importing…"
         brainStatus?.text = "Import in progress. Keep Zexa open until it finishes."
         Thread {
@@ -214,6 +215,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     modelImportButton?.isEnabled = true
                     modelImportButton?.text = "Try model import again"
+                    refreshModelStatus()
                     brainStatus?.text = "Import failed: " + (error.message ?: "unknown error")
                     Toast.makeText(this, "Model import failed. Check storage and file format.", Toast.LENGTH_LONG).show()
                 }
