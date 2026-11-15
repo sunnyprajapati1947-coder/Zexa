@@ -116,19 +116,20 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
         return nullptr;
     }
 
-    llama_chat_message messages[2] = {
-        {"system", system_text.c_str()},
-        {"user", user_text.c_str()}
-    };
+    std::vector<llama_chat_message> messages;
+    if (!system_text.empty()) {
+        messages.push_back({"system", system_text.c_str()});
+    }
+    messages.push_back({"user", user_text.c_str()});
     int32_t prompt_length = llama_chat_apply_template(
-        chat_template, messages, system_text.empty() ? 1 : 2, true, nullptr, 0);
+        chat_template, messages.data(), messages.size(), true, nullptr, 0);
     if (prompt_length <= 0 || prompt_length > 256 * 1024) {
         throw_java(env, "Could not format the prompt using the model chat template.");
         return nullptr;
     }
     std::vector<char> prompt(static_cast<size_t>(prompt_length) + 1);
     const int32_t formatted = llama_chat_apply_template(
-        chat_template, messages, system_text.empty() ? 1 : 2, true,
+        chat_template, messages.data(), messages.size(), true,
         prompt.data(), static_cast<int32_t>(prompt.size()));
     if (formatted < 0 || formatted > prompt_length) {
         throw_java(env, "Model chat template formatting failed.");
@@ -157,10 +158,15 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
     tokens.resize(static_cast<size_t>(actual_tokens));
 
     llama_memory_clear(llama_get_memory(context), true);
-    llama_batch batch = llama_batch_get_one(tokens.data(), static_cast<int32_t>(tokens.size()));
-    if (llama_decode(context, batch) != 0) {
-        throw_java(env, "The model could not evaluate the prompt.");
-        return nullptr;
+    const int32_t batch_size = 512;
+    for (size_t offset = 0; offset < tokens.size(); offset += batch_size) {
+        const int32_t count = static_cast<int32_t>(
+            std::min<size_t>(batch_size, tokens.size() - offset));
+        llama_batch batch = llama_batch_get_one(tokens.data() + offset, count);
+        if (llama_decode(context, batch) != 0) {
+            throw_java(env, "The model could not evaluate the prompt.");
+            return nullptr;
+        }
     }
 
     llama_sampler * sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
