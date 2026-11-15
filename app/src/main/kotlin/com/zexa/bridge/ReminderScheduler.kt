@@ -129,7 +129,6 @@ object ReminderScheduler {
     fun pending(context: Context): List<androidx.work.WorkInfo> =
         WorkManager.getInstance(context.applicationContext).getWorkInfosByTag(TAG).get()
             .filter { !it.state.isFinished }
-            .sortedBy { it.nextScheduleTimeMillis }
 
     fun cancel(context: Context, id: UUID): Operation =
         WorkManager.getInstance(context.applicationContext).cancelWorkById(id)
