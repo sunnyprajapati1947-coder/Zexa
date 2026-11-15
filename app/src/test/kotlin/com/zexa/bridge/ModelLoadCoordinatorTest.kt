@@ -20,6 +20,19 @@ class ModelLoadCoordinatorTest {
     }
 
     @Test
+    fun loadedTransitionOnlyAcceptsActiveLoadStates() {
+        assertTrue(ModelLoadCoordinator.shouldPublishLoaded("queued"))
+        assertTrue(ModelLoadCoordinator.shouldPublishLoaded("waiting"))
+        assertTrue(ModelLoadCoordinator.shouldPublishLoaded("checking"))
+        assertTrue(ModelLoadCoordinator.shouldPublishLoaded("loading"))
+
+        assertFalse(ModelLoadCoordinator.shouldPublishLoaded("loaded"))
+        assertFalse(ModelLoadCoordinator.shouldPublishLoaded("failed"))
+        assertFalse(ModelLoadCoordinator.shouldPublishLoaded("interrupted"))
+        assertFalse(ModelLoadCoordinator.shouldPublishLoaded("idle"))
+    }
+
+    @Test
     fun persistedLoadedStateDoesNotClaimNativeRuntimeIsStillLoadedAfterRestart() {
         assertEquals(
             "Loaded",
