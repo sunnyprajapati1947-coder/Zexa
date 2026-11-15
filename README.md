@@ -1,10 +1,12 @@
 # Zexa
 
-**Zexa** is intended to be a phone-first personal assistant: a local Qwen brain, a native Android interface, and a permission-controlled device/action layer. The goal is everyday use from the Zexa app without needing to open Termux. Termux remains a development/migration tool until the Android app can independently handle the required workflows.
+**Zexa is a Termux-first, phone-based personal assistant.** Termux is the primary runtime for the Python CLI, local Qwen/llama.cpp brain, SQLite memory and jobs, Termux:API integrations, Termux:Widget shortcuts, and the optional Termux:Boot startup hook. GitHub is the canonical source, review, and CI environment; the intended deployment flow is to clone or update the repository in Termux, install the project in its virtual environment, configure the local model, and run device-side acceptance tests.
 
-## Current Android app status
+The optional Android companion in `app/` is not required for normal Zexa operation. Its Accessibility Bridge is a separately opt-in integration and must not be treated as a replacement for Termux:API, Termux:Widget, or the Termux background worker. Features that depend on Android add-ons must report missing permissions or packages clearly and must never pretend they succeeded.
 
-The Android app in `app/` has a native workspace with Home, Chat, Brain, Tasks, Memory and Device sections.
+## Optional Android companion status
+
+The optional Android companion in `app/` has a native workspace with Home, Chat, Brain, Tasks, Memory and Device sections. It is supplementary; the Termux CLI remains the primary Zexa interface and runtime.
 
 - **Local AI:** A pinned llama.cpp JNI CPU runtime loads a user-imported GGUF model. The importer enforces a 10 GiB limit, validates the GGUF header, calculates SHA-256 and verifies the stored digest before model load. The current native configuration uses arm64-v8a, a 2,048-token context and four CPU threads; each response is capped at 256 tokens. Compatible GGUF chat templates are required.
 - **Chat:** Multi-turn local Qwen chat with bounded history. Completed turns are saved in an app-private SQLite database; interrupted generations are not saved as completed conversations.
@@ -75,7 +77,7 @@ The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use
 
 ## Android Accessibility Bridge app
 
-The Android app is in `app/` and now opens a native Zexa workspace dashboard. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. The optional Accessibility Bridge remains OFF by default. Native assistant features and the Termux-free daily runtime are still being implemented. Voice requires microphone permission and an available Android on-device recognition service; speech output depends on the installed TTS engine.
+The optional Android companion is in `app/` and opens a native Zexa workspace dashboard. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. The optional Accessibility Bridge remains OFF by default. It is not required for the Termux-first daily runtime. Voice requires microphone permission and an available Android on-device recognition service; speech output depends on the installed TTS engine.
 
 The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is available only through an explicit copy action in the Device section; keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots, but other private on-screen information may still appear. Accessibility events are not collected or transmitted. Screen snapshots should be requested only when needed.
 
