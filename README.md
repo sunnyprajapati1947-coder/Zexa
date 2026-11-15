@@ -18,7 +18,7 @@ The Android app in `app/` has a native workspace with Home, Chat, Brain, Tasks, 
 
 Android CI run `43675903149` passed for commit `6f258774744496a06378b61699413066d50c8bde`, including JVM tests, native CMake compilation and debug APK assembly. The uploaded `zexa-bridge-debug-apk` artifact contains `app-debug.apk` and `lib/arm64-v8a/libzexa_llama.so`. This proves CI assembly only; the APK has not been installed or exercised on the target OPPO Android 16 device.
 
-The reminder-notification Tasks deep-link change is committed on the current review branch and its Android CI verification is in progress. Do not treat it as passed until the workflow completes successfully. Physical-device tests remain outstanding for Qwen inference, memory persistence/export, voice, reminders, accessibility approval, process recovery, RAM and thermals.
+The latest Android CI run `43679262981` failed during Kotlin compilation at `MainActivity.kt:1322`; it did not produce an APK. The malformed escaped-newline text in the companion-object declaration has been corrected on the review branch, and the Android workflow trigger now includes `gradle.properties` for pull requests. A fresh Android CI run must pass before this revision is considered build-verified. Physical-device tests remain outstanding for Qwen inference, memory persistence/export, voice, reminders, accessibility approval, process recovery, RAM and thermals.
 
 For the current local-model flow, open **Brain** → **Import Qwen GGUF model** → **Load model into memory**, then open **Chat**. Large model loading can fail when Android has insufficient free RAM. Zexa does not automatically download model files. Unfinished modules are labelled as pending rather than showing fake AI output.
 
