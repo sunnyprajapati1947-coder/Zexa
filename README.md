@@ -8,11 +8,11 @@ The Android app in `app/` has a native workspace with Home, Chat, Brain, Tasks, 
 
 - **Local AI:** A pinned llama.cpp JNI CPU runtime loads a user-imported GGUF model. The importer enforces a 10 GiB limit, validates the GGUF header, calculates SHA-256 and verifies the stored digest before model load. The current native configuration uses arm64-v8a, a 2,048-token context and four CPU threads; each response is capped at 256 tokens. Compatible GGUF chat templates are required.
 - **Chat:** Multi-turn local Qwen chat with bounded history. Completed turns are saved in an app-private SQLite database; interrupted generations are not saved as completed conversations.
-- **Personal memory:** User-managed facts in a separate app-private SQLite database. Users can add, edit, search, delete individual facts, export JSON through the document picker, or confirm clearing all facts. Nothing is extracted automatically from conversations. Up to 10 facts / 3,000 characters are supplied as reference context to local chat.
+- **Personal memory:** User-managed facts in a separate app-private SQLite database. Users can add, edit, search, delete individual facts, export JSON through the document picker, or restore/merge a selected Zexa JSON backup. Restore validates the schema and fact limits, skips case-insensitive duplicates, never overwrites existing facts, and applies additions atomically. Nothing is extracted automatically from conversations. Up to 10 facts / 3,000 characters are supplied as reference context to local chat.
 - **Voice:** User-started Android on-device speech recognition. Recognized text is inserted for review and is not sent until the user taps Send. Optional read-aloud uses the installed Android TextToSpeech engine. Hindi/Hinglish offline recognition and TTS still need target-device validation.
 - **Reminders:** WorkManager-backed local reminders, bounded from 1 minute to 7 days, with pending-list display, individual cancellation and cancel-all. Notifications require permission and delivery is best-effort. Tapping a reminder notification opens the Tasks section. Reboot, Doze and battery-policy behavior still need target-device validation.
 - **Device actions:** The optional Accessibility Bridge is OFF by default. Requests are authenticated on loopback, queued with HTTP 202, and require exact-action native approval in Zexa; a bearer token alone never executes an action. Approval tickets are one-use, expire after 60 seconds and are limited to eight pending requests. Approval notifications deep-link to the matching request. Pending approvals/results remain in memory and are lost if the bridge process stops.
-- **Not complete yet:** Semantic memory/RAG, full task management, Android settings/health dashboard, durable approval/audit recovery, secure online-provider credential setup, browser and productivity connectors, and several lifecycle/security improvements.
+- **Not complete yet:** Semantic memory/RAG, full task management, Android settings/health dashboard, durable pending-approval recovery, secure online-provider credential setup, browser and productivity connectors, and several lifecycle/security improvements. The action audit is metadata-only and persisted separately; it does not restore pending approval tickets.
 
 ## Build verification
 
@@ -206,3 +206,5 @@ GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and 
 ## Project provenance
 
 This is an independent implementation. Reference repositories and attribution are documented in THIRD_PARTY_NOTICES.md. Upstream source code is not copied into this repository by default.
+
+The memory backup restore implementation is committed on the current review branch. Zexa CI passed for commit `4e791dea1b4c03ff557542de07753bca2b3a2686`; Android Bridge Build is still pending for that same commit. Do not treat the Android build as passed until the workflow completes. Restore and memory persistence still require physical-device testing.
