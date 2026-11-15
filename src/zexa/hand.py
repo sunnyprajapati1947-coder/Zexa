@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -86,11 +87,36 @@ class AccessibilityBridge:
         payload: dict,
         approve: Callable[[str, dict], bool] | None = None,
     ) -> dict:
-        """Perform one allowlisted action only after an external approval callback."""
+        """Queue one allowlisted action after caller approval and wait for native app approval."""
         if action not in _ALLOWED_ACTIONS:
             raise ValueError("Action is not allowlisted.")
         if not isinstance(payload, dict):
             raise ValueError("Action payload must be an object.")
         if approve is None or approve(action, dict(payload)) is not True:
             raise PermissionError("Android action was not explicitly approved.")
-        return self._request("POST", "/v1/action", {"action": action, "payload": payload})
+        queued = self._request("POST", "/v1/action", {"action": action, "payload": payload})
+        if queued.get("status") != "pending_approval":
+            return queued
+        request_id = queued.get("request_id")
+        if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9-]{1,64}", request_id):
+            raise RuntimeError("Android bridge returned an invalid approval request ID.")
+
+        # The Android app must be open and the user must approve the exact
+        # action and payload there. This client-side callback is an additional
+        # gate, not a substitute for native confirmation.
+        deadline = time.monotonic() + 65.0
+        while time.monotonic() < deadline:
+            result = self._request("GET", "/v1/action/" + request_id)
+            status = result.get("status")
+            if status == "completed":
+                return result
+            if status in {"denied", "failed", "expired_or_unknown"}:
+                if status == "denied":
+                    raise PermissionError("Android user denied the device action.")
+                if status == "expired_or_unknown":
+                    raise TimeoutError("Android action approval expired or is no longer available.")
+                return result
+            if status != "pending_approval":
+                raise RuntimeError("Android bridge returned an unknown action status.")
+            time.sleep(0.5)
+        raise TimeoutError("Timed out waiting for native Android action approval.")
