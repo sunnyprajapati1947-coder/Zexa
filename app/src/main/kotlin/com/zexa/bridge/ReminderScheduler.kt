@@ -84,14 +84,23 @@ class ReminderWorker(context: Context, parameters: WorkerParameters) : Worker(co
     }
 }
 
+object ReminderRules {
+    fun isValid(title: String, message: String, delayMinutes: Long): Boolean =
+        title.isNotBlank() &&
+            title.length <= ReminderWorker.MAX_TITLE_LENGTH &&
+            message.isNotBlank() &&
+            message.length <= ReminderWorker.MAX_MESSAGE_LENGTH &&
+            delayMinutes in 1L..ReminderScheduler.MAX_DELAY_MINUTES
+}
+
 object ReminderScheduler {
     const val TAG = "zexa-user-reminder"
     const val MAX_DELAY_MINUTES = 10080L
 
     fun schedule(context: Context, title: String, message: String, delayMinutes: Long): UUID {
-        require(title.isNotBlank() && title.length <= ReminderWorker.MAX_TITLE_LENGTH)
-        require(message.isNotBlank() && message.length <= ReminderWorker.MAX_MESSAGE_LENGTH)
-        require(delayMinutes in 1L..MAX_DELAY_MINUTES)
+        require(ReminderRules.isValid(title, message, delayMinutes)) {
+            "Reminder title, message or delay is invalid."
+        }
 
         val request = OneTimeWorkRequest.Builder(ReminderWorker::class.java)
             .setInitialDelay(delayMinutes, TimeUnit.MINUTES)
