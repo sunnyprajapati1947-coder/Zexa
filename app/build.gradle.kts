@@ -36,4 +36,7 @@ dependencies {
     implementation("androidx.core:core:1.16.0")
     implementation("androidx.work:work-runtime:2.10.1")
     testImplementation("junit:junit:4.13.2")
+    // Android's org.json methods are stubs in local JVM unit tests.
+    // Use the pure-JVM implementation so ActionAuditStore tests exercise real JSON.
+    testImplementation("org.json:json:20240303")
 }
