@@ -305,6 +305,7 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
     }
 
     std::string answer;
+    bool generation_failed = false;
     for (int32_t index = 0; index < max_tokens; ++index) {
         const llama_token token = llama_sampler_sample(sampler, context, -1);
         if (llama_vocab_is_eog(vocab, token)) break;
@@ -313,18 +314,37 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
         char piece[256];
         int32_t piece_size = llama_token_to_piece(vocab, token, piece, sizeof(piece), 0, true);
         if (piece_size < 0) {
-            std::vector<char> expanded(static_cast<size_t>(-piece_size));
+            const size_t required_size = static_cast<size_t>(-piece_size);
+            if (required_size > static_cast<size_t>(INT32_MAX)) {
+                generation_failed = true;
+                break;
+            }
+            std::vector<char> expanded(required_size);
             piece_size = llama_token_to_piece(vocab, token, expanded.data(),
                                               static_cast<int32_t>(expanded.size()), 0, true);
-            if (piece_size > 0) answer.append(expanded.data(), static_cast<size_t>(piece_size));
-        } else if (piece_size > 0) {
+            if (piece_size <= 0 || static_cast<size_t>(piece_size) > expanded.size()) {
+                generation_failed = true;
+                break;
+            }
+            answer.append(expanded.data(), static_cast<size_t>(piece_size));
+        } else if (piece_size > 0 && piece_size <= static_cast<int32_t>(sizeof(piece))) {
             answer.append(piece, static_cast<size_t>(piece_size));
+        } else {
+            generation_failed = true;
+            break;
         }
 
         llama_token next = token;
         llama_batch next_batch = llama_batch_get_one(&next, 1);
-        if (llama_decode(context, next_batch) != 0) break;
+        if (llama_decode(context, next_batch) != 0) {
+            generation_failed = true;
+            break;
+        }
     }
     llama_sampler_free(sampler);
+    if (generation_failed) {
+        throw_java(env, "Qwen generation failed while decoding a token. Please retry.");
+        return nullptr;
+    }
     return to_java(env, answer);
 }
