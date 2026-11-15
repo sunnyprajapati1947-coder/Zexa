@@ -616,42 +616,151 @@ class MainActivity : Activity() {
         }
     }
 
+    private val memoryStore by lazy { MemoryFactStore(this) }
+
     private fun showMemory() {
         content.removeAllViews()
         addHeading("Private memory")
-        val savedCount = chatStore.loadRecent(ChatHistoryStore.MAX_HISTORY_LIMIT).size
-        addCard(
-            "LOCAL CHAT HISTORY",
-            "$savedCount messages saved",
-            "Only completed local conversations are stored in Zexa's app-private database. They are not uploaded or synced."
-        )
+        val facts = memoryStore.all()
+        addCard("PERSONAL FACTS", "${facts.size} / ${MemoryFactRules.MAX_FACTS} saved",
+            "Only facts you add here are stored. Zexa does not automatically extract facts from your chats. Data stays in this app's private database.")
+        val factInput = EditText(this).apply {
+            hint = "Add a fact to remember (max 500 characters)"
+            setTextColor(0xFFF9FAFB.toInt())
+            setHintTextColor(0xFF9CA3AF.toInt())
+            minLines = 2
+            maxLines = 4
+        }
+        content.addView(factInput)
+        content.addView(Button(this).apply {
+            text = "Save memory fact"
+            setOnClickListener {
+                try {
+                    memoryStore.save(null, factInput.text.toString())
+                    showMemory()
+                    Toast.makeText(this@MainActivity, "Memory fact saved on this device.", Toast.LENGTH_SHORT).show()
+                } catch (error: Exception) {
+                    Toast.makeText(this@MainActivity, error.message ?: "Could not save memory.", Toast.LENGTH_LONG).show()
+                }
+            }
+        })
+        val searchInput = EditText(this).apply {
+            hint = "Search saved facts"
+            setSingleLine(true)
+            setTextColor(0xFFF9FAFB.toInt())
+            setHintTextColor(0xFF9CA3AF.toInt())
+        }
+        content.addView(searchInput)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(Button(this).apply {
+            text = "Search memory"
+            setOnClickListener { renderMemoryFacts(results, searchInput.text.toString()) }
+        })
+        content.addView(results)
+        renderMemoryFacts(results, "")
+        addButton("Delete all personal memory") {
+            if (memoryStore.all().isEmpty()) {
+                Toast.makeText(this, "There are no saved facts.", Toast.LENGTH_SHORT).show()
+            } else {
+                AlertDialog.Builder(this)
+                    .setTitle("Delete all personal memory?")
+                    .setMessage("This permanently deletes every saved personal fact from this device. Chat history is not affected.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Delete all") { _, _ ->
+                        memoryStore.clear()
+                        showMemory()
+                    }
+                    .show()
+            }
+        }
+        addCard("CHAT HISTORY", "${chatStore.loadRecent(ChatHistoryStore.MAX_HISTORY_LIMIT).size} messages saved",
+            "Chat history is separate from personal memory. Use the Chat History section below to clear it.")
         addButton("Clear saved chat history") {
             if (chatGenerating) {
                 Toast.makeText(this, "Wait for the current response to finish.", Toast.LENGTH_LONG).show()
             } else {
                 AlertDialog.Builder(this)
                     .setTitle("Clear local chat history?")
-                    .setMessage("This permanently deletes the saved conversations from this app on this device.")
+                    .setMessage("This permanently deletes saved conversations. Personal memory facts remain.")
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Clear") { _, _ ->
                         chatStore.clear()
                         chatHistory.clear()
                         showMemory()
-                        Toast.makeText(this, "Local chat history cleared.", Toast.LENGTH_SHORT).show()
                     }
                     .show()
             }
         }
-        addCard(
-            "MEMORY STATUS",
-            "Conversation history only",
-            "Automatic personal-memory extraction, semantic search, and editable memory facts are not implemented yet."
-        )
-        addCard(
-            "TASKS & REMINDERS",
-            "Basic local reminders available",
-            "WorkManager scheduling and notifications are wired in. Full task management, editing and target-device background validation remain pending."
-        )
+        addCard("TASKS & REMINDERS", "Basic local reminders available",
+            "WorkManager scheduling and notifications are wired in. Full task management and target-device background validation remain pending.")
+    }
+
+    private fun renderMemoryFacts(container: LinearLayout, query: String) {
+        container.removeAllViews()
+        val facts = memoryStore.search(query)
+        if (facts.isEmpty()) {
+            container.addView(TextView(this).apply {
+                text = if (query.isBlank()) "No personal facts saved yet." else "No matching facts found."
+                setTextColor(0xFFD1D5DB.toInt())
+                setPadding(dp(4), dp(12), dp(4), dp(12))
+            })
+            return
+        }
+        facts.forEach { item ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                setBackgroundColor(0xFF20232B.toInt())
+            }
+            card.addView(TextView(this).apply {
+                text = item.fact
+                textSize = 14f
+                setTextColor(0xFFF9FAFB.toInt())
+                setTextIsSelectable(true)
+            })
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            actions.addView(Button(this).apply {
+                text = "Edit"
+                setOnClickListener {
+                    val editor = EditText(this@MainActivity).apply {
+                        setText(item.fact)
+                        setSelection(text.length)
+                        minLines = 2
+                    }
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Edit memory fact")
+                        .setView(editor)
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Save") { _, _ ->
+                            try {
+                                memoryStore.save(item.id, editor.text.toString())
+                                renderMemoryFacts(container, query)
+                            } catch (error: Exception) {
+                                Toast.makeText(this@MainActivity, error.message ?: "Could not update memory.", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                        .show()
+                }
+            }, LinearLayout.LayoutParams(0, dp(44), 1f))
+            actions.addView(Button(this).apply {
+                text = "Delete"
+                setOnClickListener {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Delete this fact?")
+                        .setMessage("This saved fact will be permanently removed.")
+                        .setNegativeButton("Keep", null)
+                        .setPositiveButton("Delete") { _, _ ->
+                            memoryStore.delete(item.id)
+                            renderMemoryFacts(container, query)
+                        }
+                        .show()
+                }
+            }, LinearLayout.LayoutParams(0, dp(44), 1f))
+            card.addView(actions)
+            val params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            params.bottomMargin = dp(8)
+            container.addView(card, params)
+        }
     }
 
     private fun showTasks() {
