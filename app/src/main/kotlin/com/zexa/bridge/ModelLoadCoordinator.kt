@@ -34,6 +34,22 @@ object ModelLoadCoordinator {
         return true
     }
 
+    /**
+     * A worker may finish native loading after WorkManager has stopped it.
+     * Only an active load may transition to loaded; an interruption that
+     * already won the race remains visible instead of being overwritten.
+     */
+    @Synchronized
+    fun publishLoadedIfActive(context: Context, detail: String): Boolean {
+        val current = savedState(context).first
+        if (!shouldPublishLoaded(current)) return false
+        publish(context, "loaded", detail)
+        return true
+    }
+
+    internal fun shouldPublishLoaded(state: String): Boolean =
+        state in ACTIVE_STATES
+
     private fun notifyListeners(state: String, detail: String?) {
         listeners.forEach { listener ->
             try { listener(state, detail) } catch (_: Exception) { /* UI observers are isolated. */ }
