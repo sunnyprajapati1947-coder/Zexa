@@ -7,6 +7,15 @@ import org.junit.Test
 
 class BridgeSecurityRulesTest {
     @Test
+    fun bridgeTokenMustBeAFullRandomHexToken() {
+        assertTrue(BridgeSecurityRules.validBridgeToken("a".repeat(64)))
+        assertFalse(BridgeSecurityRules.validBridgeToken(""))
+        assertFalse(BridgeSecurityRules.validBridgeToken("short"))
+        assertFalse(BridgeSecurityRules.validBridgeToken("g".repeat(64)))
+        assertFalse(BridgeSecurityRules.validBridgeToken("A".repeat(64)))
+    }
+
+    @Test
     fun tokenComparisonRequiresExactMatch() {
         assertTrue(BridgeSecurityRules.tokenMatches("expected-token", "expected-token"))
         assertFalse(BridgeSecurityRules.tokenMatches("expected-token", "other-token"))
