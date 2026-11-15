@@ -129,7 +129,8 @@ class MainActivity : Activity() {
         addCard("APP STATUS", "Android foundation active", "This build is the first native workspace shell. Brain, chat, voice, memory and tasks are not falsely marked as ready.")
         addCard("AI BRAIN", "Native Qwen integration under validation", "GGUF import and llama.cpp JNI inference code are in place; CI and real-device inference still need verification.")
         addCard("VOICE", "On-device voice controls added", "Chat offers explicit microphone input using Android's on-device recognizer and optional spoken replies using the installed Hindi TTS voice. Device language packs may be required.")
-        addCard("CHAT HISTORY", "Saved privately on this device", "The latest completed local chat messages are stored in Zexa's app-private database. Tasks and reminders are still pending.")
+        addCard("CHAT HISTORY", "Saved privately on this device", "The latest completed local chat messages are stored in Zexa's app-private database.")
+        addCard("REMINDERS", "Available in Tasks", "Create local WorkManager reminders with notification permission. Delivery is best-effort and may be delayed by Android battery controls.")
         addCard("DEVICE HAND", "Optional and OFF by default", "Accessibility access is separate from AI chat and remains user-controlled.")
         addButton("Open device settings") { showDevice() }
     }
