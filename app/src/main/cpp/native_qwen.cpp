@@ -183,7 +183,7 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
 
     const std::string system_text = from_java(env, system_prompt);
     const jsize history_count = history_roles == nullptr ? 0 : env->GetArrayLength(history_roles);
-    if (history_contents == nullptr || history_count < 1 || history_count > 16 ||
+    if (history_contents == nullptr || history_count < 1 || history_count > 15 || (history_count % 2) == 0 ||
         env->GetArrayLength(history_contents) != history_count) {
         throw_java(env, "Chat history must contain between 1 and 16 matching messages.");
         return nullptr;
@@ -234,7 +234,7 @@ Java_com_zexa_bridge_NativeQwenRuntime_nativeGenerate(
             throw_java(env, "Could not format the prompt using the model chat template.");
             return nullptr;
         }
-        prompt.assign(static_cast<size_t>(prompt_length) + 1, '\\0');
+        prompt.assign(static_cast<size_t>(prompt_length) + 1, '\0');
         formatted = llama_chat_apply_template(
             chat_template, messages.data(), messages.size(), true,
             prompt.data(), static_cast<int32_t>(prompt.size()));
