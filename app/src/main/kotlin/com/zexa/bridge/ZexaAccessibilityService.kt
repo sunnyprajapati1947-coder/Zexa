@@ -59,6 +59,9 @@ class ZexaAccessibilityService : AccessibilityService() {
     fun pendingActionApprovals(): List<PendingDeviceAction> =
         actionApprovals.list(System.currentTimeMillis())
 
+    fun isActionPending(requestId: String): Boolean =
+        actionApprovals.list(System.currentTimeMillis()).any { it.requestId == requestId }
+
     @Synchronized
     fun approveAction(requestId: String): JSONObject {
         val ticket = actionApprovals.approve(requestId, System.currentTimeMillis())
