@@ -44,6 +44,8 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [x] Low-risk background skill jobs routed through the same skill engine and gateway.
 - [x] Stable job database path, early environment-file loading, pending-job cancellation, failed-job retry, and safe error identifiers.
 - [x] Termux:Services installer and optional Termux:Boot startup hook.
+- [x] Optional Termux:Widget installer creates tap-to-run voice, continuous voice, jobs, and capability shortcuts; existing same-name shortcuts are backed up.
+- [ ] Dedicated authenticated loopback-only Termux control API; not implemented yet and must not be represented as available.
 - [x] 320 pinned community skill references imported with provenance and SHA-256 metadata; all are disabled, and one requires manual review.
 - [x] Read-only `zexa skillpacks status/list` commands; imported references are not executable capabilities.
 - [x] Android bridge limits concurrent clients, reports actual readiness, and can recover after a bind failure.
