@@ -10,9 +10,12 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
+    private val actionApprovals = ActionApprovalRegistry()
+    private val actionResults = ConcurrentHashMap<String, JSONObject>()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -40,6 +43,60 @@ class ZexaAccessibilityService : AccessibilityService() {
         } else {
             bridgeServer?.stop()
             bridgeServer = null
+        }
+    }
+
+    fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
+        require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
+        val ticket = actionApprovals.create(action, payload.toString(), System.currentTimeMillis())
+        return JSONObject()
+            .put("ok", true)
+            .put("status", "pending_approval")
+            .put("request_id", ticket.requestId)
+            .put("expires_at_epoch_ms", ticket.expiresAtEpochMs)
+    }
+
+    fun pendingActionApprovals(): List<PendingDeviceAction> =
+        actionApprovals.list(System.currentTimeMillis())
+
+    @Synchronized
+    fun approveAction(requestId: String): JSONObject {
+        val ticket = actionApprovals.approve(requestId, System.currentTimeMillis())
+            ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
+        val result = try {
+            perform(ticket.action, JSONObject(ticket.payloadJson))
+                .put("status", "completed")
+                .put("request_id", ticket.requestId)
+        } catch (error: Exception) {
+            JSONObject()
+                .put("ok", false)
+                .put("status", "failed")
+                .put("request_id", ticket.requestId)
+                .put("error", error.message ?: "Action failed")
+        }
+        rememberActionResult(ticket.requestId, result)
+        return result
+    }
+
+    fun denyAction(requestId: String): JSONObject {
+        val denied = actionApprovals.deny(requestId)
+        val result = JSONObject()
+            .put("ok", false)
+            .put("status", if (denied) "denied" else "expired_or_not_pending")
+            .put("request_id", requestId)
+        if (denied) rememberActionResult(requestId, result)
+        return result
+    }
+
+    fun actionResult(requestId: String): JSONObject? =
+        actionResults[requestId]?.let { JSONObject(it.toString()) }
+
+    @Synchronized
+    private fun rememberActionResult(requestId: String, result: JSONObject) {
+        actionResults[requestId] = JSONObject(result.toString())
+        while (actionResults.size > MAX_ACTION_RESULTS) {
+            val oldest = actionResults.keys().nextElement()
+            actionResults.remove(oldest)
         }
     }
 
@@ -151,6 +208,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        private const val MAX_ACTION_RESULTS = 64
         @Volatile var instance: ZexaAccessibilityService? = null
             private set
     }
