@@ -21,4 +21,22 @@ class ChatGenerationGateTest {
 
         ChatGenerationGate.finish()
     }
+    @Test
+    fun completionNotifiesRegisteredObserversAndSupportsRemoval() {
+        ChatGenerationGate.finish()
+        val notifications = AtomicInteger(0)
+        val listener: () -> Unit = { notifications.incrementAndGet() }
+
+        ChatGenerationGate.addCompletionListener(listener)
+        assertTrue(ChatGenerationGate.tryStart())
+        ChatGenerationGate.finish()
+        assertEquals(1, notifications.get())
+
+        ChatGenerationGate.addCompletionListener(listener)
+        ChatGenerationGate.removeCompletionListener(listener)
+        assertTrue(ChatGenerationGate.tryStart())
+        ChatGenerationGate.finish()
+        assertEquals(1, notifications.get())
+    }
+
 }
