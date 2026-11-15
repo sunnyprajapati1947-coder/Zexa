@@ -51,7 +51,10 @@ class QwenModelLoadWorker(
     }
 
     override fun onStopped() {
-        ModelLoadCoordinator.publish(applicationContext, "interrupted", "Loading was interrupted. Tap Retry to start it again.")
+        ModelLoadCoordinator.publishInterruptedIfActive(
+            applicationContext,
+            "Loading was interrupted. Tap Retry to start it again."
+        )
         super.onStopped()
     }
 }
