@@ -933,6 +933,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     reminderStatus?.text = "Reminder scheduled for about ${reminder.third} minute(s) from now. ID: ${scheduled.id}"
                     Toast.makeText(this, "Local reminder scheduled.", Toast.LENGTH_LONG).show()
+                    renderPendingReminders()
                 }
             } catch (error: Exception) {
                 runOnUiThread {
