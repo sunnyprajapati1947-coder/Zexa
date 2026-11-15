@@ -19,17 +19,82 @@ void throw_java(JNIEnv * env, const char * message) {
     if (error_class != nullptr) env->ThrowNew(error_class, message);
 }
 
+void append_utf8(std::string & output, uint32_t codepoint) {
+    if (codepoint <= 0x7F) {
+        output.push_back(static_cast<char>(codepoint));
+    } else if (codepoint <= 0x7FF) {
+        output.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+        output.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0xFFFF) {
+        output.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+        output.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        output.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else {
+        output.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+        output.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+        output.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        output.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+}
+
 std::string from_java(JNIEnv * env, jstring value) {
     if (value == nullptr) return {};
-    const char * chars = env->GetStringUTFChars(value, nullptr);
+    const jsize length = env->GetStringLength(value);
+    const jchar * chars = env->GetStringChars(value, nullptr);
     if (chars == nullptr) return {};
-    std::string result(chars);
-    env->ReleaseStringUTFChars(value, chars);
+    std::string result;
+    result.reserve(static_cast<size_t>(length) * 3);
+    for (jsize i = 0; i < length; ++i) {
+        uint32_t codepoint = chars[i];
+        if (codepoint >= 0xD800 && codepoint <= 0xDBFF &&
+            i + 1 < length && chars[i + 1] >= 0xDC00 && chars[i + 1] <= 0xDFFF) {
+            codepoint = 0x10000 + ((codepoint - 0xD800) << 10) +
+                        (static_cast<uint32_t>(chars[++i]) - 0xDC00);
+        }
+        append_utf8(result, codepoint);
+    }
+    env->ReleaseStringChars(value, chars);
     return result;
 }
 
 jstring to_java(JNIEnv * env, const std::string & value) {
-    return env->NewStringUTF(value.c_str());
+    std::vector<jchar> output;
+    output.reserve(value.size());
+    for (size_t i = 0; i < value.size();) {
+        const uint8_t first = static_cast<uint8_t>(value[i++]);
+        uint32_t codepoint = 0xFFFD;
+        size_t continuation = 0;
+        if (first <= 0x7F) {
+            codepoint = first;
+        } else if ((first & 0xE0) == 0xC0) {
+            codepoint = first & 0x1F; continuation = 1;
+        } else if ((first & 0xF0) == 0xE0) {
+            codepoint = first & 0x0F; continuation = 2;
+        } else if ((first & 0xF8) == 0xF0) {
+            codepoint = first & 0x07; continuation = 3;
+        }
+        bool valid = i + continuation <= value.size();
+        for (size_t j = 0; valid && j < continuation; ++j) {
+            const uint8_t next = static_cast<uint8_t>(value[i++]);
+            if ((next & 0xC0) != 0x80) {
+                valid = false;
+                break;
+            }
+            codepoint = (codepoint << 6) | (next & 0x3F);
+        }
+        if (!valid || codepoint > 0x10FFFF ||
+            (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
+            codepoint = 0xFFFD;
+        }
+        if (codepoint <= 0xFFFF) {
+            output.push_back(static_cast<jchar>(codepoint));
+        } else {
+            codepoint -= 0x10000;
+            output.push_back(static_cast<jchar>(0xD800 + (codepoint >> 10)));
+            output.push_back(static_cast<jchar>(0xDC00 + (codepoint & 0x3FF)));
+        }
+    }
+    return env->NewString(output.data(), static_cast<jsize>(output.size()));
 }
 
 void release_runtime() {
