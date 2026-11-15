@@ -669,16 +669,11 @@ class MainActivity : Activity() {
         val hash = getSharedPreferences("zexa_bridge", Context.MODE_PRIVATE)
             .getString("model_sha256", null)
         val loadState = ModelLoadCoordinator.savedState(this)
-        val stateLabel = when (loadState.first) {
-            "queued" -> "Queued"
-            "checking" -> "Checking model integrity"
-            "loading" -> "Loading into native memory"
-            "waiting" -> "Waiting for current chat"
-            "loaded" -> "Loaded"
-            "failed" -> "Failed: " + (loadState.second ?: "unknown error")
-            "interrupted" -> "Interrupted: " + (loadState.second ?: "tap retry")
-            else -> if (nativeModelLoaded) "Loaded" else "Not loaded"
-        }
+        val stateLabel = ModelLoadCoordinator.stateLabel(
+            loadState.first,
+            nativeModelLoaded,
+            loadState.second
+        )
         status.text = "Model imported: " + String.format("%.2f", size) + " GiB\nSHA-256: " +
             (hash ?: "not recorded") + "\nInference status: " +
             (if (nativeModelLoaded) "Qwen is loaded in this app process." else "Model is imported; load it to start local inference.") +
