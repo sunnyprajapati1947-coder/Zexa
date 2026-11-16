@@ -161,6 +161,10 @@ def main() -> None:
     laptop_revoke.add_argument("--host", required=True)
     laptop_revoke.add_argument("--port", type=int, default=9443)
     laptop_revoke.add_argument("--client-id", default="zexa-phone")
+    laptop_apps = laptop_sub.add_parser("apps", help="List laptop apps explicitly allowlisted by the owner")
+    laptop_apps.add_argument("--host", required=True)
+    laptop_apps.add_argument("--port", type=int, default=9443)
+    laptop_apps.add_argument("--client-id", default="zexa-phone")
     laptop_launch = laptop_sub.add_parser("launch", help="Launch one owner-allowlisted laptop app after exact confirmation")
     laptop_launch.add_argument("--host", required=True)
     laptop_launch.add_argument("--port", type=int, default=9443)
@@ -351,7 +355,9 @@ def main() -> None:
         client = LaptopAgentClient(
             args.host, args.port, None, args.client_id,
         )
-        if args.laptop_command == "list":
+        if args.laptop_command == "apps":
+            print(json.dumps(client.list_apps(), ensure_ascii=False, indent=2))
+        elif args.laptop_command == "list":
             print(json.dumps(client.list_directory(args.dir), ensure_ascii=False, indent=2))
         elif args.laptop_command == "read":
             print(json.dumps(client.read_text(args.path), ensure_ascii=False, indent=2))
