@@ -87,7 +87,7 @@ Learning means building retrievable knowledge and reviewed workflows. It does **
 - `LearningService.import_text_file()` studies UTF-8 local text files up to 1 MB and saves a draft summary; imported text is treated as untrusted data and never executed.
 - `LearningService.draft_skill()` requires an approved note, validates a typed skill contract, and stores it disabled with `review_required` status.
 - Termux CLI commands are available as `zexa learn research`, `import`, `list`, `show`, `search`, `review`, `draft-skill`, `skill-drafts`, and `review-skill`.
-- Approved knowledge notes are searchable; draft/rejected notes are excluded from normal retrieval. Reviewing a skill contract does not enable execution. Skill activation, version history, document formats beyond UTF-8 text, full-page crawling, and model-weight training are not implemented by this foundation.
+- `LearningAwareBrain` retrieves relevant approved notes into ordinary chat, voice, planning, and agent requests as bounded untrusted reference context; draft/rejected notes are excluded. Reviewing a skill contract does not enable execution. Skill activation, version history, document formats beyond UTF-8 text, full-page crawling, and model-weight training are not implemented by this foundation.
 
 ## 5. Permission and approval model
 
@@ -172,14 +172,18 @@ A feature is not "done" because it appears in a catalogue or UI. It must have:
 
 ## 10. Current implementation boundary
 
-At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. Laptop pairing, general browser automation, full-page research, production app connectors, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
+At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. A TLS-pinned, private-IPv4 laptop workspace channel now supports explicit pairing, scoped listing/reading, and optional exact-confirmed text writes. General browser automation, full-page research, production app connectors, remote laptop app/process control, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
 
-### Laptop workspace adapter foundation
+### Laptop workspace and remote pairing foundation
 - LaptopWorkspace constrains file listing, UTF-8 reads, and writes to one existing user-selected root directory.
-- Absolute paths, parent traversal, Windows-style path separators, symlinks, binary formats, credential-like filenames, and oversized files are rejected or excluded.
-- Reads are bounded to 256 KB; writes are bounded to 128,000 characters and use a temporary file plus atomic replacement.
-- Trusted CapabilitySpec definitions expose list/read as low-risk and write as high-risk; CapabilityController enforces explicit permissions and one-time exact-payload approval for writes.
-- This is a laptop-side local adapter only. It has no network listener, device pairing, TLS identity exchange, remote session, process execution, arbitrary shell, or app-control implementation.
+- Absolute paths, parent traversal, control characters, Windows-style path separators, symlinks, binary formats, credential-like filenames, and oversized files are rejected or excluded. Common credentials are redacted from text returned to the phone.
+- Reads are bounded to 256 KB; writes are bounded to 128,000 characters and use temporary files plus atomic replacement/no-clobber creation.
+- Trusted CapabilitySpec definitions expose list/read as low-risk and local write as high-risk; CapabilityController enforces explicit permissions and one-time exact-payload approval for local writes.
+- LaptopAgentServer binds only to a private IPv4 address and requires TLS 1.2+ with a locally displayed SHA-256 certificate fingerprint. Pairing uses a 12-digit one-time code, PBKDF2/HMAC challenge proof, explicit capability scopes, and replay-resistant request MACs with timestamps and nonces.
+- Remote pairing defaults to workspace list/read. The laptop owner may opt into workspace writes when starting the server; the phone CLI previews source, destination, character count, and SHA-256 and requires an exact path confirmation for every write, with a distinct overwrite confirmation.
+- Phone-side session credentials are stored in an owner-only file. Laptop-side paired-client records are process-local and are invalidated when the server restarts. Clients can revoke their own pairing.
+- A metadata-only SQLite audit trail records pairing, workspace list/read/write, and revocation events without storing file contents or authentication secrets.
+- Remote deletion, arbitrary shell/process execution, laptop app control, and general browser automation are not exposed.
 
 
 ## 12. Security without blocking useful work
