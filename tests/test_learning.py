@@ -66,6 +66,10 @@ class LearningStoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.save_note(sources=[{"title": "Good", "url": "https://example.org", "extra": "x"}])
         with self.assertRaises(ValueError):
+            self.save_note(sources=[{"title": "Bad port", "url": "https://example.org:70000"}])
+        with self.assertRaises(ValueError):
+            self.save_note(sources=[{"title": "Bad host", "url": "https://[invalid"}])
+        with self.assertRaises(ValueError):
             self.save_note(source_sha256="not-a-hash")
 
     def test_note_search_treats_wildcards_as_literal_text(self):
