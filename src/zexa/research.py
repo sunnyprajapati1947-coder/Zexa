@@ -14,7 +14,7 @@ from html.parser import HTMLParser
 import socket
 import ssl
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlsplit
+from urllib.parse import parse_qs, quote, urlencode, urljoin, urlparse, urlsplit
 from urllib.request import Request, urlopen
 
 
@@ -250,9 +250,13 @@ def fetch_public_page(url: str, *, timeout: float = 10.0) -> FetchedPage:
     current = url
     for redirect_count in range(4):
         parsed, host = _validate_public_https_url(current)
-        target = parsed.path or "/"
+        target = quote(parsed.path or "/", safe="/%:@!        target = parsed.path or "/"
         if parsed.query:
-            target += "?" + parsed.query
+            target += "?" + parsed.query'()*+,;=-._~")
+        if parsed.query:
+            target += "?" + quote(parsed.query, safe="/?@!        target = parsed.path or "/"
+        if parsed.query:
+            target += "?" + parsed.query'()*+,;=:%-._~")
         connection = _connect_public_https(host, max(2.0, min(float(timeout), 20.0)))
         response = None
         try:
