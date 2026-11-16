@@ -11,6 +11,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 from urllib.parse import urlencode
 
+from zexa.audit import AuditLog
 from zexa.laptop_hand import LaptopWorkspace
 from zexa.laptop_pairing import LaptopPairingAuthority
 from zexa.laptop_server import (
@@ -33,7 +34,8 @@ class LaptopServerTests(unittest.TestCase):
         self.authority = LaptopPairingAuthority(iterations=100_000)
         self.offer = self.authority.begin_pairing()
         self.server = _LaptopHTTPServer(
-            ("127.0.0.1", 0), make_laptop_handler(), self.workspace, self.authority
+            ("127.0.0.1", 0), make_laptop_handler(), self.workspace, self.authority,
+            AuditLog(Path(self.temp.name) / "laptop_audit.sqlite3"),
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -215,6 +217,18 @@ class LaptopServerTests(unittest.TestCase):
                 generate_laptop_certificate("192.168.1.20", cert, key)
             with self.assertRaises(ValueError):
                 generate_laptop_certificate("8.8.8.8", cert, key)
+
+    def test_workspace_actions_are_audited_without_recording_file_contents(self):
+        key = self.pair()
+        read_path = "/v1/workspace/read?" + urlencode({"path": "lesson.txt"})
+        status, _ = self.request(
+            "GET", read_path, headers=self.signed(key, "GET", read_path)
+        )
+        self.assertEqual(status, 200)
+        events = self.server.audit.recent(10)
+        read_event = next(item for item in events if item["event_type"] == "laptop_workspace_read")
+        self.assertEqual(read_event["details"]["relative_path"], "lesson.txt")
+        self.assertNotIn("hello laptop", json.dumps(read_event["details"]))
 
     def test_agent_server_rejects_wildcard_and_public_bind_addresses(self):
         for host in ("0.0.0.0", "8.8.8.8", "example.com"):
