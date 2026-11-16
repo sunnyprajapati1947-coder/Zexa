@@ -29,6 +29,7 @@ from .brain import build_brain_router
 from .intent import route_utterance
 from .learning import LearningAwareBrain, LearningService, LearningStore
 from .laptop_client import LaptopAgentClient
+from .laptop_apps import LaptopAppRegistry
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_server import LaptopAgentServer, certificate_fingerprint, generate_laptop_certificate
 from .jobs import JobQueue, JobWorker
@@ -126,6 +127,13 @@ def main() -> None:
         "--allow-write", action="store_true",
         help="Allow paired phones to request workspace writes after exact phone-side confirmation",
     )
+    laptop_serve.add_argument(
+        "--apps", help="Owner-authored JSON manifest of exact laptop app executables and fixed arguments",
+    )
+    laptop_serve.add_argument(
+        "--allow-app-launch", action="store_true",
+        help="Allow paired phones to launch only apps in the supplied owner manifest",
+    )
     laptop_pair = laptop_sub.add_parser("pair", help="Pair this phone using the code shown by the laptop")
     laptop_pair.add_argument("--host", required=True)
     laptop_pair.add_argument("--port", type=int, default=9443)
@@ -152,6 +160,11 @@ def main() -> None:
     laptop_revoke.add_argument("--host", required=True)
     laptop_revoke.add_argument("--port", type=int, default=9443)
     laptop_revoke.add_argument("--client-id", default="zexa-phone")
+    laptop_launch = laptop_sub.add_parser("launch", help="Launch one owner-allowlisted laptop app after exact confirmation")
+    laptop_launch.add_argument("--host", required=True)
+    laptop_launch.add_argument("--port", type=int, default=9443)
+    laptop_launch.add_argument("--client-id", default="zexa-phone")
+    laptop_launch.add_argument("app_id")
 
     skill_parser = subparsers.add_parser("skill", help="Run one registered skill through the execution gateway")
     skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
@@ -257,15 +270,18 @@ def main() -> None:
             return
         if args.laptop_command == "serve":
             workspace = LaptopWorkspace(args.workspace)
+            if args.allow_app_launch and not args.apps:
+                raise ValueError("--allow-app-launch requires an owner-authored --apps manifest.")
+            app_registry = LaptopAppRegistry(args.apps) if args.apps else None
             server = LaptopAgentServer(
                 args.host, args.port, args.cert, args.key, workspace,
-                pairing_path=args.pairings,
+                pairing_path=args.pairings, app_registry=app_registry,
             )
-            permissions = (
-                ("laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write")
-                if args.allow_write else
-                ("laptop.workspace.list", "laptop.workspace.read")
-            )
+            permissions = ["laptop.workspace.list", "laptop.workspace.read"]
+            if args.allow_write:
+                permissions.append("laptop.workspace.write")
+            if args.allow_app_launch:
+                permissions.append("laptop.apps.launch")
             offer = server.begin_pairing(permissions=permissions)
             fingerprint = certificate_fingerprint(args.cert)
             print("Zexa laptop Human Hand server started (TLS 1.2+, private IPv4 only).")
@@ -277,7 +293,9 @@ def main() -> None:
             print("Remote permissions: " + ", ".join(offer.permissions))
             if args.allow_write:
                 print("Remote workspace writes are enabled; every write must be confirmed on the phone.")
-            else:
+            if args.allow_app_launch:
+                print("Remote app launch is enabled only for the owner's fixed allowlist; each launch needs exact phone confirmation.")
+            if not args.allow_write and not args.allow_app_launch:
                 print("Remote access is read-only: workspace list/read only; no shell or app control.")
             try:
                 server.serve_forever()
@@ -341,6 +359,15 @@ def main() -> None:
                 print("Remote laptop pairing revoked and local credential deleted.")
             else:
                 print("Laptop had no active pairing; local credential deleted.")
+        elif args.laptop_command == "launch":
+            phrase = "LAUNCH " + args.app_id
+            print(f"Requested laptop application: {args.app_id}")
+            confirmation = input(f"Type exactly '{phrase}' to approve: ")
+            if confirmation != phrase:
+                print("Laptop app launch cancelled.")
+                return
+            result = client.launch_app(args.app_id, user_confirmed=True)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
     registry = default_registry()
