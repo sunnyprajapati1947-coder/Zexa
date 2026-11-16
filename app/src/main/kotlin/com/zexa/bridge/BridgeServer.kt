@@ -123,24 +123,31 @@ class BridgeServer(
         socket.use { client ->
             client.soTimeout = 5000
             val input = BufferedInputStream(client.getInputStream())
-            val requestLine = readHttpLine(input) ?: return
+            val requestLine = try {
+                readHttpLine(input)
+            } catch (_: Exception) {
+                return respond(client, 400, JSONObject().put("error", "Malformed request line"))
+            } ?: return
             val parsedRequest = BridgeHttpRequestLine.parse(requestLine)
                 ?: return respond(client, 400, JSONObject().put("error", "Bad request line"))
             val method = parsedRequest.method
             val path = parsedRequest.target
-            val headers = mutableMapOf<String, String>()
-            var headerCount = 0
-            while (true) {
-                val line = readHttpLine(input) ?: return
-                if (line.isEmpty()) break
-                headerCount++
-                require(headerCount <= 32) { "Too many request headers." }
-                val header = BridgeHttpHeader.parse(line)
-                    ?: return respond(client, 400, JSONObject().put("error", "Malformed header"))
-                if (headers.containsKey(header.name)) {
-                    return respond(client, 400, JSONObject().put("error", "Duplicate header"))
+            val headers = try {
+                val parsedHeaders = mutableMapOf<String, String>()
+                var headerCount = 0
+                while (true) {
+                    val line = readHttpLine(input) ?: error("Incomplete request headers.")
+                    if (line.isEmpty()) break
+                    headerCount++
+                    require(headerCount <= 32) { "Too many request headers." }
+                    val header = BridgeHttpHeader.parse(line)
+                        ?: error("Malformed request header.")
+                    require(!parsedHeaders.containsKey(header.name)) { "Duplicate request header." }
+                    parsedHeaders[header.name] = header.value
                 }
-                headers[header.name] = header.value
+                parsedHeaders
+            } catch (_: Exception) {
+                return respond(client, 400, JSONObject().put("error", "Malformed request headers"))
             }
             if (headers.containsKey("transfer-encoding")) {
                 return respond(client, 400, JSONObject().put("error", "Transfer-Encoding is not supported"))
