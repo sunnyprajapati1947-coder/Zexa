@@ -149,6 +149,45 @@ class LaptopClientTests(unittest.TestCase):
         self.assertTrue(result["spawned"])
         self.assertEqual(calls[0], ("POST", "/v1/apps/launch", {"app_id": "editor"}))
 
+    def test_app_inventory_requires_scope_and_validates_response(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.apps.launch",),
+        )
+        client = self.make_client()
+        calls = []
+
+        def fake_request(method, path, body=b"", headers=None):
+            calls.append((method, path))
+            self.assertTrue(LaptopPairingAuthority.verify_scoped_request(
+                "phone-main", "laptop.apps.launch", method, path, body, headers
+            ) is False or headers is not None)
+            return 200, {"ok": True, "result": {"apps": [
+                {"app_id": "editor", "description": "Approved editor"}
+            ]}}
+
+        client._request = fake_request
+        self.assertEqual(client.list_apps(), [
+            {"app_id": "editor", "description": "Approved editor"}
+        ])
+        self.assertEqual(calls, [("GET", "/v1/apps")])
+
+        client._request = lambda *args, **kwargs: (
+            200, {"ok": True, "result": {"apps": [
+                {"app_id": "editor", "description": "ok", "executable": "/tmp/x"}
+            ]}}
+        )
+        with self.assertRaises(RuntimeError):
+            client.list_apps()
+
+    def test_app_inventory_rejects_pairing_without_launch_permission(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.workspace.read",),
+        )
+        with self.assertRaises(PermissionError):
+            self.make_client().list_apps()
+
     def test_app_launch_rejects_pairing_without_launch_permission(self):
         self.store.save(
             "127.0.0.1", 9443, "a" * 64, "phone-main",
