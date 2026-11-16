@@ -214,7 +214,7 @@ class LaptopPairingTests(unittest.TestCase):
                 "laptop.workspace.list", "laptop.workspace.read", "laptop.apps.launch"
             ))
             expanded_nonce = encoded(b"r" * 32)
-            expanded_proof, _ = third.make_client_proof(
+            expanded_proof, expanded_session_key = third.make_client_proof(
                 expanded_offer.pairing_code, expanded_offer.salt_b64,
                 expanded_offer.server_nonce_b64, "phone-persist", expanded_nonce,
                 iterations=expanded_offer.iterations, permissions=expanded_offer.permissions,
@@ -231,10 +231,12 @@ class LaptopPairingTests(unittest.TestCase):
             self.assertEqual(fourth.list_clients()[0]["client_id"], "phone-persist")
             self.assertIn("laptop.apps.launch", fourth.list_clients()[0]["permissions"])
             expanded_probe = LaptopPairingAuthority.sign_request(
-                expanded_record.session_key.hex() if False else encoded(b"z" * 32),
-                "GET", "/v1/workspace/list", b"",
+                expanded_session_key, "GET", "/v1/workspace/list", b"",
                 timestamp=int(self.wall_now), nonce_b64=encoded(b"u" * 24),
             )
+            self.assertTrue(second.verify_request(
+                "phone-persist", "GET", "/v1/workspace/list", b"", expanded_probe
+            ))
             if os.name != "nt":
                 self.assertEqual(database.stat().st_mode & 0o777, 0o600)
 
