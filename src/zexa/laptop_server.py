@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import stat
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import ssl
@@ -258,8 +259,14 @@ class LaptopAgentServer:
             raise TypeError("A configured LaptopWorkspace is required.")
         cert = Path(certificate_file).expanduser()
         key = Path(private_key_file).expanduser()
-        if not cert.is_file() or not key.is_file():
-            raise FileNotFoundError("TLS certificate and private key files must exist.")
+        if (
+            cert.is_symlink() or key.is_symlink()
+            or not cert.is_file() or not key.is_file()
+            or cert.stat().st_size > 64_000 or key.stat().st_size > 64_000
+        ):
+            raise FileNotFoundError("TLS certificate and private key must be bounded regular files, not symlinks.")
+        if os.name != "nt" and stat.S_IMODE(key.stat().st_mode) & 0o077:
+            raise PermissionError("Laptop TLS private key permissions must be owner-only (0600).")
         self.authority = authority or LaptopPairingAuthority()
         self.workspace = workspace
         self.host = host
