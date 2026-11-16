@@ -119,7 +119,6 @@ class LaptopCliTests(unittest.TestCase):
             patch("builtins.print") as output,
         ):
             cli.main()
-        FakeLaptopClient.instance.list_apps()
         output.assert_called_once()
 
     def test_laptop_app_launch_requires_exact_confirmation(self):
