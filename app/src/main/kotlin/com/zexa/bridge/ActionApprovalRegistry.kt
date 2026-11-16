@@ -93,6 +93,14 @@ class ActionApprovalRegistry(
         return pending.remove(requestId)?.ticket
     }
 
+    /** Atomically expires due tickets and returns each newly expired ticket once. */
+    @Synchronized
+    fun expireAndDrain(nowElapsedMs: Long): List<PendingDeviceAction> {
+        val effectiveNowMs = observeTime(nowElapsedMs)
+        expire(effectiveNowMs)
+        return expired.values.toList().also { expired.clear() }
+    }
+
     /** Returns each expired ticket once, including tickets expired by list/create/approve/deny. */
     @Synchronized
     fun drainExpired(): List<PendingDeviceAction> = expired.values.toList().also { expired.clear() }
