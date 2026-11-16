@@ -25,6 +25,11 @@ def make_handler(token: str, queue: JobQueue) -> Type[BaseHTTPRequestHandler]:
         server_version = "ZexaLocalAPI"
         sys_version = ""
 
+        def setup(self) -> None:
+            super().setup()
+            # Bound slow local clients so an incomplete request cannot hold a worker thread forever.
+            self.connection.settimeout(5.0)
+
         def log_message(self, _format: str, *_args: object) -> None:
             # Avoid writing request headers, tokens, or user content to shared logs.
             return
