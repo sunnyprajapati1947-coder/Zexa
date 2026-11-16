@@ -30,6 +30,18 @@ class TaskActionGrantRegistryTest {
     }
 
     @Test
+    fun returnedActionScopeCannotBeMutated() {
+        val registry = TaskActionGrantRegistry(idFactory = { "immutable" })
+        val grant = registry.create("task-1", "phone-1", setOf("back"), 1L, 100_000L)
+        try {
+            (grant.allowedActions as MutableSet<String>).add("tap")
+            throw AssertionError("Grant action scope was mutable.")
+        } catch (_: UnsupportedOperationException) {
+        }
+        assertNull(registry.consume("immutable", "task-1", "phone-1", "tap", 2L))
+    }
+
+    @Test
     fun coordinateTapsAndTextEntryCannotBeGranted() {
         val registry = TaskActionGrantRegistry()
         assertRejected {
