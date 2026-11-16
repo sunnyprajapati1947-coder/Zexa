@@ -174,14 +174,14 @@ Security is a set of proportionate controls, not a blanket lock on every action.
 ### User-facing autonomy tiers
 
 - **Observe:** status, help, public research, and user-requested reads from already granted folders can proceed without repeated prompts. Sensitive screen fields remain redacted.
-- **Assist:** opening an app, navigating, scrolling, and other reversible UI actions can run under a clearly visible, user-started task grant. The grant is scoped to one device, one task, an explicit action set, and a short expiry; the user can pause or revoke it at any time. Do not ask for a fresh confirmation for every tap in that approved task.
+- **Assist:** app launch, opening a validated HTTP(S) URL, swipe, scroll, back, and home may run under a clearly visible, user-started task grant. The grant is scoped to one device, one task, an explicit allowlisted action set, a short expiry, and a bounded operation count; the user can pause or revoke it at any time. Coordinate-based taps and text entry are excluded because their target/effect cannot be reliably classified from coordinates alone.
 - **Change:** writing or editing local files requires a scoped folder and a preview. A task grant may cover a batch of reversible edits within that folder, but must not expand to other folders or destructive operations.
 - **Commit externally:** sending, publishing, submitting, sharing, purchases, account/security changes, and deletion require a fresh confirmation showing the exact destination and content/effect. A task grant cannot silently approve these.
 - **Restricted:** credentials, hidden recording, permission bypass, stealth control, and arbitrary remote execution are not available capabilities.
 
 ### Engineering rules
 
-- Prefer one clear approval at the start of a bounded low-risk task over repeated approval dialogs for each navigation step.
+- Prefer one clear approval at the start of a bounded low-risk task over repeated approval dialogs for each eligible navigation step. Do not broaden a task grant to coordinate taps, text entry, form submission, messages, purchases, deletion, account changes, or any external commit.
 - Approval must be revocable and scoped; expiry, device change, capability change, or material task change invalidates it.
 - Keep a visible activity indicator and concise audit history, but do not log private screen contents or text payloads by default.
 - When a capability is unavailable, explain the exact missing permission, adapter, or platform limitation and offer a supported alternative. Do not fail the whole task if an independent safe step can still complete.
