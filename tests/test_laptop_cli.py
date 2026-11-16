@@ -83,6 +83,7 @@ class LaptopCliTests(unittest.TestCase):
             patch.object(cli, "load_env_file"),
             patch.object(cli, "LaptopPairingAuthority", return_value=authority),
             patch.object(cli, "AuditLog") as audit,
+            patch.object(cli, "secure_owner_only"),
             patch("builtins.print"),
         ):
             cli.main()
