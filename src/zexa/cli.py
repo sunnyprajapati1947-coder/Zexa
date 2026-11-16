@@ -167,6 +167,10 @@ def main() -> None:
     laptop_pair.add_argument("--port", type=int, default=9443)
     laptop_pair.add_argument("--fingerprint", required=True, help="SHA-256 certificate fingerprint confirmed on the laptop")
     laptop_pair.add_argument("--client-id", default="zexa-phone")
+    laptop_status = laptop_sub.add_parser("status", help="Show local laptop pairing status and granted permissions without exposing credentials")
+    laptop_status.add_argument("--host", required=True)
+    laptop_status.add_argument("--port", type=int, default=9443)
+    laptop_status.add_argument("--client-id", default="zexa-phone")
     laptop_list = laptop_sub.add_parser("list", help="List the paired laptop workspace")
     laptop_list.add_argument("--host", required=True)
     laptop_list.add_argument("--port", type=int, default=9443)
@@ -406,6 +410,21 @@ def main() -> None:
         client = LaptopAgentClient(
             args.host, args.port, None, args.client_id,
         )
+        if args.laptop_command == "status":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None:
+                print(json.dumps({
+                    "paired": False, "host": client.host, "port": client.port,
+                    "client_id": client.client_id,
+                }, ensure_ascii=False, indent=2))
+            else:
+                print(json.dumps({
+                    "paired": True, "host": client.host, "port": client.port,
+                    "client_id": client.client_id,
+                    "fingerprint": pairing["fingerprint"],
+                    "permissions": sorted(pairing["permissions"]),
+                }, ensure_ascii=False, indent=2))
+            return
         if args.laptop_command == "apps":
             print(json.dumps(client.list_apps(), ensure_ascii=False, indent=2))
         elif args.laptop_command == "list":
