@@ -148,6 +148,23 @@ class LaptopPairingAuthority:
                 permissions=selected_permissions,
             )
 
+    def public_offer(self) -> dict[str, object] | None:
+        """Return challenge metadata without disclosing the locally displayed pairing code."""
+        with self._lock:
+            offer = self._offer
+            if offer is None:
+                return None
+            if self._monotonic() >= offer["expires_at"]:
+                self._offer = None
+                return None
+            return {
+                "salt_b64": _b64encode(offer["salt"]),
+                "server_nonce_b64": _b64encode(offer["server_nonce"]),
+                "expires_in_seconds": max(0, int(offer["expires_at"] - self._monotonic())),
+                "iterations": self.iterations,
+                "permissions": list(offer["permissions"]),
+            }
+
     @staticmethod
     def make_client_proof(
         pairing_code: str,
