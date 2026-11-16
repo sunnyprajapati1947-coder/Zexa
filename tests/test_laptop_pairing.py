@@ -53,6 +53,17 @@ class LaptopPairingTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.authority.complete_pairing("phone-main", encoded(bytes(32)), encoded(bytes(32)))
 
+    def test_revoke_all_clients_clears_sessions_and_replay_state(self):
+        self.make_pair("phone-main")
+        self.make_pair("phone-secondary")
+        self.assertEqual(len(self.authority.list_clients()), 2)
+        self.assertEqual(self.authority.revoke_all_clients(), 2)
+        self.assertEqual(self.authority.list_clients(), [])
+        self.assertFalse(self.authority.verify_request(
+            "phone-main", "GET", "/v1/workspace/list", b"", {},
+        ))
+        self.assertEqual(self.authority.revoke_all_clients(), 0)
+
     def test_pairing_binds_requested_permissions_and_defaults_to_read_only(self):
         _, read_only, key = self.make_pair()
         self.assertTrue(read_only.allows("laptop.workspace.read"))
