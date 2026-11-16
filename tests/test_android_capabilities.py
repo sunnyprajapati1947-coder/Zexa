@@ -80,6 +80,7 @@ class AndroidCapabilityTests(unittest.TestCase):
             "home": {},
             "input_text": {"text": "Hello"},
             "launch_app": {"package_name": "com.example.app"},
+            "open_url": {"url": "https://example.com/path?q=1"},
         }
         for action, payload in valid.items():
             with self.subTest(action=action):
@@ -99,6 +100,11 @@ class AndroidCapabilityTests(unittest.TestCase):
             ("input_text", {"text": "   "}),
             ("input_text", {"text": "x" * 501}),
             ("launch_app", {"package_name": "../../other"}),
+            ("open_url", {"url": "javascript:alert(1)"}),
+            ("open_url", {"url": "https://user:pass@example.com"}),
+            ("open_url", {"url": "https://exa mple.com"}),
+            ("open_url", {"url": "file:///etc/passwd"}),
+            ("open_url", {"url": "https://example.com", "extra": True}),
         ]
         for action, payload in invalid:
             with self.subTest(action=action, payload=payload):
