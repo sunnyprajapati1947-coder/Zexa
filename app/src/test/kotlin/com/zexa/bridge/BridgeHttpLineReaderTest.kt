@@ -23,8 +23,8 @@ class BridgeHttpLineReaderTest {
 
     @Test
     fun rejectsControlAndNonAsciiBytes() {
-        assertRejected("GET /\\u0001 HTTP/1.1\\r\\n")
-        assertRejected("GET /é HTTP/1.1\\r\\n")
+        assertRejectedBytes("GET /é HTTP/1.1\r\n".toByteArray(Charsets.UTF_8))
+        assertRejectedBytes(byteArrayOf(71, 69, 84, 32, 47, 1, 32, 72, 84, 84, 80, 47, 49, 46, 49, 13, 10))
     }
 
     @Test
@@ -38,8 +38,12 @@ class BridgeHttpLineReaderTest {
     }
 
     private fun assertRejected(value: String) {
+        assertRejectedBytes(value.toByteArray(Charsets.US_ASCII))
+    }
+
+    private fun assertRejectedBytes(bytes: ByteArray) {
         try {
-            BridgeHttpLineReader.read(ByteArrayInputStream(value.toByteArray(Charsets.US_ASCII)))
+            BridgeHttpLineReader.read(ByteArrayInputStream(bytes))
             fail("Malformed HTTP line must be rejected")
         } catch (_: IllegalArgumentException) {
             // Expected.
