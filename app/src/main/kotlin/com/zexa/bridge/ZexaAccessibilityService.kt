@@ -376,11 +376,11 @@ class ZexaAccessibilityService : AccessibilityService() {
             .put("ok", true).put("package", "").put("nodes", JSONArray())
         val nodes = JSONArray()
         var count = 0
-        fun hasOtpLabelChild(parent: AccessibilityNodeInfo): Boolean {
+        fun hasSensitiveLabelChild(parent: AccessibilityNodeInfo): Boolean {
             for (index in 0 until minOf(parent.childCount, 150)) {
                 val child = parent.getChild(index) ?: continue
                 val hasLabel = try {
-                    ScreenRedactionRules.isOtpLabel(
+                    ScreenRedactionRules.isSensitiveLabel(
                         className = child.className?.toString()?.take(160) ?: "",
                         viewId = child.viewIdResourceName?.take(200) ?: "",
                         hint = child.hintText?.toString()?.take(300) ?: "",
@@ -394,7 +394,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             }
             return false
         }
-        fun visit(node: AccessibilityNodeInfo?, depth: Int, sensitiveOtpContext: Boolean = false) {
+        fun visit(node: AccessibilityNodeInfo?, depth: Int, sensitiveContext: Boolean = false) {
             if (node == null || depth > 12 || count >= 150) return
             count++
             val bounds = Rect()
@@ -412,7 +412,7 @@ class ZexaAccessibilityService : AccessibilityService() {
                 hint = hint,
                 text = text,
                 description = description,
-                sensitiveOtpContext = sensitiveOtpContext,
+                sensitiveContext = sensitiveContext,
             )
             val item = JSONObject()
                 .put("index", count - 1)
@@ -428,14 +428,14 @@ class ZexaAccessibilityService : AccessibilityService() {
                     .put("left", bounds.left).put("top", bounds.top)
                     .put("right", bounds.right).put("bottom", bounds.bottom))
             nodes.put(item)
-            val childOtpContext = sensitiveOtpContext || hasOtpLabelChild(node)
+            val childSensitiveContext = sensitiveContext || hasSensitiveLabelChild(node)
             // Bound child retrieval as well as emitted nodes; hostile or malformed
             // accessibility trees must not force unbounded traversal work.
             val childLimit = minOf(node.childCount, 150 - count)
             for (i in 0 until childLimit) {
                 val child = node.getChild(i)
                 try {
-                    visit(child, depth + 1, childOtpContext)
+                    visit(child, depth + 1, childSensitiveContext)
                 } finally {
                     child?.recycle()
                 }
