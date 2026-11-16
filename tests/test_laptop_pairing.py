@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
+import tempfile
 import unittest
+from pathlib import Path
 
 from zexa.laptop_pairing import LaptopPairingAuthority, verify_tls_fingerprint
 
@@ -157,6 +160,67 @@ class LaptopPairingTests(unittest.TestCase):
             "phone-main", "GET", "/v1/status", b"", headers
         ))
         self.assertFalse(self.authority.revoke_client("phone-main"))
+
+    def test_persistent_pairings_and_replay_nonces_survive_restart(self):
+        with tempfile.TemporaryDirectory() as temp:
+            database = Path(temp) / "pairings.sqlite3"
+            first = LaptopPairingAuthority(
+                iterations=100_000,
+                wall_clock=lambda: self.wall_now,
+                storage_path=database,
+            )
+            offer = first.begin_pairing()
+            client_nonce = encoded(b"p" * 32)
+            proof, session_key = first.make_client_proof(
+                offer.pairing_code, offer.salt_b64, offer.server_nonce_b64,
+                "phone-persist", client_nonce, iterations=offer.iterations,
+                permissions=offer.permissions,
+            )
+            first.complete_pairing("phone-persist", client_nonce, proof)
+            headers = first.sign_request(
+                session_key, "GET", "/v1/workspace/list", b"",
+                timestamp=int(self.wall_now), nonce_b64=encoded(b"q" * 24),
+            )
+
+            second = LaptopPairingAuthority(
+                iterations=100_000,
+                wall_clock=lambda: self.wall_now,
+                storage_path=database,
+            )
+            self.assertEqual(second.list_clients()[0]["client_id"], "phone-persist")
+            self.assertTrue(second.verify_request(
+                "phone-persist", "GET", "/v1/workspace/list", b"", headers
+            ))
+
+            third = LaptopPairingAuthority(
+                iterations=100_000,
+                wall_clock=lambda: self.wall_now,
+                storage_path=database,
+            )
+            self.assertFalse(third.verify_request(
+                "phone-persist", "GET", "/v1/workspace/list", b"", headers
+            ))
+            self.assertTrue(third.revoke_client("phone-persist"))
+            fourth = LaptopPairingAuthority(
+                iterations=100_000,
+                wall_clock=lambda: self.wall_now,
+                storage_path=database,
+            )
+            self.assertEqual(fourth.list_clients(), [])
+            if os.name != "nt":
+                self.assertEqual(database.stat().st_mode & 0o777, 0o600)
+
+    def test_persistent_pairing_database_rejects_symlink(self):
+        if os.name == "nt":
+            self.skipTest("Symlink permissions differ on Windows.")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / "target.sqlite3"
+            target.touch()
+            link = root / "pairings.sqlite3"
+            link.symlink_to(target)
+            with self.assertRaises(PermissionError):
+                LaptopPairingAuthority(storage_path=link)
 
     def test_certificate_fingerprint_is_pinned(self):
         certificate = b"test-certificate-der"
