@@ -220,6 +220,12 @@ class ZexaAccessibilityService : AccessibilityService() {
     fun approveAction(requestId: String): JSONObject {
         val ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
             ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
+        val executing = JSONObject()
+            .put("ok", true)
+            .put("status", "executing")
+            .put("request_id", ticket.requestId)
+        rememberActionResult(ticket.requestId, executing)
+        actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "executing", System.currentTimeMillis()))
         val result = try {
             val execution = perform(ticket.action, JSONObject(ticket.payloadJson))
             execution
