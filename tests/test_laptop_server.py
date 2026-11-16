@@ -242,6 +242,65 @@ class LaptopServerTests(unittest.TestCase):
         self.assertEqual(status, 401)
         spawn.assert_not_called()
 
+    def test_exact_confirmed_browser_navigation_opens_visible_default_browser(self):
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.browser.open"
+        ))
+        key = self.pair(offer)
+        path = "/v1/browser/open"
+        url = "https://example.com/docs?topic=zexa"
+        body = json.dumps({"url": url}, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(key, "POST", path, body)
+        headers.update({
+            "X-Zexa-Client-ID": "phone-main",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        with patch("zexa.laptop_server.open_browser_url", return_value={
+            "opened": True, "host": "example.com"
+        }) as open_browser:
+            status, result = self.request("POST", path, body, headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(result["result"], {"opened": True, "host": "example.com"})
+        open_browser.assert_called_once_with(url)
+        events = self.server.audit.recent(10)
+        event = next(item for item in events if item["event_type"] == "laptop_browser_navigation")
+        self.assertEqual(event["details"], {"host": "example.com"})
+        self.assertNotIn("topic=zexa", json.dumps(event["details"]))
+
+    def test_browser_navigation_denied_without_opt_in_scope(self):
+        key = self.pair()
+        path = "/v1/browser/open"
+        body = json.dumps({"url": "https://example.com"}, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(key, "POST", path, body)
+        headers.update({
+            "X-Zexa-Client-ID": "phone-main",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        with patch("zexa.laptop_server.open_browser_url") as open_browser:
+            status, _ = self.request("POST", path, body, headers)
+        self.assertEqual(status, 401)
+        open_browser.assert_not_called()
+
+    def test_browser_navigation_rejects_non_https_destinations(self):
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.browser.open"
+        ))
+        key = self.pair(offer)
+        path = "/v1/browser/open"
+        body = json.dumps({"url": "http://example.com"}, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(key, "POST", path, body)
+        headers.update({
+            "X-Zexa-Client-ID": "phone-main",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        with patch("zexa.laptop_server.open_browser_url") as open_browser:
+            status, _ = self.request("POST", path, body, headers)
+        self.assertEqual(status, 400)
+        open_browser.assert_not_called()
+
     def test_remote_shell_route_is_not_exposed(self):
         self.pair()
         status, _ = self.request("POST", "/v1/shell", b"{}")
