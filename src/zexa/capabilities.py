@@ -47,9 +47,9 @@ class CapabilitySpec:
             raise ValueError("Capability description must contain 1–500 characters.")
         if not isinstance(self.permission, str) or not self.permission.strip() or len(self.permission) > 120:
             raise ValueError("Capability permission must contain 1–120 characters.")
-        if self.risk_level not in RISK_LEVELS:
+        if not isinstance(self.risk_level, str) or self.risk_level not in RISK_LEVELS:
             raise ValueError("Capability risk must be low, medium, high, or critical.")
-        if self.platform not in _PLATFORMS:
+        if not isinstance(self.platform, str) or self.platform not in _PLATFORMS:
             raise ValueError("Capability platform must be core, android, laptop, browser, or cloud.")
         if not callable(self.handler):
             raise TypeError("Capability handler must be a trusted callable.")
