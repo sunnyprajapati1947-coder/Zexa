@@ -150,6 +150,9 @@ class BridgeServer(
             } catch (_: Exception) {
                 return respond(client, 400, JSONObject().put("error", "Malformed request headers"))
             }
+            if (parsedRequest.version == "HTTP/1.1" && headers["host"].isNullOrBlank()) {
+                return respond(client, 400, JSONObject().put("error", "HTTP/1.1 requires a Host header"))
+            }
             if (headers.containsKey("transfer-encoding")) {
                 return respond(client, 400, JSONObject().put("error", "Transfer-Encoding is not supported"))
             }
