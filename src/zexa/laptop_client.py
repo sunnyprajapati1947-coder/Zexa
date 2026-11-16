@@ -24,7 +24,7 @@ from .laptop_pairing import (
 _FINGERPRINT = re.compile(r"^[0-9a-f]{64}$")
 _CLIENT_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _ALLOWED_PERMISSIONS = {
-    "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write",
+    "laptop.workspace.list", "laptop.workspace.read",
 }
 
 
