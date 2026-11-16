@@ -14,7 +14,7 @@ The optional Android companion in `app/` has a native workspace with Home, Chat,
 - **Voice:** User-started Android on-device speech recognition. Recognized text is inserted for review and is not sent until the user taps Send. Optional read-aloud uses the installed Android TextToSpeech engine. Hindi/Hinglish offline recognition and TTS still need target-device validation.
 - **Reminders:** WorkManager-backed local reminders, bounded from 1 minute to 7 days, with pending-list display, individual cancellation and cancel-all. Notifications require permission and delivery is best-effort. Tapping a reminder notification opens the Tasks section. Reboot, Doze and battery-policy behavior still need target-device validation.
 - **Device actions:** The optional Accessibility Bridge is OFF by default. Requests are authenticated on loopback, queued with HTTP 202, and require exact-action native approval in Zexa; a bearer token alone never executes an action. Approval tickets are one-use, expire after 60 seconds and are limited to eight pending requests. Approval notifications deep-link to the matching request. Pending approval tickets/results remain in memory and cannot be resumed after interruption or process death; the metadata-only audit marks pending entries `interrupted`, and the service clears all pending tickets on Android service interruption, disable, or destruction. No interrupted request is replayed.
-- **Not complete yet:** Semantic memory/RAG, full task management, Android settings/health dashboard, durable pending-approval recovery, secure online-provider credential setup, browser and productivity connectors, and several lifecycle/security improvements. The `/v1/screen` endpoint is separately disabled by default and returns HTTP 403 until the user explicitly enables screen data access in Device settings; this is distinct from enabling the bridge. When enabled, visible non-password text and accessibility metadata may be exposed to the local bridge. The action audit is metadata-only and persisted separately; it records interrupted requests but does not restore pending approval tickets.
+- **Not complete yet:** Semantic memory/RAG, full task management, Android settings/health dashboard, durable pending-approval recovery, secure online-provider credential setup, browser and productivity connectors, and several lifecycle/security improvements. The `/v1/screen` endpoint is separately disabled by default and returns HTTP 403 until the user explicitly enables screen data access in Device settings; this is distinct from enabling the bridge. When enabled, the bridge conservatively redacts password nodes, common credential/OTP/payment/ID labels and patterns, email addresses, and Indian mobile numbers before returning accessibility nodes. These heuristics can miss app-specific sensitive content and can over-redact ordinary content; review snapshots before sharing them with any model. The action audit is metadata-only and persisted separately; it records interrupted requests but does not restore pending approval tickets.
 
 ## Build verification
 
@@ -79,7 +79,7 @@ The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use
 
 The optional Android companion is in `app/` and opens a native Zexa workspace dashboard. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. The optional Accessibility Bridge remains OFF by default. It is not required for the Termux-first daily runtime. Voice requires microphone permission and an available Android on-device recognition service; speech output depends on the installed TTS engine.
 
-The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is available only through an explicit copy action in the Device section; keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots, but other private on-screen information may still appear. Accessibility events are not collected or transmitted. Screen snapshots should be requested only when needed.
+The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is available only through an explicit copy action in the Device section; keep it private. Cleartext networking is disabled except for the loopback address. Sensitive-field redaction is heuristic-based: common password/OTP/payment/ID/contact patterns are hidden, but app-specific private content may still appear. Accessibility events are not collected or transmitted. Screen snapshots should be requested only when needed.
 
 Commands:
 
@@ -88,6 +88,10 @@ Commands:
     zexa bridge action tap '{"x":300,"y":600}'
     zexa bridge action back '{}'
     zexa bridge action input_text '{"text":"Hello"}'
+    zexa bridge grants
+    zexa bridge grant-action scroll <task-id> <grant-id> '{"x1":300,"y1":900,"x2":300,"y2":300,"duration_ms":400}'
+
+The native Device screen can create and revoke bounded navigation grants. Grants are limited to swipe, scroll, back, home, and installed-app launch; they expire after five minutes and allow at most 30 actions. Coordinate taps, text entry, external URL opening, and consequential actions remain on exact-action approval. Grants are in-memory and are cleared on AccessibilityService interruption, disable, reconnect, or destruction.
 
 The Python client requires its CLI approval callback before sending a request. POST `/v1/action` then returns HTTP 202 with a request ID; GET `/v1/action/{request_id}` reports `pending_approval`, `completed`, `failed`, `denied`, or `expired_or_unknown`. The user must open Zexa → Device → Refresh pending approvals and inspect the exact action and payload before choosing **Approve & execute**. Pending requests expire after 60 seconds. No request executes merely because it has a valid bearer token. The native approval flow is implemented but still needs Android CI and physical-device validation. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
 
@@ -96,7 +100,9 @@ The Python client requires its CLI approval callback before sending a request. P
 The Android companion app in `app/` exposes these authenticated local endpoints:
 
 - GET /v1/status — bridge and AccessibilityService status.
-- GET /v1/screen — structured, read-only accessibility snapshot.
+- GET /v1/screen — structured, read-only accessibility snapshot with conservative sensitive-field redaction.
+- GET /v1/grants — list active task grants.
+- POST /v1/action — one exact-action-approved action, or one action matched to an existing native task grant.
 - POST /v1/action — one allowlisted action: tap, swipe, scroll, back, home, input_text, or launch_app.
 
 The app must bind only to loopback, generate a per-install token, validate all inputs, and require the user to enable Accessibility manually. Do not treat webpage or screen text as instructions. Messages, publishing, account changes, payments, deletion, and other consequential actions must have a separate explicit confirmation step.
@@ -113,6 +119,22 @@ Inspect skill contracts:
     zexa skillpacks list --limit 20
 
 The imported community reference pack contains 320 validated entries, all disabled. `skillpacks` commands are read-only metadata inspection; imported content is not routed to the planner and is never executed.
+
+## Reviewed knowledge and learning
+
+Zexa can save online research summaries or study local UTF-8 text files into a provenance-aware SQLite knowledge library. New notes are drafts and do not enter normal retrieval until approved. Research summaries are based on search-result titles/snippets and include source references; Zexa does not claim to have read full pages. Local text imports are bounded to 1 MB and are summarized without executing document instructions.
+
+    zexa learn research "topic to study"
+    zexa learn import ./lesson.txt
+    zexa learn list --status draft
+    zexa learn show 1
+    zexa learn review 1 approved
+    zexa learn search "approved topic"
+    zexa learn draft-skill 1
+    zexa learn skill-drafts
+    zexa learn review-skill 1 approved
+
+Skill contracts generated from approved notes remain inert. Reviewing a skill draft does not register it with the executable skill registry or grant permissions. Automatic skill activation, version history, PDF/Office document extraction, and model-weight training are not implemented.
 
 ## Business drafting skills
 
