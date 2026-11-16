@@ -84,6 +84,11 @@ class LaptopPairingTests(unittest.TestCase):
         self.assertFalse(self.authority.verify_request(
             "phone-main", "GET", "/v1/workspace/read", body, headers
         ))
+        padded_nonce = dict(headers)
+        padded_nonce["X-Zexa-Nonce"] += "=="
+        self.assertFalse(self.authority.verify_request(
+            "phone-main", "GET", "/v1/workspace/read", body, padded_nonce
+        ))
         changed = dict(headers)
         changed["X-Zexa-Nonce"] = encoded(b"m" * 24)
         self.assertFalse(self.authority.verify_request(
