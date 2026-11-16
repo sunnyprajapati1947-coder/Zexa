@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 import math
 import re
+from urllib.parse import urlsplit
 from typing import Any
 
 from .capabilities import CapabilitySpec
@@ -11,7 +12,7 @@ from .hand import AccessibilityBridge
 
 
 ANDROID_ACTIONS = frozenset({
-    "tap", "swipe", "scroll", "back", "home", "input_text", "launch_app",
+    "tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url",
 })
 _PACKAGE_NAME = re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+")
 _COORDINATE_LIMIT = 10_000.0
@@ -30,6 +31,7 @@ def _validate_action_payload(action: str, payload: dict[str, Any]) -> None:
         "home": (set(), set()),
         "input_text": ({"text"}, set()),
         "launch_app": ({"package_name"}, set()),
+        "open_url": ({"url"}, set()),
     }
     required, optional = contracts[action]
     keys = set(payload)
@@ -64,6 +66,26 @@ def _validate_action_payload(action: str, payload: dict[str, Any]) -> None:
         value = payload["package_name"]
         if not isinstance(value, str) or not _PACKAGE_NAME.fullmatch(value):
             raise ValueError("Android launch_app requires a valid package name.")
+
+    if action == "open_url":
+        value = payload["url"]
+        if not isinstance(value, str) or not value or len(value) > 2_048:
+            raise ValueError("Android open_url requires a URL of at most 2048 characters.")
+        if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError("Android open_url does not allow whitespace or control characters.")
+        try:
+            parsed = urlsplit(value)
+            valid = (
+                parsed.scheme.lower() in {"http", "https"}
+                and bool(parsed.hostname)
+                and parsed.username is None
+                and parsed.password is None
+                and (parsed.port is None or 1 <= parsed.port <= 65_535)
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("Android open_url requires a valid HTTP(S) URL without embedded credentials.")
 
 
 def build_android_capabilities(
