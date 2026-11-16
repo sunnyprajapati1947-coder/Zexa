@@ -20,6 +20,7 @@ import ssl
 from urllib.parse import parse_qs, urlsplit
 
 from .audit import AuditLog
+from .laptop_apps import LaptopAppRegistry
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_pairing import LaptopPairingAuthority, secure_owner_only
 
@@ -100,10 +101,11 @@ class _LaptopHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, handler, workspace, authority, audit):
+    def __init__(self, address, handler, workspace, authority, audit, app_registry=None):
         self.workspace = workspace
         self.authority = authority
         self.audit = audit
+        self.app_registry = app_registry
         self._worker_slots = threading.BoundedSemaphore(8)
         super().__init__(address, handler)
 
@@ -251,6 +253,27 @@ def make_laptop_handler():
             return self._send(404, {"error": "not_found"})
 
         def do_POST(self):
+            if self.path == "/v1/apps/launch":
+                if self.server.app_registry is None:
+                    return self._send(404, {"error": "app_launch_not_enabled"})
+                try:
+                    payload = self._read_json(limit=4096)
+                    if set(payload) != {"app_id"}:
+                        raise ValueError("Invalid app launch fields.")
+                    if not self._authorized("laptop.apps.launch", self._last_body):
+                        return
+                    result = self.server.app_registry.launch(payload["app_id"])
+                    self._audit(
+                        "laptop_app_launch", self.headers.get("X-Zexa-Client-ID", ""),
+                        "app.launch", "spawned", {"app_id": result["app_id"]},
+                    )
+                    return self._send(200, {"ok": True, "result": result})
+                except KeyError:
+                    return self._send(404, {"error": "app_not_allowlisted"})
+                except PermissionError:
+                    return self._send(403, {"error": "app_launch_scope_denied"})
+                except (ValueError, RuntimeError) as exc:
+                    return self._send(400, {"error": str(exc)[:200]})
             if self.path == "/v1/workspace/write":
                 try:
                     payload = self._read_json(limit=MAX_WRITE_BODY)
@@ -351,6 +374,7 @@ class LaptopAgentServer:
         authority: LaptopPairingAuthority | None = None,
         audit_path: str | Path | None = None,
         pairing_path: str | Path | None = None,
+        app_registry: LaptopAppRegistry | None = None,
     ) -> None:
         host = _private_ipv4(host)
         if type(port) is not int or not 1024 <= port <= 65535:
@@ -381,8 +405,12 @@ class LaptopAgentServer:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(str(cert), str(key))
+        if app_registry is not None and not isinstance(app_registry, LaptopAppRegistry):
+            raise TypeError("A validated LaptopAppRegistry is required.")
+        self.app_registry = app_registry
         self._server = _LaptopHTTPServer(
-            (host, port), make_laptop_handler(), workspace, self.authority, self.audit
+            (host, port), make_laptop_handler(), workspace, self.authority, self.audit,
+            app_registry,
         )
         self._server.socket = context.wrap_socket(self._server.socket, server_side=True)
 
