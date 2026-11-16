@@ -28,12 +28,12 @@ The Human Hand is the execution layer. It must not be confused with the language
 
 ### A. Android phone hand
 
-**Implemented foundation on this branch:** opt-in AccessibilityService, authenticated loopback bridge, read-only screen snapshots, allowlisted tap/swipe/scroll/back/home/text-entry/app-launch/validated-HTTP(S)-URL requests, native exact-action approval, and a bounded task-grant path for eligible navigation actions. The Android Device screen can create, list, copy the ID for, and revoke task grants; authenticated bridge clients can list active grants and execute eligible actions within a matching task/device/action scope. Python exposes task_grants() and perform_granted(). This code is awaiting the current CI run and target-device acceptance testing; it is not yet a claim of full phone automation.
+**Implemented foundation on this branch:** opt-in AccessibilityService, authenticated loopback bridge, read-only screen snapshots with conservative password/OTP/payment/ID/contact redaction, allowlisted tap/swipe/scroll/back/home/text-entry/app-launch/validated-HTTP(S)-URL requests, native exact-action approval, and a bounded task-grant path for eligible navigation actions. The Android Device screen can create, list, copy the ID for, and revoke task grants; authenticated bridge clients can list active grants and execute eligible actions within a matching task/device/action scope. Python exposes task_grants() and perform_granted(). This code is awaiting the current CI run and target-device acceptance testing; it is not yet a claim of full phone automation.
 
 Planned capability groups:
 
 - App navigation: launch an installed app and navigate supported visible UI controls.
-- Screen understanding: read a user-requested accessibility snapshot; redact password, OTP, payment, and other sensitive fields before optional model processing.
+- Screen understanding: read a user-requested accessibility snapshot. The Android bridge now redacts password/credential labels, likely OTP values, payment-card patterns, common ID patterns, email addresses, and Indian mobile numbers before returning nodes. These are conservative heuristics, not a guarantee that every sensitive field on every app is detected; screen access remains opt-in and must be manually reviewed before use with a model.
 - Text and forms: prepare text, fill approved fields, show a preview, and require a fresh confirmation before submission.
 - Files and media: use Android document/provider APIs and Termux file tools within user-approved folders; never assume access to every app's private storage.
 - Device utilities: notifications, reminders, clipboard, speech input/output, and supported system intents through Termux:API or native APIs.
