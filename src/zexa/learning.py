@@ -303,6 +303,13 @@ class LearningStore:
                 "UPDATE knowledge_notes SET status=?, updated_at=? WHERE note_id=?",
                 (decision, now, note_id),
             )
+            if cursor.rowcount and decision != "approved":
+                # A skill cannot retain approval after its source note is withdrawn.
+                db.execute(
+                    "UPDATE skill_drafts SET status='review_required', updated_at=? "
+                    "WHERE note_id=? AND status='approved'",
+                    (now, note_id),
+                )
             return cursor.rowcount > 0
 
     def delete_note(self, note_id: int) -> bool:
@@ -317,10 +324,15 @@ class LearningStore:
             raise ValueError("Learned skill drafts must remain disabled.")
         if not _SKILL_NAME.fullmatch(skill.name):
             raise ValueError("Learned skill name must be a lowercase identifier.")
-        if self.get_note(note_id) is None:
-            raise KeyError("Knowledge note does not exist.")
         now = self._now()
         with closing(self._connect()) as db, db:
+            note = db.execute(
+                "SELECT status FROM knowledge_notes WHERE note_id=?", (note_id,)
+            ).fetchone()
+            if note is None:
+                raise KeyError("Knowledge note does not exist.")
+            if note["status"] != "approved":
+                raise PermissionError("A skill can be drafted only from an approved knowledge note.")
             cursor = db.execute(
                 """INSERT INTO skill_drafts
                    (note_id, name, description, system_instruction, input_schema_json,
@@ -375,6 +387,18 @@ class LearningStore:
             raise ValueError("Skill draft decision must be approved or rejected.")
         now = self._now()
         with closing(self._connect()) as db, db:
+            if decision == "approved":
+                row = db.execute(
+                    """SELECT notes.status AS note_status
+                       FROM skill_drafts AS drafts
+                       JOIN knowledge_notes AS notes ON notes.note_id=drafts.note_id
+                       WHERE drafts.draft_id=?""",
+                    (draft_id,),
+                ).fetchone()
+                if row is None:
+                    return False
+                if row["note_status"] != "approved":
+                    raise PermissionError("A skill can be approved only while its source note is approved.")
             cursor = db.execute(
                 "UPDATE skill_drafts SET status=?, updated_at=? WHERE draft_id=?",
                 (decision, now, draft_id),
