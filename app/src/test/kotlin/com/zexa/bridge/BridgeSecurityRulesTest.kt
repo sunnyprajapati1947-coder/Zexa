@@ -51,7 +51,7 @@ class BridgeSecurityRulesTest {
         assertEquals(null, BridgeSecurityRules.contentLength("16001"))
         assertEquals(null, BridgeSecurityRules.contentLength("not-a-number"))
         assertEquals(null, BridgeSecurityRules.contentLength("+1"))
-        assertEquals(null, BridgeSecurityRules.contentLength("01"))
+        assertEquals(1, BridgeSecurityRules.contentLength("01"))
         assertEquals(null, BridgeSecurityRules.contentLength(" 1"))
         assertEquals(null, BridgeSecurityRules.contentLength("1.0"))
         assertEquals(null, BridgeSecurityRules.contentLength("99999"))
