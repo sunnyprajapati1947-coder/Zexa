@@ -192,7 +192,7 @@ class LearningServiceTests(unittest.TestCase):
         self.assertEqual(note.title, "Study Guide")
         self.assertEqual(note.content_sha256, "a" * 64)
         self.assertEqual(note.sources[0]["url"], "https://example.com/guide")
-        self.assertIn("untrusted data", brain.messages[0]["content"])
+        self.assertIn("untrusted data", brain.messages[0][0]["content"])
 
     def test_online_research_saves_source_provenance_as_draft(self):
         brain = FakeBrain()
