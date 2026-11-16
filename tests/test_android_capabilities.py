@@ -51,7 +51,7 @@ class AndroidCapabilityTests(unittest.TestCase):
         specs = build_android_capabilities(bridge, ["back"])
         policy = PermissionPolicy({"android.back"})
         controller = CapabilityController(
-            policy, ApprovalManager(), AuditLog(":memory:"), specs,
+            policy, ApprovalManager(), self.audit, specs,
         )
         payload = {"payload": {}}
         approval = controller.issue_approval(
