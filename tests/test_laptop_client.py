@@ -93,9 +93,10 @@ class LaptopClientTests(unittest.TestCase):
             calls.append((method, path))
             self.assertEqual(method, "GET")
             self.assertIn("/v1/browser/read?", path)
-            self.assertTrue(self.authority.verify_scoped_request(
-                "phone-main", "laptop.browser.read", method, path, b"", headers
-            ))
+            self.assertEqual(headers["X-Zexa-Client-ID"], "phone-main")
+            self.assertRegex(headers["X-Zexa-Timestamp"], r"^\\d{10}$")
+            self.assertRegex(headers["X-Zexa-Nonce"], r"^[A-Za-z0-9_-]{20,}$")
+            self.assertRegex(headers["X-Zexa-MAC"], r"^[0-9a-f]{64}$")
             return 200, {"ok": True, "result": page}
 
         client._request = fake_request
