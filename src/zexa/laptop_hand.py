@@ -204,6 +204,7 @@ def build_laptop_capabilities(workspace: LaptopWorkspace) -> dict[str, Capabilit
             platform="laptop",
             input_schema={"relative_path": "string"},
             output_schema={"relative_path": "string", "content": "string", "sha256": "string", "size_bytes": "integer"},
+            max_output_chars=MAX_READ_BYTES + 2048,
             handler=lambda data: workspace.read_text(data["relative_path"]),
         ),
         "laptop.workspace.write": CapabilitySpec(
@@ -214,6 +215,7 @@ def build_laptop_capabilities(workspace: LaptopWorkspace) -> dict[str, Capabilit
             platform="laptop",
             input_schema={"relative_path": "string", "content": "string", "overwrite": "boolean"},
             output_schema={"relative_path": "string", "written": "boolean", "sha256": "string", "size_bytes": "integer"},
+            max_input_chars=MAX_WRITE_CHARS + 1024,
             handler=lambda data: workspace.write_text(
                 data["relative_path"], data["content"], data["overwrite"]
             ),
