@@ -47,10 +47,13 @@ class ActionAuditStoreTest {
 
     @Test
     fun taskGrantCreationAndRevocationAreAudited() {
-        store.append(ActionAuditEntry("grant-123", "task_grant", "created", 100L))
-        store.append(ActionAuditEntry("grant-123", "task_grant", "revoked", 200L))
+        store.append(ActionAuditEntry("grant-created-123", "task_grant", "created", 100L))
+        store.append(ActionAuditEntry("grant-revoked-123", "task_grant", "revoked", 200L))
         assertEquals(
-            listOf(ActionAuditEntry("grant-123", "task_grant", "revoked", 200L)),
+            listOf(
+                ActionAuditEntry("grant-revoked-123", "task_grant", "revoked", 200L),
+                ActionAuditEntry("grant-created-123", "task_grant", "created", 100L),
+            ),
             store.list(),
         )
     }
