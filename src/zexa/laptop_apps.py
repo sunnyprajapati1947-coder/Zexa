@@ -6,6 +6,9 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import stat
+
+from .laptop_pairing import secure_owner_only
 
 
 _APP_ID = re.compile(r"^[a-z][a-z0-9._-]{1,63}$")
@@ -19,11 +22,15 @@ class LaptopAppRegistry:
     def __init__(self, manifest_path: str | Path) -> None:
         self.manifest_path = Path(manifest_path).expanduser()
         if (
-            self.manifest_path.is_symlink()
+            self.manifest_path.parent.is_symlink()
+            or not self.manifest_path.parent.is_dir()
+            or self.manifest_path.is_symlink()
             or not self.manifest_path.is_file()
             or self.manifest_path.stat().st_size > _MAX_MANIFEST_BYTES
         ):
-            raise PermissionError("Laptop app manifest must be a bounded regular file, not a symlink.")
+            raise PermissionError("Laptop app manifest path must be a bounded regular file, not a symlink.")
+        secure_owner_only(self.manifest_path.parent, directory=True)
+        secure_owner_only(self.manifest_path)
         try:
             data = json.loads(self.manifest_path.read_text(encoding="utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -53,6 +60,9 @@ class LaptopAppRegistry:
                 or not executable_path.is_file()
             ):
                 raise ValueError("Approved app executable must be an existing absolute regular file, not a symlink.")
+            executable_stat = executable_path.stat()
+            if os.name != "nt" and stat.S_IMODE(executable_stat.st_mode) & 0o022:
+                raise PermissionError("Approved app executable must not be group- or world-writable.")
             if (
                 not isinstance(arguments, list) or len(arguments) > 16
                 or any(
