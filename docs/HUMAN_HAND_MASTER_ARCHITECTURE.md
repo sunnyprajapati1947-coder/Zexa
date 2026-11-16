@@ -172,7 +172,7 @@ A feature is not "done" because it appears in a catalogue or UI. It must have:
 
 ## 10. Current implementation boundary
 
-At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. A TLS-pinned, private-IPv4 laptop workspace channel now supports explicit pairing, scoped listing/reading, and optional exact-confirmed text writes. General browser automation, multi-page crawling, production app connectors, arbitrary laptop process control, remote app discovery, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
+At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. A TLS-pinned, private-IPv4 laptop Human Hand channel now supports explicit pairing, scoped workspace listing/reading, optional exact-confirmed text writes, and owner-allowlisted app launch. General browser automation, multi-page crawling, production app connectors, arbitrary laptop process control, remote app discovery, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
 
 ### Laptop workspace and remote pairing foundation
 - LaptopWorkspace constrains file listing, UTF-8 reads, and writes to one existing user-selected root directory.
@@ -182,7 +182,8 @@ At the current branch, Android Accessibility and Termux integrations exist as fo
 - LaptopAgentServer binds only to a private IPv4 address and requires TLS 1.2+ with a locally displayed SHA-256 certificate fingerprint. Pairing uses a 12-digit one-time code, PBKDF2/HMAC challenge proof, explicit capability scopes, and replay-resistant request MACs with timestamps and nonces.
 - Remote pairing defaults to workspace list/read. The laptop owner may opt into workspace writes when starting the server; the phone CLI previews source, destination, character count, and SHA-256 and requires an exact path confirmation for every write, with a distinct overwrite confirmation.
 - Phone-side session credentials are stored with owner-restricted permissions. Laptop-side paired-client keys and replay nonces persist in a restricted SQLite database (default ~/.zexa/laptop-pairings.sqlite3), survive server restarts, and are removed when a client revokes pairing. Unix uses mode 0600/0700; Windows applies an ACL for the current user plus SYSTEM/Administrators and fails closed if icacls is unavailable.
-- A metadata-only SQLite audit trail records pairing, workspace list/read/write, and revocation events without storing file contents or authentication secrets.
+- LaptopAppRegistry loads a bounded owner-only manifest of absolute executable paths and fixed argument arrays; launch uses shell=False, requires the separate laptop.apps.launch pairing scope, and is confirmed with an exact app ID on the phone.
+- A metadata-only SQLite audit trail records pairing, workspace list/read/write, app launch, and revocation events without storing file contents or authentication secrets.
 - Remote deletion, arbitrary shell/process execution, arbitrary laptop process control, remote app discovery, and general browser automation are not exposed. Optional app launch is limited to an owner-authored fixed executable/argument manifest, requires a separate pairing permission, and requires exact confirmation on the phone.
 
 
