@@ -54,16 +54,17 @@ class LaptopServerTests(unittest.TestCase):
         finally:
             connection.close()
 
-    def pair(self):
+    def pair(self, offer=None):
+        offer = offer or self.offer
         nonce = encoded(bytes(range(32)))
         proof, session_key = LaptopPairingAuthority.make_client_proof(
-            self.offer.pairing_code,
-            self.offer.salt_b64,
-            self.offer.server_nonce_b64,
+            offer.pairing_code,
+            offer.salt_b64,
+            offer.server_nonce_b64,
             "phone-main",
             nonce,
-            iterations=self.offer.iterations,
-            permissions=self.offer.permissions,
+            iterations=offer.iterations,
+            permissions=offer.permissions,
         )
         body = json.dumps({
             "client_id": "phone-main",
@@ -106,6 +107,54 @@ class LaptopServerTests(unittest.TestCase):
         status, result = self.request("GET", path)
         self.assertEqual(status, 401)
         self.assertEqual(result["error"], "unauthorized_or_scope_denied")
+
+    def test_remote_write_requires_opt_in_pairing_scope(self):
+        key = self.pair()
+        path = "/v1/workspace/write"
+        body = json.dumps({
+            "relative_path": "new.md", "content": "new content", "overwrite": False
+        }, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(key, "POST", path, body)
+        headers.update({
+            "X-Zexa-Client-ID": "phone-main",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        status, _ = self.request("POST", path, body, headers)
+        self.assertEqual(status, 401)
+        self.assertFalse((self.root / "new.md").exists())
+
+    def test_explicitly_paired_write_scope_can_create_and_replace_workspace_text(self):
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write"
+        ))
+        key = self.pair(offer)
+        path = "/v1/workspace/write"
+        body = json.dumps({
+            "relative_path": "new.md", "content": "first", "overwrite": False
+        }, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(key, "POST", path, body)
+        headers.update({
+            "X-Zexa-Client-ID": "phone-main",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        status, result = self.request("POST", path, body, headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(result["result"]["written"])
+        self.assertEqual((self.root / "new.md").read_text(encoding="utf-8"), "first")
+
+        body = json.dumps({
+            "relative_path": "new.md", "content": "second", "overwrite": False
+        }, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(key, "POST", path, body)
+        headers.update({
+            "X-Zexa-Client-ID": "phone-main",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        status, _ = self.request("POST", path, body, headers)
+        self.assertEqual(status, 409)
 
     def test_remote_write_and_shell_routes_are_not_exposed(self):
         self.pair()
