@@ -24,6 +24,7 @@ from .laptop_pairing import LaptopPairingAuthority
 
 
 MAX_PAIR_BODY = 16_384
+MAX_WRITE_BODY = MAX_WRITE_CHARS * 4 + 4096
 
 
 def certificate_fingerprint(cert_file: str | Path) -> str:
@@ -229,7 +230,7 @@ def make_laptop_handler():
         def do_POST(self):
             if self.path == "/v1/workspace/write":
                 try:
-                    payload = self._read_json(limit=MAX_WRITE_CHARS + 4096)
+                    payload = self._read_json(limit=MAX_WRITE_BODY)
                     if set(payload) != {"relative_path", "content", "overwrite"}:
                         raise ValueError("Invalid workspace write fields.")
                     if not self._authorized("laptop.workspace.write", self._last_body):
