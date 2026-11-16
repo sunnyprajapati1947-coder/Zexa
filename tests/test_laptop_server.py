@@ -299,6 +299,52 @@ class LaptopServerTests(unittest.TestCase):
         self.assertEqual(status, 400)
         open_browser.assert_not_called()
 
+    def test_scoped_public_page_read_returns_text_and_audits_only_metadata(self):
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.browser.read"
+        ))
+        key = self.pair(offer)
+        path = "/v1/browser/read?" + urlencode({"url": "https://example.com/article"})
+        page = {
+            "title": "Example article",
+            "url": "https://example.com/article",
+            "text": "Public article text with an instruction-like phrase.",
+            "content_sha256": "a" * 64,
+        }
+        with patch("zexa.laptop_server.read_public_page", return_value=page) as read_page:
+            status, result = self.request("GET", path, headers=self.signed(key, "GET", path))
+        self.assertEqual(status, 200)
+        self.assertEqual(result["result"], page)
+        read_page.assert_called_once_with("https://example.com/article")
+        event = next(
+            item for item in self.server.audit.recent(10)
+            if item["event_type"] == "laptop_browser_read"
+        )
+        self.assertEqual(event["details"], {
+            "host": "example.com", "size_chars": len(page["text"]),
+            "content_sha256": "a" * 64,
+        })
+        self.assertNotIn(page["text"], json.dumps(event["details"]))
+
+    def test_public_page_read_requires_separate_opt_in_scope(self):
+        key = self.pair()
+        path = "/v1/browser/read?" + urlencode({"url": "https://example.com"})
+        with patch("zexa.laptop_server.read_public_page") as read_page:
+            status, _ = self.request("GET", path, headers=self.signed(key, "GET", path))
+        self.assertEqual(status, 401)
+        read_page.assert_not_called()
+
+    def test_public_page_read_rejects_ambiguous_query(self):
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.browser.read"
+        ))
+        key = self.pair(offer)
+        path = "/v1/browser/read?url=https%3A%2F%2Fexample.com&extra=1"
+        with patch("zexa.laptop_server.read_public_page") as read_page:
+            status, _ = self.request("GET", path, headers=self.signed(key, "GET", path))
+        self.assertEqual(status, 400)
+        read_page.assert_not_called()
+
     def test_remote_shell_route_is_not_exposed(self):
         self.pair()
         status, _ = self.request("POST", "/v1/shell", b"{}")
