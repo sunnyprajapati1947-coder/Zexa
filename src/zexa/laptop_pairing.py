@@ -61,6 +61,7 @@ class PairingOffer:
     salt_b64: str
     server_nonce_b64: str
     expires_in_seconds: int
+    iterations: int
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,7 @@ class LaptopPairingAuthority:
                 salt_b64=_b64encode(salt),
                 server_nonce_b64=_b64encode(server_nonce),
                 expires_in_seconds=self.ttl_seconds,
+                iterations=self.iterations,
             )
 
     @staticmethod
