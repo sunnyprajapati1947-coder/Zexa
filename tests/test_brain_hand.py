@@ -88,14 +88,22 @@ class AccessibilityBridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "allowlisted"):
             bridge.perform("run_shell", {"command": "whoami"}, lambda *_: True)
 
-    def test_approved_action_uses_fixed_endpoint(self):
+    def test_approved_action_uses_fixed_endpoint_and_waits_for_native_approval(self):
         bridge = AccessibilityBridge("t" * 32)
-        with patch.object(bridge, "_request", return_value={"ok": True}) as request:
+        responses = iter([
+            {"ok": True, "status": "pending_approval", "request_id": "native-request"},
+            {"ok": True, "status": "completed", "request_id": "native-request"},
+        ])
+        with patch.object(bridge, "_request", side_effect=lambda *args: next(responses)) as request:
             result = bridge.perform("back", {}, lambda *_: True)
-        self.assertEqual(result, {"ok": True})
-        request.assert_called_once_with(
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(result["ok"])
+        self.assertEqual(request.call_args_list[0].args, (
             "POST", "/v1/action", {"action": "back", "payload": {}}
-        )
+        ))
+        self.assertEqual(request.call_args_list[1].args, (
+            "GET", "/v1/action/native-request"
+        ))
 
 
 if __name__ == "__main__":
