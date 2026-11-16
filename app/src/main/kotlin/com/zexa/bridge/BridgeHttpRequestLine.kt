@@ -7,7 +7,7 @@ package com.zexa.bridge
 data class BridgeHttpRequestLine(val method: String, val target: String, val version: String) {
     companion object {
         private val methodPattern = Regex("^[A-Z]{1,16}$")
-        private val targetPattern = Regex("^/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]{0,2047}$")
+        private val targetPattern = Regex("^/[A-Za-z0-9._~!\$&'()*+,;=:@%/?-]{0,2047}$")
 
         fun parse(line: String): BridgeHttpRequestLine? {
             if (line.length !in 14..2100 || line.any { it.code < 0x20 || it.code == 0x7f }) return null
