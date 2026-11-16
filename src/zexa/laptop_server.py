@@ -342,7 +342,7 @@ def make_laptop_handler():
 
 
 class LaptopAgentServer:
-    """Explicitly started TLS server exposing read-only workspace capabilities."""
+    """Explicitly started TLS server exposing scoped workspace capabilities."""
 
     def __init__(
         self,
