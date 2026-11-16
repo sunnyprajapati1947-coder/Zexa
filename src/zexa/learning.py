@@ -382,6 +382,40 @@ class LearningStore:
             for row in rows
         ]
 
+    def approved_skills(self, limit: int = 100) -> list[Skill]:
+        """Load reviewed declarative skills only while their source notes remain approved.
+
+        Returned skills are prompt-only contracts. Application code must still
+        provide trusted handlers; learned text is never imported as Python code.
+        """
+        if not 1 <= limit <= 500:
+            raise ValueError("Approved skill limit must be between 1 and 500.")
+        with closing(self._connect()) as db:
+            rows = db.execute(
+                """SELECT drafts.* FROM skill_drafts AS drafts
+                   JOIN knowledge_notes AS notes ON notes.note_id=drafts.note_id
+                   WHERE drafts.status='approved' AND notes.status='approved'
+                   ORDER BY drafts.updated_at DESC, drafts.draft_id DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        skills = []
+        for row in rows:
+            skill = Skill(
+                name=row["name"],
+                description=row["description"],
+                system_instruction=row["system_instruction"],
+                input_schema=json.loads(row["input_schema_json"]),
+                output_schema=json.loads(row["output_schema_json"]),
+                required_permissions=tuple(json.loads(row["required_permissions_json"])),
+                dependencies=tuple(json.loads(row["dependencies_json"])),
+                timeout_seconds=int(row["timeout_seconds"]),
+                resource_budget=json.loads(row["resource_budget_json"]),
+                risk_level=row["risk_level"],
+                enabled=True,
+            )
+            skills.append(skill)
+        return skills
+
     def review_skill_draft(self, draft_id: int, decision: str) -> bool:
         if decision not in {"approved", "rejected"}:
             raise ValueError("Skill draft decision must be approved or rejected.")
