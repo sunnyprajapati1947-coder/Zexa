@@ -11,7 +11,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
-from .android_capabilities import build_android_capabilities
+from .android_capabilities import ANDROID_ACTIONS, build_android_capabilities
 from .capabilities import CapabilityController
 from .agents import AgentOrchestrator
 from .config import get_config, get_groq_config, get_xai_config, load_env_file
@@ -153,7 +153,7 @@ def main() -> None:
     bridge_sub.add_parser("status", help="Read bridge status")
     bridge_sub.add_parser("screen", help="Read the current accessibility snapshot")
     bridge_action = bridge_sub.add_parser("action", help="Perform one approved Android action")
-    bridge_action.add_argument("action", choices=["tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url"])
+    bridge_action.add_argument("action", choices=sorted(ANDROID_ACTIONS))
     bridge_action.add_argument("payload", help="Action payload as a JSON object")
 
     args = parser.parse_args()
@@ -377,7 +377,7 @@ def main() -> None:
                     for item in os.getenv("ZEXA_ALLOWED_ANDROID_ACTIONS", "").split(",")
                     if item.strip()
                 }
-                known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url"}
+                known_actions = set(ANDROID_ACTIONS)
                 if not allowed_actions <= known_actions:
                     raise ValueError("ZEXA_ALLOWED_ANDROID_ACTIONS contains an unknown action.")
                 action_name = f"android.{args.action}"
