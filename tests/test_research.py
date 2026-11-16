@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from zexa.research import DuckDuckGoSearch, SearchResult, _canonical_result_url, summarize_research
+from zexa.research import (\n    DuckDuckGoSearch, SearchResult, _PageTextParser, _canonical_result_url,\n    _validate_public_https_url, fetch_public_page, summarize_research,\n)
 
 
 SAMPLE_HTML = """
@@ -59,6 +59,109 @@ class ResearchTests(unittest.TestCase):
             DuckDuckGoSearch().search(" ")
         with self.assertRaises(ValueError):
             DuckDuckGoSearch().search("hello", 11)
+
+    def test_public_page_url_rejects_local_credentials_and_nonstandard_ports(self):
+        for url in (
+            "http://example.com/page",
+            "https://user:pass@example.com/page",
+            "https://localhost/page",
+            "https://127.0.0.1/page",
+            "https://example.com:8443/page",
+        ):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                _validate_public_https_url(url)
+
+    def test_page_parser_omits_scripts_and_extracts_title_and_text(self):
+        parser = _PageTextParser()
+        parser.feed(
+            "<html><head><title>Study Guide</title><script>ignore this</script></head>"
+            "<body><h1>Photosynthesis</h1><p>Plants use sunlight.</p>"
+            "<style>hidden style</style></body></html>"
+        )
+        title, text = parser.result()
+        self.assertEqual(title, "Study Guide")
+        self.assertIn("Photosynthesis", text)
+        self.assertIn("Plants use sunlight.", text)
+        self.assertNotIn("ignore this", text)
+        self.assertNotIn("hidden style", text)
+
+    def test_fetch_public_page_reads_bounded_https_html(self):
+        class FakeSocket:
+            def __init__(self):
+                self.request = b""
+                self.closed = False
+
+            def sendall(self, data):
+                self.request = data
+
+            def close(self):
+                self.closed = True
+
+        class Response:
+            status = 200
+
+            def __init__(self):
+                self.closed = False
+
+            def begin(self):
+                return None
+
+            def getheader(self, name, default=""):
+                return {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Location": "",
+                }.get(name, default)
+
+            def read(self, limit):
+                return b"<title>Public Guide</title><p>Safe learning content.</p>"[:limit]
+
+            def close(self):
+                self.closed = True
+
+        connection = FakeSocket()
+        response = Response()
+        with (
+            patch("zexa.research._connect_public_https", return_value=connection),
+            patch("zexa.research.http.client.HTTPResponse", return_value=response),
+        ):
+            page = fetch_public_page("https://example.com/guide")
+        self.assertEqual(page.title, "Public Guide")
+        self.assertIn("Safe learning content.", page.text)
+        self.assertEqual(len(page.content_sha256), 64)
+        self.assertIn(b"GET /guide HTTP/1.1", connection.request)
+        self.assertTrue(connection.closed)
+        self.assertTrue(response.closed)
+
+    def test_fetch_public_page_revalidates_redirect_target(self):
+        class FakeSocket:
+            def sendall(self, data):
+                return None
+
+            def close(self):
+                return None
+
+        class Redirect:
+            status = 302
+
+            def begin(self):
+                return None
+
+            def getheader(self, name, default=""):
+                return "https://127.0.0.1/private" if name == "Location" else default
+
+            def read(self, limit):
+                return b""
+
+            def close(self):
+                return None
+
+        with (
+            patch("zexa.research._connect_public_https", return_value=FakeSocket()) as connect,
+            patch("zexa.research.http.client.HTTPResponse", return_value=Redirect()),
+            self.assertRaises(ValueError),
+        ):
+            fetch_public_page("https://example.com/redirect")
+        connect.assert_called_once()
 
     def test_summary_uses_numbered_sources_and_untrusted_content_warning(self):
         brain = FakeBrain()
