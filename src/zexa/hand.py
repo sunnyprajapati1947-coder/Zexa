@@ -22,6 +22,7 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 
 
 _ALLOWED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
+_REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 
 class AccessibilityBridge:
@@ -87,18 +88,23 @@ class AccessibilityBridge:
         payload: dict,
         approve: Callable[[str, dict], bool] | None = None,
     ) -> dict:
-        """Queue one allowlisted action after caller approval and wait for native app approval."""
+        """Queue one allowlisted action and require exact native approval before success."""
         if action not in _ALLOWED_ACTIONS:
             raise ValueError("Action is not allowlisted.")
         if not isinstance(payload, dict):
             raise ValueError("Action payload must be an object.")
         if approve is None or approve(action, dict(payload)) is not True:
             raise PermissionError("Android action was not explicitly approved.")
+
         queued = self._request("POST", "/v1/action", {"action": action, "payload": payload})
-        if queued.get("status") != "pending_approval":
-            return queued
+        if queued.get("status") != "pending_approval" or queued.get("ok") is not True:
+            # A successful action must never be accepted directly from the
+            # enqueue response: the native app's separate approval screen is
+            # the authority for executing device actions.
+            raise RuntimeError("Android bridge did not create a valid native approval request.")
+
         request_id = queued.get("request_id")
-        if not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9-]{1,64}", request_id):
+        if not isinstance(request_id, str) or not _REQUEST_ID_PATTERN.fullmatch(request_id):
             raise RuntimeError("Android bridge returned an invalid approval request ID.")
 
         # The Android app must be open and the user must approve the exact
@@ -108,15 +114,19 @@ class AccessibilityBridge:
         while time.monotonic() < deadline:
             result = self._request("GET", "/v1/action/" + request_id)
             status = result.get("status")
+            if result.get("request_id") != request_id:
+                raise RuntimeError("Android bridge returned a result for a different approval request.")
             if status == "completed":
+                if result.get("ok") is not True:
+                    raise RuntimeError("Android bridge reported completion without a successful action result.")
                 return result
-            if status in {"denied", "failed", "expired_or_unknown"}:
-                if status == "denied":
-                    raise PermissionError("Android user denied the device action.")
-                if status == "expired_or_unknown":
-                    raise TimeoutError("Android action approval expired or is no longer available.")
-                return result
-            if status != "pending_approval":
-                raise RuntimeError("Android bridge returned an unknown action status.")
+            if status == "denied":
+                raise PermissionError("Android user denied the device action.")
+            if status == "expired_or_unknown":
+                raise TimeoutError("Android action approval expired or is no longer available.")
+            if status == "failed":
+                raise RuntimeError("Android device action failed; no success was reported.")
+            if status != "pending_approval" or result.get("ok") is not True:
+                raise RuntimeError("Android bridge returned an invalid approval status.")
             time.sleep(0.5)
         raise TimeoutError("Timed out waiting for native Android action approval.")
