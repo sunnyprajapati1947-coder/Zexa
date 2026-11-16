@@ -87,6 +87,9 @@ class BridgeServer(
             } finally {
                 synchronized(this) {
                     if (generation == myGeneration && server === socketServer) {
+                        // An unexpected accept-loop exit is also a session boundary:
+                        // no client worker may outlive the server session.
+                        clientPool.closeAll()
                         ready = false
                         running = false
                         server = null
