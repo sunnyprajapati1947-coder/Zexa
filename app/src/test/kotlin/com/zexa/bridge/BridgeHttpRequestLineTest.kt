@@ -15,10 +15,9 @@ class BridgeHttpRequestLineTest {
 
     @Test
     fun acceptsQueryStringsButNotFragmentsOrAbsoluteTargets() {
-        assertEquals(
-            "/v1/action/id?view=compact",
-            BridgeHttpRequestLine.parse("GET /v1/action/id?view=compact HTTP/1.1")?.target
-        )
+        val request = BridgeHttpRequestLine.parse("GET /v1/action/id?view=compact HTTP/1.1")
+        assertEquals("/v1/action/id?view=compact", request?.target)
+        assertEquals("/v1/action/id", request?.routePath)
         assertNull(BridgeHttpRequestLine.parse("GET https://example.com/v1/status HTTP/1.1"))
         assertNull(BridgeHttpRequestLine.parse("GET /v1/status#fragment HTTP/1.1"))
     }
