@@ -126,6 +126,26 @@ class LaptopCliTests(unittest.TestCase):
         self.assertNotIn("session_key_b64", status)
         self.assertNotIn("must-not-be-displayed", output.call_args.args[0])
 
+    def test_laptop_status_reports_unpaired_without_network_access(self):
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "status", "--host", "192.168.1.20",
+                "--client-id", "phone-secondary",
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", FakeLaptopClient),
+            patch.object(FakeStore, "get", return_value=None) as get_pairing,
+            patch("builtins.print") as output,
+        ):
+            cli.main()
+        get_pairing.assert_called_once_with("192.168.1.20", 9443, "phone-secondary")
+        import json
+        status = json.loads(output.call_args.args[0])
+        self.assertEqual(status, {
+            "paired": False, "host": "192.168.1.20",
+            "port": 9443, "client_id": "phone-secondary",
+        })
+
     def test_server_refuses_app_launch_without_owner_manifest(self):
         with (
             tempfile.TemporaryDirectory() as temp,
