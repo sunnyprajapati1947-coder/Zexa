@@ -155,7 +155,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
         val result = try {
             val execution = onServiceThread {
-                actionInterruptionGate.requireCurrent(generation) { "Android accessibility service was interrupted before action dispatch." }
+                actionInterruptionGate.requireCurrent(generation)
                 performOnServiceThread(action, payload)
             }
             execution.put("status", when {
@@ -268,7 +268,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
         val result = try {
             val execution = onServiceThread {
-                actionInterruptionGate.requireCurrent(generation) { "Android accessibility service was interrupted before action dispatch." }
+                actionInterruptionGate.requireCurrent(generation)
                 performOnServiceThread(ticket.action, JSONObject(ticket.payloadJson))
             }
             execution
