@@ -24,6 +24,8 @@ class BridgeClientPoolTest {
         pool.release(first)
         pool.release(first)
         assertEquals(1, pool.activeCount())
+        // The released socket is now owned by its worker's use scope, not the pool.
+        first.close()
         assertTrue(pool.register(third))
 
         pool.closeAll()
@@ -52,11 +54,15 @@ class BridgeClientPoolTest {
         val finished = CountDownLatch(12)
         val accepted = AtomicInteger(0)
         val sockets = (1..12).map { Socket() }
+        val registered = java.util.Collections.synchronizedList(mutableListOf<Socket>())
 
         sockets.forEach { socket ->
             Thread {
                 start.await()
-                if (pool.register(socket)) accepted.incrementAndGet()
+                if (pool.register(socket)) {
+                    accepted.incrementAndGet()
+                    registered.add(socket)
+                }
                 finished.countDown()
             }.start()
         }
@@ -67,6 +73,9 @@ class BridgeClientPoolTest {
         assertEquals(3, pool.activeCount())
         pool.closeAll()
         assertEquals(0, pool.activeCount())
+        assertTrue(registered.all { it.isClosed })
+        // Capacity-rejected sockets remain with the accept loop, which closes them.
+        sockets.filterNot { it in registered }.forEach { it.close() }
         assertTrue(sockets.all { it.isClosed })
     }
 
