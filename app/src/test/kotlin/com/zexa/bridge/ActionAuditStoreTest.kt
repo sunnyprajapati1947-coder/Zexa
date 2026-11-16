@@ -68,6 +68,16 @@ class ActionAuditStoreTest {
     }
 
     @Test
+    fun expiredApprovalReplacesPendingAuditEntry() {
+        store.append(ActionAuditEntry("req-expired", "tap", "pending_approval", 100L))
+        store.append(ActionAuditEntry("req-expired", "tap", "expired", 1_100L))
+        assertEquals(
+            listOf(ActionAuditEntry("req-expired", "tap", "expired", 1_100L)),
+            store.list(),
+        )
+    }
+
+    @Test
     fun malformedStoredDataDoesNotCrash() {
         saved = "not-json"
         assertTrue(store.list().isEmpty())
