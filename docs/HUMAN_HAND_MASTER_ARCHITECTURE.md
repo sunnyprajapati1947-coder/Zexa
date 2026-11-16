@@ -165,3 +165,17 @@ A feature is not "done" because it appears in a catalogue or UI. It must have:
 ## 10. Current implementation boundary
 
 At the architecture baseline, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. Laptop pairing, general browser automation, full-page research, production app connectors, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
+
+
+## 11. Current Human Hand implementation progress
+
+The shared capability controller is now present in `src/zexa/capabilities.py`. It owns trusted capability definitions, platform labels, permission names, risk levels, typed JSON input/output contracts, bounded payload sizes, and dispatch to application-registered handlers. It delegates authorization, one-use approvals, and audit events to the existing `ExecutionGateway`.
+
+Android action definitions are created by `src/zexa/android_capabilities.py`. The CLI's `bridge action` path now routes through this shared controller before calling the existing `AccessibilityBridge`. The command requires all of the following:
+
+1. The action is in the explicit `ZEXA_ALLOWED_ANDROID_ACTIONS` allowlist.
+2. The caller reviews and types `APPROVE` for the exact action and payload.
+3. The shared controller validates the registered capability, permission, risk, and one-use approval.
+4. The Android companion app independently confirms the exact action through its native approval flow.
+
+The capability controller is a foundation for future laptop and browser adapters; it does not itself implement laptop pairing, browser automation, or new Android gestures. Those adapters must register their own trusted contracts and pass platform-specific integration tests before they are advertised as available.
