@@ -555,7 +555,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     @Synchronized
     override fun onDestroy() {
-        actionInterruptionGate.current() += 1L
+        actionInterruptionGate.invalidate()
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
         taskActionGrants.clear()
