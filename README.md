@@ -177,7 +177,7 @@ Optional Termux:Widget shortcuts (after installing/opening the Termux:Widget And
 
     bash scripts/install-termux-widget.sh
 
-The installer adds tap-to-run shortcuts for voice, continuous voice, queued jobs and capability status under `~/.shortcuts`. Existing shortcuts with the same Zexa names are backed up as `.zexa-backup` before replacement. Refresh the Termux:Widget widget after installation. These shortcuts do not enable an always-on microphone; voice starts only after a tap.
+The installer adds tap-to-run shortcuts for voice, continuous voice, queued jobs and capability status under `~/.shortcuts`. Existing shortcuts with the same Zexa names are preserved in uniquely named `.zexa-backup.*.bak` files before replacement. Refresh the Termux:Widget widget after installation. These shortcuts do not enable an always-on microphone; voice starts only after a tap.
 
 The installer creates a service entrypoint tied to this checkout, loads its `.env`, and uses the stable queue database at `~/.zexa/jobs.sqlite3` so scheduled jobs and the service see the same queue regardless of working directory. The worker handles local notifications and low-risk skill drafts through the guarded execution gateway; imported skills and arbitrary commands are never executed. Android notifications require Termux:API permission. Check the service with `sv status zexa-worker`; stop/start with `sv down zexa-worker` / `sv up zexa-worker`; disable service startup with `sv-disable zexa-worker`. Android may still restrict background work; device-reboot startup requires the optional Termux:Boot add-on and device validation.
 
@@ -220,7 +220,7 @@ Never commit .env, API keys, bridge tokens, or personal data.
 
 ## Automated checks
 
-GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and the unit-test suite on Python 3.11, 3.12, and 3.13. The Android workflow runs bridge JVM unit tests and assembles a debug APK. A separate scheduled CodeQL workflow scans Python security queries. Dependabot checks Python and GitHub Actions updates. These CI checks do not replace Android device testing or repository-level secret-scanning settings.
+GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and the unit-test suite on Python 3.11, 3.12, 3.13, and 3.14. The Android workflow runs bridge JVM unit tests and assembles a debug APK. A separate scheduled CodeQL workflow scans Python security queries. Dependabot checks Python and GitHub Actions updates. These CI checks do not replace Android device testing or repository-level secret-scanning settings.
 
 ## Development checks
 
