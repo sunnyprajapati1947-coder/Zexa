@@ -78,7 +78,7 @@ When the user says "learn this", "study this", or "make a skill":
 3. Produce a concise knowledge note with facts, uncertainty, and source references.
 4. Test understanding using examples or a small evaluation set.
 5. If a repeatable workflow is requested, draft a typed skill contract: purpose, inputs, outputs, dependencies, permissions, risk, timeout, resource budget, and tests.
-6. Keep the skill disabled until it passes review and the user explicitly enables it.
+6. Keep generated skill contracts disabled until the user reviews and approves both the source note and the skill draft; only then register the declarative prompt-only contract in the runtime.
 7. Version the note/skill and allow the user to inspect, edit, export, disable, or delete it.
 
 Learning means building retrievable knowledge and reviewed workflows. It does **not** mean silently changing model weights, executing arbitrary downloaded code, or allowing a webpage or imported skill to rewrite Zexa's security policy.
@@ -89,7 +89,7 @@ Learning means building retrievable knowledge and reviewed workflows. It does **
 - `LearningService.import_text_file()` studies UTF-8 local text files up to 1 MB and saves a draft summary; imported text is treated as untrusted data and never executed.
 - `LearningService.draft_skill()` requires an approved note, validates a typed skill contract, and stores it disabled with `review_required` status.
 - Termux CLI commands are available as `zexa learn research`, `fetch`, `import`, `list`, `show`, `search`, `review`, `draft-skill`, `skill-drafts`, and `review-skill`.
-- `LearningAwareBrain` retrieves relevant approved notes into ordinary chat, voice, planning, and agent requests as bounded untrusted reference context; draft/rejected notes are excluded. Reviewing a skill contract does not enable execution. Skill activation, version history, document formats beyond UTF-8 text, multi-page crawling, and model-weight training are not implemented by this foundation.
+- `LearningAwareBrain` retrieves relevant approved notes into ordinary chat, voice, planning, and agent requests as bounded untrusted reference context; draft/rejected notes are excluded. Reviewing a skill contract now makes it available to the runtime only while its source note remains approved. It runs through a fixed prompt-only brain handler with schema validation and the normal execution gateway; learned code, scripts, tools, network access, and external actions are never activated. Built-in skill names cannot be overridden. Version history, document formats beyond UTF-8 text, multi-page crawling, and model-weight training are not implemented by this foundation.
 
 ## 5. Permission and approval model
 
