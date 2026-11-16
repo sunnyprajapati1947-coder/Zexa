@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from zexa import cli
 
@@ -56,7 +56,7 @@ class LaptopCliTests(unittest.TestCase):
         return FakeLaptopClient.instance
 
     def test_laptop_owner_can_list_and_revoke_paired_clients(self):
-        authority = unittest.mock.Mock()
+        authority = Mock()
         authority.list_clients.return_value = [{
             "client_id": "phone-main", "paired_at_epoch": 123,
             "permissions": ["laptop.workspace.read"],
