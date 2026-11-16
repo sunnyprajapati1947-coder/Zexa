@@ -197,6 +197,36 @@ class LaptopServerTests(unittest.TestCase):
         spawn.assert_called_once()
         self.assertIs(spawn.call_args.kwargs["shell"], False)
 
+    def test_app_inventory_requires_pairing_scope_and_returns_only_allowlisted_metadata(self):
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.apps.launch"
+        ))
+        key = self.pair(offer)
+        manifest = Path(self.temp.name) / "apps-list.json"
+        executable = Path(self.temp.name) / "python-list-executable"
+        shutil.copy2(Path(sys.executable).resolve(), executable)
+        executable.chmod(stat.S_IMODE(executable.stat().st_mode) & ~0o022)
+        manifest.write_text(json.dumps({
+            "version": 1,
+            "apps": [{
+                "id": "editor",
+                "executable": str(executable),
+                "arguments": [],
+                "description": "Approved text editor",
+            }],
+        }), encoding="utf-8")
+        self.server.app_registry = LaptopAppRegistry(manifest)
+        path = "/v1/apps"
+        status, _ = self.request("GET", path)
+        self.assertEqual(status, 401)
+        status, result = self.request("GET", path, headers=self.signed(key, "GET", path))
+        self.assertEqual(status, 200)
+        self.assertEqual(result["result"]["apps"], [{
+            "app_id": "editor", "description": "Approved text editor"
+        }])
+        self.assertNotIn("executable", json.dumps(result))
+        self.assertNotIn("arguments", json.dumps(result))
+
     def test_app_launch_denied_without_explicit_pairing_scope(self):
         key = self.pair()
         path = "/v1/apps/launch"
