@@ -6,11 +6,15 @@ source URLs. It does not fetch arbitrary pages or execute page-provided content.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import http.client
+import ipaddress
 import json
 from html.parser import HTMLParser
+import socket
+import ssl
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qs, urlencode, urlparse
-from urllib.request import Request, urlopen
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlsplit
 
 
 _SEARCH_URL = "https://html.duckduckgo.com/html/"
@@ -119,6 +123,185 @@ class DuckDuckGoSearch:
             if len(results) >= limit:
                 break
         return results
+
+
+@dataclass(frozen=True)
+class FetchedPage:
+    title: str
+    url: str
+    text: str
+    content_sha256: str
+
+
+class _PageTextParser(HTMLParser):
+    _IGNORED = {"script", "style", "noscript", "svg", "iframe", "form", "nav"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.title_parts: list[str] = []
+        self._ignored: list[str] = []
+        self._in_title = False
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag in self._IGNORED:
+            self._ignored.append(tag)
+        elif tag == "title" and not self._ignored:
+            self._in_title = True
+        elif tag in {"p", "div", "br", "li", "h1", "h2", "h3", "tr"} and not self._ignored:
+            self.parts.append("\\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._ignored:
+            if tag == self._ignored[-1]:
+                self._ignored.pop()
+            return
+        if tag == "title":
+            self._in_title = False
+        elif tag in {"p", "div", "br", "li", "h1", "h2", "h3", "tr"}:
+            self.parts.append("\\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._ignored:
+            return
+        if self._in_title:
+            self.title_parts.append(data)
+        else:
+            self.parts.append(data)
+
+    def result(self) -> tuple[str, str]:
+        title = " ".join(" ".join(self.title_parts).split())[:300]
+        text = " ".join("".join(self.parts).split())
+        return title, text[:40_000]
+
+
+def _validate_public_https_url(value: str):
+    if (
+        not isinstance(value, str) or not value or len(value) > 2048
+        or any(ord(char) <= 32 or ord(char) == 127 for char in value)
+    ):
+        raise ValueError("Page URL must be a valid public HTTPS URL.")
+    parsed = urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("Page URL has an invalid port.") from exc
+    if (
+        parsed.scheme != "https" or not parsed.hostname
+        or parsed.username is not None or parsed.password is not None
+        or (port not in (None, 443))
+        or parsed.fragment and len(parsed.fragment) > 512
+    ):
+        raise ValueError("Only public HTTPS URLs on the standard port are supported.")
+    host = parsed.hostname.rstrip(".").lower()
+    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local") or "." not in host:
+        raise ValueError("Local and single-label hostnames are not supported.")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        try:
+            host.encode("idna")
+        except UnicodeError as exc:
+            raise ValueError("Page URL hostname is invalid.") from exc
+    else:
+        if not address.is_global:
+            raise ValueError("Private, local, and reserved IP addresses are not supported.")
+    return parsed, host
+
+
+def _connect_public_https(host: str, timeout: float):
+    try:
+        records = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise RuntimeError("Could not resolve the public page hostname.") from exc
+    addresses = []
+    for record in records:
+        address = record[4][0]
+        try:
+            parsed_address = ipaddress.ip_address(address)
+        except ValueError:
+            raise RuntimeError("DNS returned an invalid address.")
+        if not parsed_address.is_global:
+            raise PermissionError("Page hostname resolves to a non-public network address.")
+        if address not in addresses:
+            addresses.append(address)
+    if not addresses:
+        raise RuntimeError("Page hostname has no public address.")
+    last_error = None
+    for address in addresses[:4]:
+        raw = None
+        try:
+            raw = socket.create_connection((address, 443), timeout=timeout)
+            return ssl.create_default_context().wrap_socket(raw, server_hostname=host)
+        except OSError as exc:
+            last_error = exc
+            if raw is not None:
+                raw.close()
+    raise RuntimeError("Could not establish a verified HTTPS connection.") from last_error
+
+
+def fetch_public_page(url: str, *, timeout: float = 10.0) -> FetchedPage:
+    """Fetch bounded public HTTPS text without executing page scripts or following private redirects."""
+    current = url
+    for redirect_count in range(4):
+        parsed, host = _validate_public_https_url(current)
+        target = parsed.path or "/"
+        if parsed.query:
+            target += "?" + parsed.query
+        connection = _connect_public_https(host, max(2.0, min(float(timeout), 20.0)))
+        response = None
+        try:
+            connection.sendall(
+                f"GET {target} HTTP/1.1\\r\\n"
+                f"Host: {host}\\r\\n"
+                "User-Agent: Mozilla/5.0 (compatible; ZexaResearch/0.1)\\r\\n"
+                "Accept: text/html,text/plain;q=0.9\\r\\n"
+                "Accept-Encoding: identity\\r\\n"
+                "Connection: close\\r\\n\\r\\n".encode("ascii")
+            )
+            response = http.client.HTTPResponse(connection)
+            response.begin()
+            if response.status in {301, 302, 303, 307, 308}:
+                location = response.getheader("Location", "")
+                response.read(8192)
+                if redirect_count >= 3 or not location:
+                    raise RuntimeError("Public page exceeded the redirect limit.")
+                current = urljoin(current, location)
+                continue
+            if response.status != 200:
+                raise RuntimeError(f"Public page returned HTTP {response.status}.")
+            content_type = response.getheader("Content-Type", "").split(";", 1)[0].strip().lower()
+            if content_type not in {"text/html", "text/plain"}:
+                raise ValueError("Only HTML and plain-text public pages can be learned.")
+            raw = response.read(1_000_001)
+            if len(raw) > 1_000_000:
+                raise RuntimeError("Public page exceeded the 1 MB response limit.")
+            charset = "utf-8"
+            content_type_header = response.getheader("Content-Type", "")
+            for part in content_type_header.split(";")[1:]:
+                key, _, value = part.strip().partition("=")
+                if key.lower() == "charset" and value.strip(" \"'"):
+                    charset = value.strip(" \"'")[:40]
+            try:
+                decoded = raw.decode(charset, errors="replace")
+            except LookupError:
+                decoded = raw.decode("utf-8", errors="replace")
+            if content_type == "text/html":
+                parser = _PageTextParser()
+                parser.feed(decoded)
+                title, text = parser.result()
+            else:
+                title = host
+                text = " ".join(decoded.split())[:40_000]
+            if not text:
+                raise RuntimeError("Public page did not contain readable text.")
+            digest = hashlib.sha256(raw).hexdigest()
+            return FetchedPage(title or host, current, text, digest)
+        finally:
+            if response is not None:
+                response.close()
+            connection.close()
+    raise RuntimeError("Public page redirect limit was exceeded.")
 
 
 def summarize_research(brain, query: str, results: list[SearchResult]) -> str:
