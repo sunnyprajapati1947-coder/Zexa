@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import closing
-import getpass
+import csv
 from dataclasses import dataclass
 import hashlib
 import hmac
@@ -64,12 +64,24 @@ def secure_owner_only(path: str | Path, *, directory: bool = False) -> None:
         raise PermissionError("Sensitive Zexa storage must not be a symbolic link.")
     if os.name == "nt":
         icacls = shutil.which("icacls")
-        if not icacls:
-            raise PermissionError("Windows icacls is required to secure Zexa pairing files.")
+        whoami = shutil.which("whoami")
+        if not icacls or not whoami:
+            raise PermissionError("Windows icacls and whoami are required to secure Zexa pairing files.")
+        try:
+            identity = subprocess.run(
+                [whoami, "/user", "/fo", "csv", "/nh"],
+                check=False, capture_output=True, text=True, timeout=10,
+            )
+            rows = list(csv.reader(identity.stdout.splitlines()))
+            user_sid = rows[0][1].strip() if identity.returncode == 0 and rows and len(rows[0]) >= 2 else ""
+        except (OSError, subprocess.TimeoutExpired, csv.Error, IndexError) as exc:
+            raise PermissionError("Could not identify the current Windows user SID.") from exc
+        if not re.fullmatch(r"S-\\d+(?:-\\d+)+", user_sid):
+            raise PermissionError("Windows did not return a valid current-user SID.")
         suffix = "(OI)(CI)F" if directory else "(F)"
         command = [
             icacls, str(target), "/inheritance:r",
-            "/grant:r", f"{getpass.getuser()}:{suffix}",
+            "/grant:r", f"*{user_sid}:{suffix}",
             "/grant:r", f"*S-1-5-18:{suffix}",
             "/grant:r", f"*S-1-5-32-544:{suffix}",
         ]
