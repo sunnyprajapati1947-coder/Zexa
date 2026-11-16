@@ -200,7 +200,7 @@ class LaptopPairingAuthority:
                 "CREATE INDEX IF NOT EXISTS idx_replay_seen_at ON replay_nonces(seen_at_epoch)"
             )
         secure_owner_only(path)
-        with self._connect_storage() as db:
+        with closing(self._connect_storage()) as db, db:
             rows = db.execute(
                 "SELECT client_id, session_key, paired_at_epoch, permissions_json FROM paired_clients"
             ).fetchall()
@@ -223,7 +223,7 @@ class LaptopPairingAuthority:
     def _persist_client(self, record: PairedLaptopClient) -> None:
         if self.storage_path is None:
             return
-        with self._connect_storage() as db:
+        with closing(self._connect_storage()) as db, db:
             db.execute(
                 "INSERT INTO paired_clients(client_id, session_key, paired_at_epoch, permissions_json) "
                 "VALUES (?, ?, ?, ?)",
@@ -428,7 +428,7 @@ class LaptopPairingAuthority:
             canonical_nonce = _b64encode(nonce)
             if self.storage_path is not None:
                 try:
-                    with self._connect_storage() as db:
+                    with closing(self._connect_storage()) as db, db:
                         db.execute(
                             "DELETE FROM replay_nonces WHERE seen_at_epoch < ?",
                             (now - 60,),
@@ -501,7 +501,7 @@ class LaptopPairingAuthority:
         with self._lock:
             if self.storage_path is not None:
                 try:
-                    with self._connect_storage() as db:
+                    with closing(self._connect_storage()) as db, db:
                         cursor = db.execute(
                             "DELETE FROM paired_clients WHERE client_id=?", (client_id,)
                         )
