@@ -101,6 +101,9 @@ class BridgeSecurityRulesTest {
         assertFalse(BridgeSecurityRules.safeWebUrl("https://user:pass@example.com"))
         assertFalse(BridgeSecurityRules.safeWebUrl("https://"))
         assertFalse(BridgeSecurityRules.safeWebUrl("https://example.com/has space"))
+        assertFalse(BridgeSecurityRules.safeWebUrl("https://example.com:0/path"))
+        assertFalse(BridgeSecurityRules.safeWebUrl("https://example.com:65536/path"))
+        assertTrue(BridgeSecurityRules.safeWebUrl("https://example.com:443/path"))
         assertFalse(BridgeSecurityRules.safeWebUrl("https://example.com/" + "a".repeat(2_050)))
     }
 
