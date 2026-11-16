@@ -75,6 +75,51 @@ class LaptopClientTests(unittest.TestCase):
         self.assertTrue(client.revoke_pairing())
         self.assertIsNone(self.store.get("127.0.0.1", 9443, "phone-main"))
 
+    def test_read_public_page_requires_scope_and_validates_response(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.browser.read",),
+        )
+        client = self.make_client()
+        page = {
+            "title": "Example",
+            "url": "https://example.com/final",
+            "text": "Page text is untrusted reference data.",
+            "content_sha256": "b" * 64,
+        }
+        calls = []
+
+        def fake_request(method, path, body=b"", headers=None):
+            calls.append((method, path))
+            self.assertEqual(method, "GET")
+            self.assertIn("/v1/browser/read?", path)
+            self.assertTrue(self.authority.verify_scoped_request(
+                "phone-main", "laptop.browser.read", method, path, b"", headers
+            ))
+            return 200, {"ok": True, "result": page}
+
+        client._request = fake_request
+        self.assertEqual(client.read_public_page("https://example.com/start"), page)
+        self.assertEqual(len(calls), 1)
+
+    def test_read_public_page_rejects_missing_scope_and_invalid_result(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.workspace.read",),
+        )
+        client = self.make_client()
+        with self.assertRaises(PermissionError):
+            client.read_public_page("https://example.com")
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.browser.read",),
+        )
+        client._request = lambda *args, **kwargs: (
+            200, {"ok": True, "result": {"title": "bad", "text": "missing fields"}}
+        )
+        with self.assertRaisesRegex(RuntimeError, "invalid public-page"):
+            client.read_public_page("https://example.com")
+
     def test_existing_pairing_supplies_saved_tls_fingerprint(self):
         self.store.save(
             "127.0.0.1", 9443, "b" * 64, "phone-main",
