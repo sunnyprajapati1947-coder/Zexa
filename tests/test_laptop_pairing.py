@@ -200,8 +200,16 @@ class LaptopPairingTests(unittest.TestCase):
             self.assertFalse(third.verify_request(
                 "phone-persist", "GET", "/v1/workspace/list", b"", headers
             ))
+            revocation_probe = LaptopPairingAuthority.sign_request(
+                session_key, "GET", "/v1/workspace/list", b"",
+                timestamp=int(self.wall_now), nonce_b64=encoded(b"s" * 24),
+            )
             self.assertTrue(third.revoke_client("phone-persist"))
             self.assertEqual(third.list_clients(), [])
+            self.assertFalse(second.verify_request(
+                "phone-persist", "GET", "/v1/workspace/list", b"", revocation_probe
+            ))
+            self.assertEqual(second.list_clients(), [])
             expanded_offer = third.begin_pairing(permissions=(
                 "laptop.workspace.list", "laptop.workspace.read", "laptop.apps.launch"
             ))
@@ -222,6 +230,11 @@ class LaptopPairingTests(unittest.TestCase):
             )
             self.assertEqual(fourth.list_clients()[0]["client_id"], "phone-persist")
             self.assertIn("laptop.apps.launch", fourth.list_clients()[0]["permissions"])
+            expanded_probe = LaptopPairingAuthority.sign_request(
+                expanded_record.session_key.hex() if False else encoded(b"z" * 32),
+                "GET", "/v1/workspace/list", b"",
+                timestamp=int(self.wall_now), nonce_b64=encoded(b"u" * 24),
+            )
             if os.name != "nt":
                 self.assertEqual(database.stat().st_mode & 0o777, 0o600)
 
