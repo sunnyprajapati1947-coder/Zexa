@@ -29,7 +29,7 @@ internal object ScreenRedactionRules {
         description: String,
     ): Boolean {
         if (isPassword) return true
-        val metadata = listOf(className, viewId, hint, description).joinToString(" ")
+        val metadata = listOf(className, viewId, hint, text, description).joinToString(" ")
         if (sensitiveLabel.containsMatchIn(metadata)) return true
 
         val values = listOf(text, description, hint)
