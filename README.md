@@ -130,6 +130,9 @@ From a separate laptop terminal, the owner can inspect or immediately revoke a p
 
     zexa laptop clients
     zexa laptop revoke-client zexa-phone
+    zexa laptop revoke-all
+
+For an emergency, `zexa laptop revoke-all` asks for the exact phrase `REVOKE ALL LAPTOP CLIENTS` before removing every paired phone session from the laptop database. The running server rejects those phones on their next authenticated request; this does not delete the phone-side local credential files.
 
 Pairing defaults to workspace list/read. The laptop owner must explicitly add --allow-write when starting the server to grant remote workspace writes. Permissions are fixed into the one-time pairing; to add permissions later, revoke the old pairing on the phone with zexa laptop revoke, restart the laptop server with the expanded flags, and pair again using the new one-time code. With write scope enabled, the phone can send a local UTF-8 file after showing its source, destination, character count, and SHA-256 and receiving an exact path confirmation:
 
