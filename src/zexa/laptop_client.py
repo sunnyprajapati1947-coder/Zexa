@@ -25,6 +25,7 @@ from .laptop_pairing import (
 
 _FINGERPRINT = re.compile(r"^[0-9a-f]{64}$")
 _CLIENT_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_APP_ID = re.compile(r"^[a-z][a-z0-9._-]{1,63}$")
 _ALLOWED_PERMISSIONS = {
     "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write",
     "laptop.apps.launch",
@@ -328,6 +329,34 @@ class LaptopAgentClient:
         status, response = self._request("GET", path, headers=headers)
         if status != 200 or response.get("ok") is not True:
             raise PermissionError("Laptop workspace read was denied or failed.")
+        return response["result"]
+
+    def launch_app(self, app_id: str, *, user_confirmed: bool = False) -> dict:
+        """Launch one laptop-owner-approved application after a fresh exact confirmation."""
+        if user_confirmed is not True:
+            raise PermissionError("A fresh explicit user confirmation is required for app launch.")
+        if not isinstance(app_id, str) or not _APP_ID.fullmatch(app_id):
+            raise ValueError("Invalid approved laptop app ID.")
+        record = self.store.get(self.host, self.port, self.client_id)
+        if record is None or "laptop.apps.launch" not in record["permissions"]:
+            raise PermissionError("This phone was not paired with laptop app-launch permission.")
+        path = "/v1/apps/launch"
+        body = json.dumps({"app_id": app_id}, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(
+            record["session_key_b64"], "POST", path, body
+        )
+        headers.update({
+            "X-Zexa-Client-ID": self.client_id,
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        status, response = self._request("POST", path, body, headers)
+        if status in {401, 403}:
+            raise PermissionError("Laptop rejected the app launch or its approval scope.")
+        if status == 404:
+            raise KeyError("Laptop app is not enabled or is not in the owner's allowlist.")
+        if status != 200 or response.get("ok") is not True:
+            raise RuntimeError("Laptop app launch failed.")
         return response["result"]
 
     def write_text(
