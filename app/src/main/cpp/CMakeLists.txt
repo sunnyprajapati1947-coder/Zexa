@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(zexa_llama_runtime LANGUAGES C CXX)
 
+# Ensure every packaged ELF shared object supports Android 16 KB page-size devices.
+add_link_options("-Wl,-z,max-page-size=16384")
+
 include(FetchContent)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
