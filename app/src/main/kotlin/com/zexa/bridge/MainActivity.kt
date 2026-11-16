@@ -1204,7 +1204,7 @@ class MainActivity : Activity() {
         }
         val taskInput = EditText(this).apply {
             hint = "Task ID (e.g. research-session-1)"
-            singleLine = true
+            maxLines = 1
         }
         panel.addView(taskInput)
         val choices = linkedMapOf<String, CheckBox>()
