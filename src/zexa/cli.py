@@ -324,6 +324,8 @@ def main() -> None:
             revoked = authority.revoke_client(args.client_id)
             if revoked:
                 audit_path = Path.home() / ".zexa" / "laptop_audit.sqlite3"
+                if audit_path.is_symlink():
+                    raise PermissionError("Laptop audit database must not be a symbolic link.")
                 audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 secure_owner_only(audit_path.parent, directory=True)
                 audit = AuditLog(audit_path)
