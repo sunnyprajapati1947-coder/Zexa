@@ -21,7 +21,7 @@ mkdir -p "$BOOT_DIR"
 chmod 700 "$BOOT_DIR"
 BOOT_HOOK="$BOOT_DIR/00-start-zexa-worker"
 if [ -e "$BOOT_HOOK" ]; then
-  backup="$BOOT_HOOK.zexa-backup.$(date +%s).$.bak"
+  backup="$BOOT_HOOK.zexa-backup.$(date +%s).$$.bak"
   cp -p "$BOOT_HOOK" "$backup"
   echo "Backed up existing boot hook: $backup"
 fi
