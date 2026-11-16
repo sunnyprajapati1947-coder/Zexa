@@ -12,7 +12,10 @@ from dataclasses import dataclass
 import hashlib
 import hmac
 import json
+import os
+from pathlib import Path
 import re
+import sqlite3
 import secrets
 import threading
 import time
@@ -84,7 +87,7 @@ class PairedLaptopClient:
 
 
 class LaptopPairingAuthority:
-    """In-memory pairing authority with bounded attempts and replay protection."""
+    """Pairing authority with optional owner-only persistence and replay protection."""
 
     def __init__(
         self,
@@ -94,6 +97,7 @@ class LaptopPairingAuthority:
         iterations: int = 310_000,
         monotonic: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], float] = time.time,
+        storage_path: str | Path | None = None,
     ) -> None:
         if type(ttl_seconds) is not int or not 30 <= ttl_seconds <= 300:
             raise ValueError("Pairing offer TTL must be between 30 and 300 seconds.")
@@ -110,6 +114,82 @@ class LaptopPairingAuthority:
         self._clients: dict[str, PairedLaptopClient] = {}
         self._replays: dict[str, dict[str, float]] = {}
         self._lock = threading.RLock()
+        self.storage_path = Path(storage_path).expanduser() if storage_path is not None else None
+        if self.storage_path is not None:
+            self._initialize_storage()
+
+    def _connect_storage(self) -> sqlite3.Connection:
+        if self.storage_path is None:
+            raise RuntimeError("Persistent pairing storage is not configured.")
+        db = sqlite3.connect(self.storage_path, timeout=5.0)
+        db.execute("PRAGMA foreign_keys = ON")
+        db.execute("PRAGMA busy_timeout = 5000")
+        return db
+
+    def _initialize_storage(self) -> None:
+        path = self.storage_path
+        if path is None:
+            return
+        if path.is_symlink():
+            raise PermissionError("Laptop pairing database must not be a symbolic link.")
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            os.chmod(path.parent, 0o700)
+        with self._connect_storage() as db:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS paired_clients (
+                    client_id TEXT PRIMARY KEY,
+                    session_key BLOB NOT NULL,
+                    paired_at_epoch INTEGER NOT NULL,
+                    permissions_json TEXT NOT NULL
+                )
+            """)
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS replay_nonces (
+                    client_id TEXT NOT NULL REFERENCES paired_clients(client_id) ON DELETE CASCADE,
+                    nonce TEXT NOT NULL,
+                    seen_at_epoch INTEGER NOT NULL,
+                    PRIMARY KEY(client_id, nonce)
+                )
+            """)
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_replay_seen_at ON replay_nonces(seen_at_epoch)"
+            )
+        if os.name != "nt":
+            os.chmod(path, 0o600)
+        with self._connect_storage() as db:
+            rows = db.execute(
+                "SELECT client_id, session_key, paired_at_epoch, permissions_json FROM paired_clients"
+            ).fetchall()
+        for client_id, session_key, paired_at_epoch, permissions_json in rows:
+            if (
+                not isinstance(client_id, str) or not _CLIENT_ID.fullmatch(client_id)
+                or not isinstance(session_key, bytes) or len(session_key) != 32
+                or type(paired_at_epoch) is not int
+            ):
+                raise RuntimeError("Laptop pairing database contains an invalid client record.")
+            try:
+                permissions = self._permissions(json.loads(permissions_json))
+            except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                raise RuntimeError("Laptop pairing database contains invalid permissions.") from exc
+            self._clients[client_id] = PairedLaptopClient(
+                client_id, session_key, paired_at_epoch, permissions
+            )
+            self._replays[client_id] = {}
+
+    def _persist_client(self, record: PairedLaptopClient) -> None:
+        if self.storage_path is None:
+            return
+        with self._connect_storage() as db:
+            db.execute(
+                "INSERT INTO paired_clients(client_id, session_key, paired_at_epoch, permissions_json) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    record.client_id, sqlite3.Binary(record.session_key),
+                    record.paired_at_epoch,
+                    json.dumps(record.permissions, separators=(",", ":")),
+                ),
+            )
 
     @staticmethod
     def _permissions(values) -> tuple[str, ...]:
