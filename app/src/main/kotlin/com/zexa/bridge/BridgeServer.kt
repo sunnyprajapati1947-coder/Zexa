@@ -123,8 +123,9 @@ class BridgeServer(
 
     private fun handle(socket: Socket) {
         socket.use { client ->
-            client.soTimeout = 5000
-            val input = BufferedInputStream(client.getInputStream())
+            val input = BufferedInputStream(
+                BridgeDeadlineInputStream(client, BridgeDeadlineInputStream.DEFAULT_TIMEOUT_MS)
+            )
             val requestLine = try {
                 readHttpLine(input)
             } catch (_: Exception) {
