@@ -142,6 +142,30 @@ class BridgeServer(
                         }
                         JSONObject().put("ok", true).put("grants", grants)
                     }
+                    method == "POST" && path == "/v1/grants/revoke" -> {
+                        val length = BridgeSecurityRules.contentLength(headers["content-length"])
+                            ?: error("Invalid request body length.")
+                        val body = ByteArray(length)
+                        var offset = 0
+                        while (offset < length) {
+                            val read = input.read(body, offset, length - offset)
+                            if (read < 0) error("Incomplete request body.")
+                            offset += read
+                        }
+                        val json = JSONObject(String(body, StandardCharsets.UTF_8))
+                        require(json.keys().asSequence().toSet() == setOf("grant_id")) {
+                            "Grant revoke request must contain only grant_id."
+                        }
+                        val grantId = json.optString("grant_id", "")
+                        require(grantId.matches(Regex("^[A-Za-z0-9-]{1,64}$"))) {
+                            "Invalid task grant identifier."
+                        }
+                        val revoked = service.revokeTaskActionGrant(grantId)
+                        JSONObject()
+                            .put("ok", revoked)
+                            .put("status", if (revoked) "revoked" else "not_found")
+                            .put("grant_id", grantId)
+                    }
                     method == "GET" && path == "/v1/screen" -> {
                         if (!service.isScreenAccessEnabled()) {
                             responseStatus = 403
