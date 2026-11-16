@@ -227,7 +227,7 @@ class BridgeServer(
                         service.actionResult(requestId)
                             ?: JSONObject()
                                 .put("ok", true)
-                                .put("status", if (service.isActionPending(requestId)) "pending_approval" else "expired_or_unknown")
+                                .put("status", "expired_or_unknown")
                                 .put("request_id", requestId)
                     }
                     else -> return respond(client, 404, JSONObject().put("error", "Not found"))
