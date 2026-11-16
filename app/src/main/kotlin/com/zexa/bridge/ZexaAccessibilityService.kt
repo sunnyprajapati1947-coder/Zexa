@@ -104,7 +104,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             ttlMs = ttlMs,
             maxActions = maxActions,
         )
-        actionAudit.append(ActionAuditEntry("grant-" + grant.grantId.take(48), "task_grant", "created", System.currentTimeMillis()))
+        actionAudit.append(ActionAuditEntry("grant-created-" + grant.grantId.take(48), "task_grant", "created", System.currentTimeMillis()))
         return grant
     }
 
@@ -113,7 +113,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     fun revokeTaskActionGrant(grantId: String): Boolean {
         val revoked = taskActionGrants.revoke(grantId)
-        if (revoked) actionAudit.append(ActionAuditEntry("grant-" + grantId.take(48), "task_grant", "revoked", System.currentTimeMillis()))
+        if (revoked) actionAudit.append(ActionAuditEntry("grant-revoked-" + grantId.take(48), "task_grant", "revoked", System.currentTimeMillis()))
         return revoked
     }
 
@@ -142,7 +142,7 @@ class ZexaAccessibilityService : AccessibilityService() {
                 .put("error", error.message ?: "Action failed")
                 .put("remaining_actions", consumed.remainingActions)
         }
-        actionAudit.append(ActionAuditEntry("grant-" + grantId.take(48), action, result.optString("status", "failed"), System.currentTimeMillis()))
+        actionAudit.append(ActionAuditEntry("grant-action-" + grantId.take(28) + "-" + UUID.randomUUID().toString().take(12), action, result.optString("status", "failed"), System.currentTimeMillis()))
         return result
     }
 
