@@ -11,9 +11,10 @@ import secrets
 import ssl
 import stat
 import tempfile
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from .laptop_hand import MAX_WRITE_CHARS
+from .laptop_browser import validate_browser_url
 from .laptop_pairing import (
     LaptopPairingAuthority,
     _b64decode,
@@ -443,6 +444,40 @@ class LaptopAgentClient:
         if status != 200 or response.get("ok") is not True:
             raise RuntimeError("Laptop workspace write failed.")
         return response["result"]
+
+    def open_browser_url(self, url: str, *, user_confirmed: bool = False) -> dict:
+        """Open one exact public HTTPS URL in the laptop owner's visible browser."""
+        normalized_url = validate_browser_url(url)
+        if user_confirmed is not True:
+            raise PermissionError("A fresh explicit user confirmation is required for browser navigation.")
+        record = self.store.get(self.host, self.port, self.client_id)
+        if record is None or "laptop.browser.open" not in record["permissions"]:
+            raise PermissionError("This phone was not paired with laptop browser-navigation permission.")
+        path = "/v1/browser/open"
+        body = json.dumps({"url": normalized_url}, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(
+            record["session_key_b64"], "POST", path, body
+        )
+        headers.update({
+            "X-Zexa-Client-ID": self.client_id,
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        status, response = self._request("POST", path, body, headers)
+        if status in {401, 403}:
+            raise PermissionError("Laptop rejected browser navigation or its approval scope.")
+        if status == 400:
+            raise ValueError("Laptop rejected the browser destination.")
+        if status != 200 or response.get("ok") is not True:
+            raise RuntimeError("Laptop browser navigation failed.")
+        result = response.get("result")
+        expected_host = urlsplit(normalized_url).hostname
+        if (
+            not isinstance(result, dict) or set(result) != {"opened", "host"}
+            or result["opened"] is not True or result["host"] != expected_host
+        ):
+            raise RuntimeError("Laptop returned an invalid browser navigation result.")
+        return result
 
     def revoke_pairing(self) -> bool:
         """Revoke this phone's server-side key, then remove its local credential."""
