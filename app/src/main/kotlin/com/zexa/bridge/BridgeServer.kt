@@ -137,7 +137,7 @@ class BridgeServer(
             val parsedRequest = BridgeHttpRequestLine.parse(requestLine)
                 ?: return respond(client, 400, JSONObject().put("error", "Bad request line"))
             val method = parsedRequest.method
-            val path = parsedRequest.target
+            val path = parsedRequest.routePath
             val headers = try {
                 val parsedHeaders = mutableMapOf<String, String>()
                 var headerCount = 0
