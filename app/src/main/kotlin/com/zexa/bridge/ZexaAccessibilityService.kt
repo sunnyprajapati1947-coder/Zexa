@@ -289,7 +289,11 @@ class ZexaAccessibilityService : AccessibilityService() {
         return result
     }
 
-    fun actionAuditHistory(): List<ActionAuditEntry> = actionAudit.list()
+    @Synchronized
+    fun actionAuditHistory(): List<ActionAuditEntry> {
+        recordExpiredApprovals()
+        return actionAudit.list()
+    }
 
     @Synchronized
     fun actionResult(requestId: String): JSONObject? {
