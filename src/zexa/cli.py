@@ -85,6 +85,8 @@ def main() -> None:
     learn_research = learn_sub.add_parser("research", help="Research a topic online and save a draft note")
     learn_research.add_argument("--limit", type=int, default=5)
     learn_research.add_argument("query", nargs="+")
+    learn_fetch = learn_sub.add_parser("fetch", help="Fetch one public HTTPS page and summarize it into a draft note")
+    learn_fetch.add_argument("url")
     learn_import = learn_sub.add_parser("import", help="Summarize a local UTF-8 text file into a draft note")
     learn_import.add_argument("path")
     learn_list = learn_sub.add_parser("list", help="List knowledge notes")
@@ -644,6 +646,9 @@ def main() -> None:
             if args.learn_command == "research":
                 note_id = LearningService(store, brain).research(" ".join(args.query), args.limit)
                 print(f"Research saved as draft knowledge note #{note_id}. Review it with: zexa learn show {note_id}")
+            elif args.learn_command == "fetch":
+                note_id = LearningService(store, brain).fetch_page(args.url)
+                print(f"Public webpage saved as draft knowledge note #{note_id}. Review it with: zexa learn show {note_id}")
             elif args.learn_command == "import":
                 note_id = LearningService(store, brain).import_text_file(args.path)
                 print(f"Local study notes saved as draft knowledge note #{note_id}.")
