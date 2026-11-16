@@ -87,25 +87,30 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     @Synchronized
+    private fun invalidateBridgeSession() {
+        // Stop is a session boundary: close active sockets and prevent any
+        // approval/grant action queued on the service looper from starting later.
+        actionInterruptionGate.invalidate()
+        markPendingApprovalsInterrupted()
+        actionApprovals.clear()
+        taskActionGrants.clear()
+        bridgeServer?.stop()
+        bridgeServer = null
+    }
+
+    @Synchronized
     fun refreshBridge() {
         val enabled = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
             .getBoolean("bridge_enabled", false)
         if (enabled) {
             if (bridgeServer?.isRunning != true) {
-                // A bridge listener restart is a new control session. Do not
-                // revive grants that were active before the listener stopped.
-                taskActionGrants.clear()
-                bridgeServer?.stop()
+                invalidateBridgeSession()
                 val token = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
                     .getString("token", null) ?: return
                 bridgeServer = BridgeServer(token, this).also { it.start() }
             }
         } else {
-            markPendingApprovalsInterrupted()
-            bridgeServer?.stop()
-            bridgeServer = null
-            actionApprovals.clear()
-            taskActionGrants.clear()
+            invalidateBridgeSession()
         }
     }
 
