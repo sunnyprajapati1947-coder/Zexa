@@ -2,8 +2,9 @@
 
 The Android companion service is a separate app and must be installed and
 enabled by the device owner. This module never launches adb, shell commands,
-or arbitrary URLs. All gesture/action requests require a caller-supplied
-approval callback; screen reads are read-only.
+or arbitrary URLs. Exact-action requests require a caller-supplied approval
+callback; bounded navigation requests must match a task grant explicitly created
+and approved in the Android app. Screen reads are read-only.
 """
 from __future__ import annotations
 
