@@ -16,6 +16,16 @@ class BridgeSecurityRulesTest {
     }
 
     @Test
+    fun taskIdentifiersUseARestrictedBoundedFormat() {
+        assertTrue(BridgeSecurityRules.validTaskId("research-session-1"))
+        assertTrue(BridgeSecurityRules.validTaskId("task_1.alpha"))
+        assertFalse(BridgeSecurityRules.validTaskId(""))
+        assertFalse(BridgeSecurityRules.validTaskId("../escape"))
+        assertFalse(BridgeSecurityRules.validTaskId("task with spaces"))
+        assertFalse(BridgeSecurityRules.validTaskId("x".repeat(65)))
+    }
+
+    @Test
     fun tokenComparisonRequiresExactMatch() {
         assertTrue(BridgeSecurityRules.tokenMatches("expected-token", "expected-token"))
         assertFalse(BridgeSecurityRules.tokenMatches("expected-token", "other-token"))
