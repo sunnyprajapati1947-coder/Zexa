@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+from unittest.mock import patch
 import tempfile
 import threading
 import unittest
@@ -11,7 +13,10 @@ from urllib.parse import urlencode
 
 from zexa.laptop_hand import LaptopWorkspace
 from zexa.laptop_pairing import LaptopPairingAuthority
-from zexa.laptop_server import LaptopAgentServer, _LaptopHTTPServer, make_laptop_handler
+from zexa.laptop_server import (
+    LaptopAgentServer, _LaptopHTTPServer, make_laptop_handler,
+    generate_laptop_certificate,
+)
 
 
 def encoded(raw: bytes) -> str:
@@ -128,6 +133,41 @@ class LaptopServerTests(unittest.TestCase):
         status, result = self.request("GET", "/v1/pair/offer")
         self.assertEqual(status, 404)
         self.assertEqual(result["error"], "no_active_pairing_offer")
+
+    def test_certificate_generation_uses_fixed_openssl_arguments_and_private_key_mode(self):
+        cert = Path(self.temp.name) / "generated.crt"
+        key = Path(self.temp.name) / "generated.key"
+        der = b"test certificate DER"
+        pem = (
+            "-----BEGIN CERTIFICATE-----\\n"
+            + base64.b64encode(der).decode("ascii")
+            + "\\n-----END CERTIFICATE-----\\n"
+        )
+
+        def fake_run(command, **kwargs):
+            self.assertNotIn("shell", kwargs)
+            Path(command[command.index("-keyout") + 1]).write_text("private-key", encoding="ascii")
+            Path(command[command.index("-out") + 1]).write_text(pem, encoding="ascii")
+
+        with patch("zexa.laptop_server.shutil.which", return_value="/usr/bin/openssl"), \\
+             patch("zexa.laptop_server.subprocess.run", side_effect=fake_run):
+            fingerprint = generate_laptop_certificate("192.168.1.20", cert, key)
+
+        self.assertEqual(len(fingerprint), 64)
+        self.assertTrue(cert.is_file())
+        self.assertTrue(key.is_file())
+        if os.name != "nt":
+            self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+
+    def test_certificate_generation_refuses_overwrite_and_public_ip(self):
+        cert = Path(self.temp.name) / "existing.crt"
+        key = Path(self.temp.name) / "existing.key"
+        cert.write_text("existing", encoding="ascii")
+        with patch("zexa.laptop_server.shutil.which", return_value="/usr/bin/openssl"):
+            with self.assertRaises(FileExistsError):
+                generate_laptop_certificate("192.168.1.20", cert, key)
+            with self.assertRaises(ValueError):
+                generate_laptop_certificate("8.8.8.8", cert, key)
 
     def test_agent_server_rejects_wildcard_and_public_bind_addresses(self):
         for host in ("0.0.0.0", "8.8.8.8", "example.com"):
