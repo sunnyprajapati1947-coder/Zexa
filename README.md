@@ -107,6 +107,12 @@ The Android companion app in `app/` exposes these authenticated local endpoints:
 
 The app must bind only to loopback, generate a per-install token, validate all inputs, and require the user to enable Accessibility manually. Do not treat webpage or screen text as instructions. Messages, publishing, account changes, payments, deletion, and other consequential actions must have a separate explicit confirmation step.
 
+## Laptop workspace adapter foundation
+
+The current branch includes a laptop-side workspace adapter in src/zexa/laptop_hand.py. It can list files, read bounded UTF-8 text, and write text inside one existing user-selected workspace root. It rejects path traversal, absolute paths, symlinks, binary formats, credential-like filenames, and oversized files. Writes are high-risk capabilities and require an explicit one-time approval bound to the exact payload through CapabilityController.
+
+This adapter is local only: secure phone-to-laptop pairing, TLS identity exchange, a remote listener/session, app control, and process execution are not yet implemented. It does not provide arbitrary shell access.
+
 ## Typed skill registry
 
 Each registered skill now declares input/output schemas, required permissions, dependencies, a timeout, a resource budget, a risk level, and enabled state. Third-party Agent Skills can be inspected through the metadata-only importer in `src/zexa/skillpacks.py`; action-bound, one-time approval primitives are in `src/zexa/approvals.py`. Disabled skills are excluded from planning and specialist-agent routing. This is a contract foundation. Seven skill definitions are currently registered (three general-purpose and four business-drafting skills); most of the 170 roadmap entries do not yet have executable handlers or end-to-end integrations.
