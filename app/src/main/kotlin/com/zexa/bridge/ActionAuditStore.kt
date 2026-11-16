@@ -89,6 +89,6 @@ class ActionAuditStore(
     companion object {
         const val MAX_ENTRIES = 100
         val ALLOWED_ACTIONS = ActionApprovalRegistry.ALLOWED_ACTIONS + "task_grant"
-        val ALLOWED_STATUSES = setOf("pending_approval", "completed", "failed", "denied", "interrupted", "created", "revoked")
+        val ALLOWED_STATUSES = setOf("pending_approval", "dispatched", "completed", "failed", "denied", "interrupted", "created", "revoked")
     }
 }
