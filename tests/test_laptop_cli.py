@@ -31,6 +31,9 @@ class FakeLaptopClient:
         self.launches = []
         FakeLaptopClient.instance = self
 
+    def list_apps(self):
+        return [{"app_id": "editor", "description": "Approved editor"}]
+
     def launch_app(self, app_id, *, user_confirmed=False):
         self.launches.append((app_id, user_confirmed))
         return {"app_id": app_id, "spawned": True}
@@ -105,6 +108,19 @@ class LaptopCliTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "--apps manifest"):
                 cli.main()
         server.assert_not_called()
+
+    def test_laptop_apps_command_lists_owner_allowlisted_apps(self):
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "apps", "--host", "192.168.1.20"
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", FakeLaptopClient),
+            patch("builtins.print") as output,
+        ):
+            cli.main()
+        FakeLaptopClient.instance.list_apps()
+        output.assert_called_once()
 
     def test_laptop_app_launch_requires_exact_confirmation(self):
         with (
