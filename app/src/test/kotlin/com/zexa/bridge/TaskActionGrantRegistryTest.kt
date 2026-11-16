@@ -5,6 +5,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class TaskActionGrantRegistryTest {
     @Test
@@ -86,6 +89,39 @@ class TaskActionGrantRegistryTest {
         assertEquals(0, registry.consume("budget", "task-1", "phone-1", "scroll", 3L)!!.remainingActions)
         assertNull(registry.consume("budget", "task-1", "phone-1", "scroll", 4L))
         assertTrue(registry.list(4L).isEmpty())
+    }
+
+    @Test
+    fun concurrentConsumersCannotExceedTheGrantActionBudget() {
+        val registry = TaskActionGrantRegistry(idFactory = { "one-use-grant" })
+        registry.create(
+            "task-1", "phone-1", setOf("scroll"),
+            nowElapsedMs = 1L, nowEpochMs = 100_000L, maxActions = 1,
+        )
+        val start = CountDownLatch(1)
+        val finished = CountDownLatch(2)
+        val outcomes = Collections.synchronizedList(mutableListOf<TaskActionGrant?>())
+        val threads = (1..2).map { offset ->
+            Thread {
+                try {
+                    start.await()
+                    outcomes.add(
+                        registry.consume(
+                            "one-use-grant", "task-1", "phone-1", "scroll", 10L + offset,
+                        )
+                    )
+                } finally {
+                    finished.countDown()
+                }
+            }.apply { start() }
+        }
+        start.countDown()
+        assertTrue("Concurrent grant consumers timed out.", finished.await(5, TimeUnit.SECONDS))
+        threads.forEach { it.join(1_000L) }
+        assertEquals(2, outcomes.size)
+        assertEquals(1, outcomes.count { it != null })
+        assertEquals(1, outcomes.count { it == null })
+        assertTrue(registry.list(20L).isEmpty())
     }
 
     @Test
