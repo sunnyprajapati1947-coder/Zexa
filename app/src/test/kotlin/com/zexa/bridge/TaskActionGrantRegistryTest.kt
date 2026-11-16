@@ -45,7 +45,7 @@ class TaskActionGrantRegistryTest {
     }
 
     @Test
-    fun coordinateTapsAndTextEntryCannotBeGranted() {
+    fun nonNavigationActionsCannotBeGranted() {
         val registry = TaskActionGrantRegistry()
         assertRejected {
             registry.create("task-1", "phone-1", setOf("tap"), 1L, 100_000L)
