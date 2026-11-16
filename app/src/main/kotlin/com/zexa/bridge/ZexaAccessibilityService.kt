@@ -81,6 +81,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     fun createTaskActionGrant(taskId: String, actions: Set<String>, ttlMs: Long, maxActions: Int): TaskActionGrant {
+        require(bridgeServer?.isRunning == true) { "Enable the authenticated local bridge before creating a task grant." }
         require(BridgeSecurityRules.validTaskId(taskId)) { "Invalid task identifier." }
         val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
         val deviceId = prefs.getString("device_id", null) ?: UUID.randomUUID().toString().also {
