@@ -13,6 +13,7 @@ import stat
 import tempfile
 from urllib.parse import urlencode
 
+from .laptop_hand import MAX_WRITE_CHARS
 from .laptop_pairing import (
     LaptopPairingAuthority,
     _b64decode,
@@ -331,6 +332,47 @@ class LaptopAgentClient:
         status, response = self._request("GET", path, headers=headers)
         if status != 200 or response.get("ok") is not True:
             raise PermissionError("Laptop workspace read was denied or failed.")
+        return response["result"]
+
+    def write_text(
+        self,
+        relative_path: str,
+        content: str,
+        *,
+        overwrite: bool = False,
+        user_confirmed: bool = False,
+    ) -> dict:
+        """Write one workspace text file after an explicit caller confirmation."""
+        if user_confirmed is not True:
+            raise PermissionError("A fresh explicit user confirmation is required for remote writes.")
+        record = self.store.get(self.host, self.port, self.client_id)
+        if record is None or "laptop.workspace.write" not in record["permissions"]:
+            raise PermissionError("This phone was not paired with remote workspace write permission.")
+        if not isinstance(content, str) or not content.strip() or len(content) > MAX_WRITE_CHARS:
+            raise ValueError("Remote workspace content must contain 1–128000 characters.")
+        if type(overwrite) is not bool:
+            raise ValueError("overwrite must be a boolean.")
+        path = "/v1/workspace/write"
+        body = json.dumps({
+            "relative_path": relative_path,
+            "content": content,
+            "overwrite": overwrite,
+        }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(
+            record["session_key_b64"], "POST", path, body
+        )
+        headers.update({
+            "X-Zexa-Client-ID": self.client_id,
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        status, response = self._request("POST", path, body, headers)
+        if status == 409:
+            raise FileExistsError("Laptop workspace file already exists.")
+        if status in {401, 403}:
+            raise PermissionError("Laptop rejected the workspace write or its approval scope.")
+        if status != 200 or response.get("ok") is not True:
+            raise RuntimeError("Laptop workspace write failed.")
         return response["result"]
 
     def revoke_pairing(self) -> bool:
