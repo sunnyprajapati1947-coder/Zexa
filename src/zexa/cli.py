@@ -360,6 +360,11 @@ def main() -> None:
             else:
                 print("Laptop had no active pairing; local credential deleted.")
         elif args.laptop_command == "launch":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None or "laptop.apps.launch" not in pairing["permissions"]:
+                raise PermissionError(
+                    "This phone pairing lacks laptop app-launch permission. Revoke it, restart the laptop server with --allow-app-launch, and pair again."
+                )
             phrase = "LAUNCH " + args.app_id
             print(f"Requested laptop application: {args.app_id}")
             confirmation = input(f"Type exactly '{phrase}' to approve: ")
