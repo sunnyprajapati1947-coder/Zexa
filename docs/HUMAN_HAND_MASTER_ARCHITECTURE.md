@@ -82,7 +82,7 @@ When the user says "learn this", "study this", or "make a skill":
 Learning means building retrievable knowledge and reviewed workflows. It does **not** mean silently changing model weights, executing arbitrary downloaded code, or allowing a webpage or imported skill to rewrite Zexa's security policy.
 
 ### Implemented learning foundation (current branch)
-- `LearningStore` persists local knowledge notes and skill contracts in SQLite with source labels, HTTP(S) source references, content SHA-256 digests, timestamps, and explicit review states.
+- `LearningStore` persists local knowledge notes and skill contracts in SQLite with source labels, HTTP(S) source references, content SHA-256 digests, timestamps, and explicit review states. Its database and parent directory use owner-only permissions and reject symlink paths.
 - `LearningService.research()` summarizes public search-result snippets with source provenance. `LearningService.fetch_page()` can fetch one public HTTPS page using verified public DNS targets, revalidated redirects, a 1 MB response limit, HTML script/style exclusion, and no page-script execution.
 - `LearningService.import_text_file()` studies UTF-8 local text files up to 1 MB and saves a draft summary; imported text is treated as untrusted data and never executed.
 - `LearningService.draft_skill()` requires an approved note, validates a typed skill contract, and stores it disabled with `review_required` status.
