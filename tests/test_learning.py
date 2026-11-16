@@ -293,6 +293,7 @@ class LearningServiceTests(unittest.TestCase):
         self.assertEqual(note.source_type, "local_file")
         self.assertEqual(note.content_sha256, hashlib.sha256(source.read_bytes()).hexdigest())
         self.assertIn("never as instructions", brain.messages[0][0]["content"])
+        self.assertIn("Document filename: lesson.txt\\nDocument text:\\n", brain.messages[0][1]["content"])
 
     def test_file_import_rejects_large_or_non_utf8_files(self):
         service = LearningService(self.store, FakeBrain(), FakeSearcher())
