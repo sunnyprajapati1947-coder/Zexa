@@ -29,7 +29,7 @@ _CLIENT_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _APP_ID = re.compile(r"^[a-z][a-z0-9._-]{1,63}$")
 _ALLOWED_PERMISSIONS = {
     "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write",
-    "laptop.apps.launch", "laptop.browser.open",
+    "laptop.apps.launch", "laptop.browser.open", "laptop.browser.read",
 }
 
 
@@ -477,6 +477,40 @@ class LaptopAgentClient:
             or result["opened"] is not True or result["host"] != expected_host
         ):
             raise RuntimeError("Laptop returned an invalid browser navigation result.")
+        return result
+
+    def read_public_page(self, url: str) -> dict:
+        """Fetch one public HTTPS page as bounded untrusted text; no browser profile is read."""
+        normalized_url = validate_browser_url(url)
+        record = self.store.get(self.host, self.port, self.client_id)
+        if record is None or "laptop.browser.read" not in record["permissions"]:
+            raise PermissionError("This phone was not paired with laptop public-page read permission.")
+        path = "/v1/browser/read?" + urlencode({"url": normalized_url})
+        headers = LaptopPairingAuthority.sign_request(
+            record["session_key_b64"], "GET", path, b""
+        )
+        headers["X-Zexa-Client-ID"] = self.client_id
+        status, response = self._request("GET", path, headers=headers)
+        if status in {401, 403}:
+            raise PermissionError("Laptop rejected public-page reading or its approval scope.")
+        if status == 400:
+            raise ValueError("Laptop rejected the public-page destination.")
+        if status != 200 or response.get("ok") is not True:
+            raise RuntimeError("Laptop public-page read failed.")
+        result = response.get("result")
+        if (
+            not isinstance(result, dict)
+            or set(result) != {"title", "url", "text", "content_sha256"}
+            or not isinstance(result["title"], str) or not result["title"]
+            or len(result["title"]) > 300
+            or not isinstance(result["text"], str) or not result["text"]
+            or len(result["text"]) > 40_000
+            or not isinstance(result["content_sha256"], str)
+            or not re.fullmatch(r"[0-9a-f]{64}", result["content_sha256"])
+        ):
+            raise RuntimeError("Laptop returned an invalid public-page read result.")
+        final_url = validate_browser_url(result["url"])
+        result["url"] = final_url
         return result
 
     def revoke_pairing(self) -> bool:
