@@ -255,9 +255,10 @@ class LaptopPairingAuthority:
             expired = [item for item, seen_at in replay.items() if current - seen_at > 60]
             for item in expired:
                 replay.pop(item, None)
-            if nonce_b64 in replay or len(replay) >= _MAX_REPLAY_ENTRIES:
+            canonical_nonce = _b64encode(nonce)
+            if canonical_nonce in replay or len(replay) >= _MAX_REPLAY_ENTRIES:
                 return False
-            replay[nonce_b64] = current
+            replay[canonical_nonce] = current
             return True
 
     @staticmethod
