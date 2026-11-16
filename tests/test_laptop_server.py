@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sys
 from unittest.mock import patch
 import tempfile
 import threading
@@ -13,6 +14,7 @@ from urllib.parse import urlencode
 
 from zexa.audit import AuditLog
 from zexa.laptop_hand import LaptopWorkspace
+from zexa.laptop_apps import LaptopAppRegistry
 from zexa.laptop_pairing import LaptopPairingAuthority
 from zexa.laptop_server import (
     LaptopAgentServer, _LaptopHTTPServer, make_laptop_handler,
@@ -157,6 +159,53 @@ class LaptopServerTests(unittest.TestCase):
         })
         status, _ = self.request("POST", path, body, headers)
         self.assertEqual(status, 409)
+
+    def test_app_launch_requires_opt_in_pairing_scope_and_owner_allowlist(self):
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.apps.launch"
+        ))
+        key = self.pair(offer)
+        manifest = Path(self.temp.name) / "apps.json"
+        manifest.write_text(json.dumps({
+            "version": 1,
+            "apps": [{
+                "id": "python-tool",
+                "executable": str(Path(sys.executable).resolve()),
+                "arguments": ["--version"],
+                "description": "Python version tool",
+            }],
+        }), encoding="utf-8")
+        self.server.app_registry = LaptopAppRegistry(manifest)
+        path = "/v1/apps/launch"
+        body = json.dumps({"app_id": "python-tool"}, separators=(",", ":")).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(key, "POST", path, body)
+        headers.update({
+            "X-Zexa-Client-ID": "phone-main",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        with patch("zexa.laptop_apps.subprocess.Popen") as spawn:
+            spawn.return_value.pid = 4321
+            status, result = self.request("POST", path, body, headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(result["result"]["app_id"], "python-tool")
+        spawn.assert_called_once()
+        self.assertIs(spawn.call_args.kwargs["shell"], False)
+
+    def test_app_launch_denied_without_explicit_pairing_scope(self):
+        key = self.pair()
+        path = "/v1/apps/launch"
+        body = json.dumps({"app_id": "editor"}).encode("utf-8")
+        headers = LaptopPairingAuthority.sign_request(key, "POST", path, body)
+        headers.update({
+            "X-Zexa-Client-ID": "phone-main",
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        })
+        with patch("zexa.laptop_apps.subprocess.Popen") as spawn:
+            status, _ = self.request("POST", path, body, headers)
+        self.assertEqual(status, 401)
+        spawn.assert_not_called()
 
     def test_remote_shell_route_is_not_exposed(self):
         self.pair()
