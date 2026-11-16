@@ -11,12 +11,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 import re
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from .skills import Skill
+from .laptop_pairing import secure_owner_only
 
 
 _NOTE_STATUSES = {"draft", "approved", "rejected", "archived"}
@@ -72,8 +74,14 @@ class LearningStore:
 
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(path or Path.home() / ".zexa" / "knowledge.sqlite3").expanduser()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if self.path.parent.is_symlink() or self.path.is_symlink():
+            raise PermissionError("Knowledge database and parent directory must not be symbolic links.")
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        secure_owner_only(self.path.parent, directory=True)
+        if self.path.exists() and not self.path.is_file():
+            raise PermissionError("Knowledge database must be a regular file.")
         self._initialize()
+        secure_owner_only(self.path)
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path)
