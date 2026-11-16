@@ -53,7 +53,7 @@ Required design:
 - Never read browser passwords, password-manager stores, private keys, session cookies, or other credentials. Do not bypass login, endpoint protection, OS permissions, or security prompts.
 - The laptop agent must have a visible running indicator, pause/stop control, local audit log, and a way to revoke the phone's pairing.
 
-A laptop hand is **not implemented by this document**. It becomes available only after a separate agent, pairing protocol, tests, and real-device validation exist.
+A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, and optional exact-confirmed text writes. It is not yet production-ready; real phone-to-laptop LAN validation, persistent server-side pairing storage, visible laptop-side session controls, and platform-specific installation are still required.
 
 ### C. Browser and internet hand
 
@@ -140,7 +140,7 @@ Every task has maximum steps, wall-clock deadline, model-token/resource budget, 
 
 ### Phase 2 — laptop pairing and restricted hand
 - Implement the desktop agent for one supported OS first.
-- Add pairing, revocation, device status, workspace allowlists, restricted file operations, and visible local approvals.
+- Complete pairing, revocation, device status, workspace allowlists, restricted file operations, visible local approvals, persistent pairing storage, and real-device validation.
 - Add integration tests and a real phone-to-laptop acceptance test on a user-owned device.
 
 **Gate:** no public unauthenticated listener, no arbitrary remote shell, and every write is scoped and auditable.
