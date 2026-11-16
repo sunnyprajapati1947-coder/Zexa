@@ -459,13 +459,24 @@ class ZexaAccessibilityService : AccessibilityService() {
                 val text = payload.optString("text", "")
                 require(text.isNotBlank() && text.length <= 500)
                 val root = rootInActiveWindow ?: error("No active input window.")
-                val target = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-                root.recycle()
-                require(target != null && target.isEditable && !target.isPassword)
-                val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
-                val ok = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-                target.recycle()
-                JSONObject().put("ok", ok)
+                val target = try {
+                    root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                        ?: error("No focused input field.")
+                } finally {
+                    root.recycle()
+                }
+                try {
+                    require(target.isEditable && !target.isPassword) {
+                        "Focused field is not an eligible non-password input."
+                    }
+                    val args = Bundle().apply {
+                        putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+                    }
+                    val ok = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                    JSONObject().put("ok", ok)
+                } finally {
+                    target.recycle()
+                }
             }
             "launch_app" -> {
                 val packageName = payload.optString("package_name", "")
