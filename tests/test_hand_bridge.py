@@ -111,7 +111,13 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
     def test_task_grants_are_listed_only_from_valid_native_response(self):
         bridge = self.make_bridge()
         bridge._request = lambda method, path, payload=None: {
-            "ok": True, "grants": [{"grant_id": "grant-1", "task_id": "research-1"}]
+            "ok": True, "grants": [{
+                "grant_id": "grant-1",
+                "task_id": "research-1",
+                "allowed_actions": ["scroll", "back"],
+                "expires_at_epoch_ms": 200_000,
+                "remaining_actions": 3,
+            }]
         }
         self.assertEqual(bridge.task_grants()[0]["grant_id"], "grant-1")
 
