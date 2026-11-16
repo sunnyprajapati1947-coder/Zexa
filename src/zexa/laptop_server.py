@@ -371,8 +371,19 @@ def make_laptop_handler():
                 except (ValueError, OSError, TypeError) as exc:
                     return self._send(400, {"error": str(exc)[:200]})
             if self.path == "/v1/pair/revoke":
+                # Revocation is a safety control, not a workspace capability.
+                # Any correctly authenticated paired client may revoke itself,
+                # even when its pairing grants no workspace-list permission.
                 client_id = self.headers.get("X-Zexa-Client-ID", "")
-                if not self._authorized("laptop.workspace.list"):
+                signed_headers = {
+                    "X-Zexa-Timestamp": self.headers.get("X-Zexa-Timestamp", ""),
+                    "X-Zexa-Nonce": self.headers.get("X-Zexa-Nonce", ""),
+                    "X-Zexa-MAC": self.headers.get("X-Zexa-MAC", ""),
+                }
+                if not self.server.authority.verify_request(
+                    client_id, self.command, self.path, b"", signed_headers
+                ):
+                    self._send(401, {"error": "unauthorized"})
                     return
                 if self.server.authority.revoke_client(client_id):
                     self._audit(
