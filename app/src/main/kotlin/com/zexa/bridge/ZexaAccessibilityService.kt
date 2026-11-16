@@ -408,6 +408,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         fun visit(node: AccessibilityNodeInfo?, depth: Int, sensitiveContext: Boolean = false) {
             if (node == null || depth > 12 || count >= 150) return
             count++
+            try {
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
             val className = node.className?.toString()?.take(160) ?: ""
@@ -462,6 +463,11 @@ class ZexaAccessibilityService : AccessibilityService() {
                 } finally {
                     child?.recycle()
                 }
+            }
+            } catch (_: RuntimeException) {
+                // Accessibility nodes can become stale while an app updates its
+                // window. Skip that node; its owner still recycles the reference.
+                return
             }
         }
         return try {
