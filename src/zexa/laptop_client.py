@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import http.client
+import ipaddress
 import json
 import os
 from pathlib import Path
 import re
 import secrets
 import ssl
+import stat
 import tempfile
 from urllib.parse import urlencode
 
@@ -37,6 +39,8 @@ class PairingCredentialStore:
             return {}
         if self.path.is_symlink() or not self.path.is_file() or self.path.stat().st_size > 64_000:
             raise PermissionError("Laptop pairing credential file is not a safe regular file.")
+        if os.name != "nt" and stat.S_IMODE(self.path.stat().st_mode) & 0o077:
+            raise PermissionError("Laptop pairing credential file permissions are too broad; restrict it to the current user.")
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -113,7 +117,7 @@ class PairingCredentialStore:
         try:
             try:
                 os.fchmod(descriptor, 0o600)
-            except OSError:
+            except (AttributeError, OSError):
                 pass
             with os.fdopen(descriptor, "w", encoding="utf-8") as target:
                 json.dump({"version": 1, "pairs": list(pairs.values())}, target, ensure_ascii=False)
@@ -200,6 +204,20 @@ class LaptopAgentClient:
     ) -> None:
         if not isinstance(host, str) or not host:
             raise ValueError("Laptop host is required.")
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError as exc:
+            raise ValueError("Laptop host must be a literal private IPv4 address.") from exc
+        allowed_networks = (
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.168.0.0/16"),
+        )
+        if address.version != 4 or not (
+            address.is_loopback or any(address in network for network in allowed_networks)
+        ):
+            raise ValueError("Laptop connection may target only loopback or a private IPv4 address.")
+        host = str(address)
         if type(port) is not int or not 1024 <= port <= 65535:
             raise ValueError("Laptop port must be between 1024 and 65535.")
         normalized = fingerprint.replace(":", "").strip().lower() if isinstance(fingerprint, str) else ""
