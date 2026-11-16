@@ -223,11 +223,10 @@ class LearningStore:
         terms = [part for part in re.findall(r"[A-Za-z0-9_\u0900-\u097f-]{2,}", query)[:8]]
         if not terms:
             raise ValueError("Knowledge search query has no searchable terms.")
-        clauses = " AND ".join("(title LIKE ? OR body LIKE ?)" for _ in terms)
+        clauses = " AND ".join("(instr(lower(title), lower(?)) > 0 OR instr(lower(body), lower(?)) > 0)" for _ in terms)
         params: list[str | int] = []
         for term in terms:
-            escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            params.extend((f"%{escaped}%", f"%{escaped}%"))
+            params.extend((term, term))
         sql = "SELECT * FROM knowledge_notes WHERE " + clauses
         if approved_only:
             sql += " AND status='approved'"
