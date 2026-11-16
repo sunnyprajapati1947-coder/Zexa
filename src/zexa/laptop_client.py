@@ -338,6 +338,39 @@ class LaptopAgentClient:
             raise PermissionError("Laptop workspace read was denied or failed.")
         return response["result"]
 
+    def list_apps(self) -> list[dict[str, str]]:
+        """List only owner-allowlisted apps; this does not launch or modify anything."""
+        record = self.store.get(self.host, self.port, self.client_id)
+        if record is None or "laptop.apps.launch" not in record["permissions"]:
+            raise PermissionError("This phone was not paired with laptop app-launch permission.")
+        path = "/v1/apps"
+        headers = LaptopPairingAuthority.sign_request(
+            record["session_key_b64"], "GET", path, b""
+        )
+        headers["X-Zexa-Client-ID"] = self.client_id
+        status, response = self._request("GET", path, headers=headers)
+        if status in {401, 403}:
+            raise PermissionError("Laptop rejected app inventory access or its approval scope.")
+        if status == 404:
+            raise KeyError("Laptop app launch is not enabled by the owner.")
+        if status != 200 or response.get("ok") is not True:
+            raise RuntimeError("Laptop app inventory request failed.")
+        result = response.get("result")
+        apps = result.get("apps") if isinstance(result, dict) else None
+        if not isinstance(apps, list) or len(apps) > 30:
+            raise RuntimeError("Laptop returned an invalid app inventory.")
+        validated = []
+        for item in apps:
+            if (
+                not isinstance(item, dict) or set(item) != {"app_id", "description"}
+                or not isinstance(item["app_id"], str) or not _APP_ID.fullmatch(item["app_id"])
+                or not isinstance(item["description"], str) or not item["description"].strip()
+                or len(item["description"]) > 200
+            ):
+                raise RuntimeError("Laptop returned an invalid app inventory entry.")
+            validated.append({"app_id": item["app_id"], "description": item["description"]})
+        return validated
+
     def launch_app(self, app_id: str, *, user_confirmed: bool = False) -> dict:
         """Launch one laptop-owner-approved application after a fresh exact confirmation."""
         if user_confirmed is not True:
