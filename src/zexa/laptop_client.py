@@ -333,5 +333,19 @@ class LaptopAgentClient:
             raise PermissionError("Laptop workspace read was denied or failed.")
         return response["result"]
 
+    def revoke_pairing(self) -> bool:
+        """Revoke this phone's server-side key, then remove its local credential."""
+        headers = self._signed_headers("POST", "/v1/pair/revoke")
+        status, response = self._request(
+            "POST", "/v1/pair/revoke", headers=headers
+        )
+        if status == 200 and response.get("revoked") is True:
+            self.store.delete(self.host, self.port, self.client_id)
+            return True
+        if status == 404:
+            self.store.delete(self.host, self.port, self.client_id)
+            return False
+        raise PermissionError("Laptop pairing revocation was denied or failed.")
+
     def forget_local_pairing(self) -> bool:
         return self.store.delete(self.host, self.port, self.client_id)
