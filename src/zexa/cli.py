@@ -135,6 +135,10 @@ def main() -> None:
         "--allow-app-launch", action="store_true",
         help="Allow paired phones to launch only apps in the supplied owner manifest",
     )
+    laptop_serve.add_argument(
+        "--allow-browser-open", action="store_true",
+        help="Allow paired phones to open exact-confirmed public HTTPS URLs in the visible laptop browser",
+    )
     laptop_pair = laptop_sub.add_parser("pair", help="Pair this phone using the code shown by the laptop")
     laptop_pair.add_argument("--host", required=True)
     laptop_pair.add_argument("--port", type=int, default=9443)
@@ -170,6 +174,13 @@ def main() -> None:
     laptop_launch.add_argument("--port", type=int, default=9443)
     laptop_launch.add_argument("--client-id", default="zexa-phone")
     laptop_launch.add_argument("app_id")
+    laptop_open_url = laptop_sub.add_parser(
+        "open-url", help="Open one public HTTPS URL in the paired laptop's visible browser after exact confirmation",
+    )
+    laptop_open_url.add_argument("--host", required=True)
+    laptop_open_url.add_argument("--port", type=int, default=9443)
+    laptop_open_url.add_argument("--client-id", default="zexa-phone")
+    laptop_open_url.add_argument("url")
     laptop_clients = laptop_sub.add_parser("clients", help="List paired phones on this laptop")
     laptop_clients.add_argument(
         "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
@@ -300,6 +311,8 @@ def main() -> None:
                 permissions.append("laptop.workspace.write")
             if args.allow_app_launch:
                 permissions.append("laptop.apps.launch")
+            if args.allow_browser_open:
+                permissions.append("laptop.browser.open")
             offer = server.begin_pairing(permissions=permissions)
             fingerprint = certificate_fingerprint(args.cert)
             print("Zexa laptop Human Hand server started (TLS 1.2+, private IPv4 only).")
@@ -313,7 +326,9 @@ def main() -> None:
                 print("Remote workspace writes are enabled; every write must be confirmed on the phone.")
             if args.allow_app_launch:
                 print("Remote app launch is enabled only for the owner's fixed allowlist; each launch needs exact phone confirmation.")
-            if not args.allow_write and not args.allow_app_launch:
+            if args.allow_browser_open:
+                print("Browser navigation is enabled only for exact-confirmed public HTTPS URLs and opens visibly on this laptop.")
+            if not args.allow_write and not args.allow_app_launch and not args.allow_browser_open:
                 print("Remote access is read-only: workspace list/read only; no shell or app control.")
             try:
                 server.serve_forever()
@@ -415,6 +430,22 @@ def main() -> None:
                 print("Laptop app launch cancelled.")
                 return
             result = client.launch_app(args.app_id, user_confirmed=True)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.laptop_command == "open-url":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None or "laptop.browser.open" not in pairing["permissions"]:
+                raise PermissionError(
+                    "This phone pairing lacks laptop browser permission. Restart the laptop server with --allow-browser-open and pair again."
+                )
+            from .laptop_browser import validate_browser_url
+            normalized_url = validate_browser_url(args.url)
+            phrase = "OPEN URL " + normalized_url
+            print(f"Requested visible laptop browser destination: {normalized_url}")
+            confirmation = input(f"Type exactly '{phrase}' to approve: ")
+            if confirmation != phrase:
+                print("Laptop browser navigation cancelled.")
+                return
+            result = client.open_browser_url(normalized_url, user_confirmed=True)
             print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
