@@ -35,11 +35,11 @@ class AccessibilityBridge:
         base_url: str = "http://127.0.0.1:8765",
         timeout: int = 8,
     ) -> None:
-        if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9._~-]{16,256}", token):
-            raise ValueError("Bridge token must be 16–256 URL-safe characters.")
+        if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{64}", token):
+            raise ValueError("Bridge token must be exactly 64 lowercase hexadecimal characters.")
         parsed = urlparse(base_url)
-        if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-            raise ValueError("Accessibility bridge must use local HTTP loopback only.")
+        if parsed.scheme != "http" or parsed.hostname != "127.0.0.1":
+            raise ValueError("Accessibility bridge must use the IPv4 loopback address 127.0.0.1.")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("Bridge URL must not contain credentials, query, or fragment.")
         if parsed.port != 8765 or parsed.path not in {"", "/"}:
