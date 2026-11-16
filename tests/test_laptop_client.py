@@ -95,7 +95,8 @@ class LaptopClientTests(unittest.TestCase):
             self.assertEqual(method, "GET")
             self.assertIn("/v1/browser/read?", path)
             self.assertEqual(headers["X-Zexa-Client-ID"], "phone-main")
-            self.assertRegex(headers["X-Zexa-Timestamp"], r"^\\d{10}$")
+            self.assertEqual(len(headers["X-Zexa-Timestamp"]), 10)
+            self.assertTrue(headers["X-Zexa-Timestamp"].isdigit())
             self.assertRegex(headers["X-Zexa-Nonce"], r"^[A-Za-z0-9_-]{20,}$")
             self.assertRegex(headers["X-Zexa-MAC"], r"^[0-9a-f]{64}$")
             return 200, {"ok": True, "result": page}
