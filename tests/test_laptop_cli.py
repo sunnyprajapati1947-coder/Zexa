@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from zexa import cli
+
+
+class FakeStore:
+    def __init__(self, permissions):
+        self.permissions = permissions
+
+    def get(self, host, port, client_id):
+        return {"permissions": self.permissions}
+
+
+class FakeLaptopClient:
+    instance = None
+
+    def __init__(self, host, port, fingerprint, client_id):
+        self.host = host
+        self.port = port
+        self.client_id = client_id
+        self.store = FakeStore((
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write"
+        ))
+        self.writes = []
+        FakeLaptopClient.instance = self
+
+    def write_text(self, path, content, *, overwrite=False, user_confirmed=False):
+        self.writes.append((path, content, overwrite, user_confirmed))
+        return {"relative_path": path, "written": True}
+
+
+class LaptopCliTests(unittest.TestCase):
+    def invoke_write(self, source, destination, confirmation, *extra):
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "write", "--host", "192.168.1.20",
+                *extra, str(source), destination,
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", FakeLaptopClient),
+            patch("builtins.input", return_value=confirmation),
+            patch("builtins.print"),
+        ):
+            cli.main()
+        return FakeLaptopClient.instance
+
+    def test_remote_write_cancel_sends_no_data(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "notes.md"
+            source.write_text("hello", encoding="utf-8")
+            client = self.invoke_write(source, "docs/notes.md", "no")
+        self.assertEqual(client.writes, [])
+
+    def test_remote_write_requires_exact_destination_confirmation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "notes.md"
+            source.write_text("hello", encoding="utf-8")
+            client = self.invoke_write(source, "docs/notes.md", "WRITE docs/notes.md")
+        self.assertEqual(
+            client.writes,
+            [("docs/notes.md", "hello", False, True)],
+        )
+
+    def test_overwrite_requires_distinct_confirmation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "notes.md"
+            source.write_text("updated", encoding="utf-8")
+            client = self.invoke_write(
+                source, "docs/notes.md", "WRITE docs/notes.md", "--overwrite"
+            )
+        self.assertEqual(client.writes, [])
+
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "notes.md"
+            source.write_text("updated", encoding="utf-8")
+            client = self.invoke_write(
+                source, "docs/notes.md", "OVERWRITE docs/notes.md", "--overwrite"
+            )
+        self.assertEqual(
+            client.writes,
+            [("docs/notes.md", "updated", True, True)],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
