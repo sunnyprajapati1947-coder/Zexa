@@ -1,4 +1,4 @@
-"""Pinned-TLS phone client for the read-scoped laptop Human Hand server."""
+"""Pinned-TLS phone client for the scope-limited laptop Human Hand server."""
 from __future__ import annotations
 
 import http.client
