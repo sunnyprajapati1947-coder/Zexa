@@ -209,10 +209,9 @@ class BridgeServer(
                             .put("grant_id", grantId)
                     }
                     method == "GET" && path == "/v1/screen" -> {
-                        if (!service.isScreenAccessEnabled()) {
-                            responseStatus = 403
-                            JSONObject().put("ok", false).put("error", "Screen access is disabled in Zexa settings.")
-                        } else service.screenJson()
+                        val snapshot = service.screenJson()
+                        if (snapshot.optBoolean("screen_access_disabled")) responseStatus = 403
+                        snapshot
                     }
                     method == "POST" && path == "/v1/action" -> {
                         val length = BridgeSecurityRules.contentLength(headers["content-length"])
