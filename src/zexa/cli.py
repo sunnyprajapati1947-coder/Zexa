@@ -377,7 +377,7 @@ def main() -> None:
                     for item in os.getenv("ZEXA_ALLOWED_ANDROID_ACTIONS", "").split(",")
                     if item.strip()
                 }
-                known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
+                known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url"}
                 if not allowed_actions <= known_actions:
                     raise ValueError("ZEXA_ALLOWED_ANDROID_ACTIONS contains an unknown action.")
                 action_name = f"android.{args.action}"
