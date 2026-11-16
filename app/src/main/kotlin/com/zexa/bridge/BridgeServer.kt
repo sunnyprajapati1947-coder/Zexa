@@ -114,10 +114,10 @@ class BridgeServer(
             client.soTimeout = 5000
             val input = BufferedInputStream(client.getInputStream())
             val requestLine = readHttpLine(input) ?: return
-            val parts = requestLine.split(" ")
-            if (parts.size != 3) return respond(client, 400, JSONObject().put("error", "Bad request"))
-            val method = parts[0]
-            val path = parts[1]
+            val parsedRequest = BridgeHttpRequestLine.parse(requestLine)
+                ?: return respond(client, 400, JSONObject().put("error", "Bad request line"))
+            val method = parsedRequest.method
+            val path = parsedRequest.target
             val headers = mutableMapOf<String, String>()
             var headerCount = 0
             while (true) {
@@ -230,6 +230,8 @@ class BridgeServer(
                                 .put("status", "expired_or_unknown")
                                 .put("request_id", requestId)
                     }
+                    method !in setOf("GET", "POST") ->
+                        return respond(client, 405, JSONObject().put("error", "Method not allowed"))
                     else -> return respond(client, 404, JSONObject().put("error", "Not found"))
                 }
             } catch (error: Exception) {
@@ -264,6 +266,7 @@ class BridgeServer(
             400 -> "Bad Request"
             401 -> "Unauthorized"
             403 -> "Forbidden"
+            405 -> "Method Not Allowed"
             503 -> "Service Unavailable"
             else -> "Not Found"
         }
