@@ -15,6 +15,7 @@ import socket
 import ssl
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlsplit
+from urllib.request import Request, urlopen
 
 
 _SEARCH_URL = "https://html.duckduckgo.com/html/"
