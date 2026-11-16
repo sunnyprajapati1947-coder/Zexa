@@ -53,13 +53,13 @@ Required design:
 - Never read browser passwords, password-manager stores, private keys, session cookies, or other credentials. Do not bypass login, endpoint protection, OS permissions, or security prompts.
 - The laptop agent must have a visible running indicator, pause/stop control, local audit log, and a way to revoke the phone's pairing.
 
-A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, optional exact-confirmed text writes, owner-only persistent server-side pairing/replay storage, and optional owner-allowlisted app launch. It is not yet production-ready; real phone-to-laptop LAN validation, visible laptop-side session controls, and platform-specific installation are still required.
+A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, optional exact-confirmed text writes, owner-only persistent server-side pairing/replay storage, optional owner-allowlisted app launch, and optional exact-confirmed opening of public HTTPS URLs in the laptop owner's visible default browser (`zexa laptop open-url`). Browser navigation has its own opt-in `laptop.browser.open` pairing scope and `--allow-browser-open` server flag; audit records retain only the destination host, not URL paths or query strings. This is navigation only: it does not inspect browser tabs, read browser profiles/cookies/passwords, click page controls, fill forms, or submit transactions. It is not yet production-ready; real phone-to-laptop LAN validation, visible laptop-side session controls, and platform-specific installation are still required.
 
 ### C. Browser and internet hand
 
 - Separate read-only research from interactive browser control.
 - Research adapters use source URLs, titles, retrieval timestamps, content limits, redirect controls, and source citations.
-- Browser control uses an isolated profile without saved credentials by default.
+- The current laptop browser adapter opens only validated public HTTPS URLs in the owner's visible default browser after exact confirmation; it does not automate page interaction. A future interactive adapter must use an isolated profile without saved credentials by default.
 - Treat webpage text, downloaded files, QR codes, and screen content as untrusted input, never as instructions that can grant permissions or change the task.
 - Form submission, posting, messaging, purchases, account changes, and file uploads require a preview and fresh approval for the exact destination and content.
 
