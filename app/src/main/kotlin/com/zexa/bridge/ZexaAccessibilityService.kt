@@ -31,6 +31,7 @@ class ActionExecutionUnknownException(message: String) : IllegalStateException(m
 
 class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
+    @Volatile private var interruptionGeneration = 0L
     private val actionApprovals = ActionApprovalRegistry()
     private val taskActionGrants = TaskActionGrantRegistry()
     // All reads and writes are guarded by the service monitor; insertion order gives FIFO eviction.
@@ -60,8 +61,9 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     @Synchronized
     override fun onInterrupt() {
-        // Serialize interruption with approval execution and request queueing. A request
-        // must not be added after the interruption has invalidated the current queue.
+        // Invalidate work queued for the service looper before clearing one-use authority.
+        // Approval/grant handlers never hold this monitor while waiting for that looper.
+        interruptionGeneration += 1L
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
         taskActionGrants.clear()
@@ -107,6 +109,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
     }
 
+    @Synchronized
     fun createTaskActionGrant(taskId: String, actions: Set<String>, ttlMs: Long, maxActions: Int): TaskActionGrant {
         require(bridgeServer?.isRunning == true) { "Enable the authenticated local bridge before creating a task grant." }
         require(BridgeSecurityRules.validTaskId(taskId)) { "Invalid task identifier." }
@@ -136,23 +139,30 @@ class ZexaAccessibilityService : AccessibilityService() {
         return revoked
     }
 
-    @Synchronized
     fun performGrantedAction(taskId: String, grantId: String, action: String, payload: JSONObject): JSONObject {
-        require(action in TaskActionGrantRegistry.GRANTABLE_ACTIONS) { "Action is not eligible for a task grant." }
-        require(BridgeSecurityRules.validActionPayload(action, payload)) { "Invalid payload for the requested Android action." }
-        val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
-        val deviceId = prefs.getString("device_id", null)
-            ?: return JSONObject().put("ok", false).put("status", "grant_unavailable")
-        val consumed = taskActionGrants.consume(
-            grantId, taskId, deviceId, action, SystemClock.elapsedRealtime()
-        ) ?: return JSONObject().put("ok", false).put("status", "grant_scope_mismatch_or_expired")
+        val generation: Long
+        val consumed: ConsumedTaskActionGrant
+        synchronized(this) {
+            require(action in TaskActionGrantRegistry.GRANTABLE_ACTIONS) { "Action is not eligible for a task grant." }
+            require(BridgeSecurityRules.validActionPayload(action, payload)) { "Invalid payload for the requested Android action." }
+            val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
+            val deviceId = prefs.getString("device_id", null)
+                ?: return JSONObject().put("ok", false).put("status", "grant_unavailable")
+            consumed = taskActionGrants.consume(
+                grantId, taskId, deviceId, action, SystemClock.elapsedRealtime()
+            ) ?: return JSONObject().put("ok", false).put("status", "grant_scope_mismatch_or_expired")
+            generation = interruptionGeneration
+        }
         val result = try {
-            val execution = perform(action, payload)
+            val execution = onServiceThread {
+                check(interruptionGeneration == generation) { "Android accessibility service was interrupted before action dispatch." }
+                performOnServiceThread(action, payload)
+            }
             execution.put("status", when {
-                    execution.optString("status") == "dispatched" -> "dispatched"
-                    execution.optBoolean("ok", false) -> "completed"
-                    else -> "failed"
-                })
+                execution.optString("status") == "dispatched" -> "dispatched"
+                execution.optBoolean("ok", false) -> "completed"
+                else -> "failed"
+            })
                 .put("grant_id", grantId)
                 .put("remaining_actions", consumed.remainingActions)
         } catch (error: ActionExecutionUnknownException) {
@@ -166,7 +176,9 @@ class ZexaAccessibilityService : AccessibilityService() {
                 .put("error", error.message ?: "Action failed")
                 .put("remaining_actions", consumed.remainingActions)
         }
-        actionAudit.append(ActionAuditEntry("grant-action-" + grantId.take(28) + "-" + UUID.randomUUID().toString().take(12), action, result.optString("status", "failed"), System.currentTimeMillis()))
+        synchronized(this) {
+            actionAudit.append(ActionAuditEntry("grant-action-" + grantId.take(28) + "-" + UUID.randomUUID().toString().take(12), action, result.optString("status", "failed"), System.currentTimeMillis()))
+        }
         return result
     }
 
@@ -239,19 +251,26 @@ class ZexaAccessibilityService : AccessibilityService() {
         return actionApprovals.list(SystemClock.elapsedRealtime()).any { it.requestId == requestId }
     }
 
-    @Synchronized
     fun approveAction(requestId: String): JSONObject {
-        recordExpiredApprovals()
-        val ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
-            ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
-        val executing = JSONObject()
-            .put("ok", true)
-            .put("status", "executing")
-            .put("request_id", ticket.requestId)
-        rememberActionResult(ticket.requestId, executing)
-        actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "executing", System.currentTimeMillis()))
+        val ticket: PendingDeviceAction
+        val generation: Long
+        synchronized(this) {
+            recordExpiredApprovals()
+            ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
+                ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
+            generation = interruptionGeneration
+            val executing = JSONObject()
+                .put("ok", true)
+                .put("status", "executing")
+                .put("request_id", ticket.requestId)
+            rememberActionResult(ticket.requestId, executing)
+            actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "executing", System.currentTimeMillis()))
+        }
         val result = try {
-            val execution = perform(ticket.action, JSONObject(ticket.payloadJson))
+            val execution = onServiceThread {
+                check(interruptionGeneration == generation) { "Android accessibility service was interrupted before action dispatch." }
+                performOnServiceThread(ticket.action, JSONObject(ticket.payloadJson))
+            }
             execution
                 .put("status", when {
                     execution.optString("status") == "dispatched" -> "dispatched"
@@ -272,8 +291,10 @@ class ZexaAccessibilityService : AccessibilityService() {
                 .put("request_id", ticket.requestId)
                 .put("error", error.message ?: "Action failed")
         }
-        rememberActionResult(ticket.requestId, result)
-        actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, result.optString("status", "failed"), System.currentTimeMillis()))
+        synchronized(this) {
+            rememberActionResult(ticket.requestId, result)
+            actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, result.optString("status", "failed"), System.currentTimeMillis()))
+        }
         return result
     }
 
