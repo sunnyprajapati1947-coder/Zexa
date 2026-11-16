@@ -22,6 +22,12 @@ class BridgeHttpLineReaderTest {
     }
 
     @Test
+    fun rejectsControlAndNonAsciiBytes() {
+        assertRejected("GET /\\u0001 HTTP/1.1\\r\\n")
+        assertRejected("GET /é HTTP/1.1\\r\\n")
+    }
+
+    @Test
     fun enforcesLineByteLimit() {
         try {
             BridgeHttpLineReader.read(ByteArrayInputStream("12345\r\n".toByteArray()), 4)
