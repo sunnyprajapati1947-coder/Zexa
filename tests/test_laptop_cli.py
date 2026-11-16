@@ -29,7 +29,12 @@ class FakeLaptopClient:
         ))
         self.writes = []
         self.launches = []
+        self.browser_opens = []
         FakeLaptopClient.instance = self
+
+    def open_browser_url(self, url, *, user_confirmed=False):
+        self.browser_opens.append((url, user_confirmed))
+        return {"opened": True, "host": "example.com"}
 
     def list_apps(self):
         return [{"app_id": "editor", "description": "Approved editor"}]
