@@ -84,6 +84,25 @@ class LaptopCliTests(unittest.TestCase):
             cli.main()
         self.assertEqual(FakeLaptopClient.instance.launches, [("editor", True)])
 
+    def test_laptop_app_launch_checks_scope_before_prompting(self):
+        class ReadOnlyLaptopClient(FakeLaptopClient):
+            def __init__(self, host, port, fingerprint, client_id):
+                super().__init__(host, port, fingerprint, client_id)
+                self.store.permissions = ("laptop.workspace.list", "laptop.workspace.read")
+
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "launch", "--host", "192.168.1.20", "editor"
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", ReadOnlyLaptopClient),
+            patch("builtins.input") as prompt,
+            patch("builtins.print"),
+        ):
+            with self.assertRaisesRegex(PermissionError, "lacks laptop app-launch permission"):
+                cli.main()
+        prompt.assert_not_called()
+
     def test_laptop_app_launch_cancel_sends_no_request(self):
         with (
             patch("sys.argv", [
