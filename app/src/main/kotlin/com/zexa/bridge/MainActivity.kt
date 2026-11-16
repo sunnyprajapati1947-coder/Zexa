@@ -1178,6 +1178,7 @@ class MainActivity : Activity() {
         addHeading("Low-risk task access")
         addCard("OPTIONAL TASK GRANT", "One approval for a bounded navigation task", "Choose a task ID and only the navigation actions it needs. The grant is local to this device, visible here, revocable, and automatically expires.")
         addButton("Create task grant") { showCreateTaskGrantDialog() }
+        addButton("Refresh active grants") { refreshTaskGrantUi() }
         taskGrantContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(taskGrantContainer)
         refreshTaskGrantUi()
