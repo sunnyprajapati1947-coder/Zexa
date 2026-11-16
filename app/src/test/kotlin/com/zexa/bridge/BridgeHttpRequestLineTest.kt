@@ -26,6 +26,7 @@ class BridgeHttpRequestLineTest {
     @Test
     fun rejectsMalformedWhitespaceAndUnsupportedHttpVersions() {
         assertNull(BridgeHttpRequestLine.parse("GET  /v1/status HTTP/1.1"))
+        assertNull(BridgeHttpRequestLine.parse("GET /v1/status HTTP/1.1 "))
         assertNull(BridgeHttpRequestLine.parse("GET /v1/status HTTP/2"))
         assertNull(BridgeHttpRequestLine.parse("GET\t/v1/status HTTP/1.1"))
         assertNull(BridgeHttpRequestLine.parse("GET /v1/status HTTP/1.1 EXTRA"))
