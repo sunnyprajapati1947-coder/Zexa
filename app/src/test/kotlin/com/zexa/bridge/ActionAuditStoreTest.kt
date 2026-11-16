@@ -37,6 +37,16 @@ class ActionAuditStoreTest {
     }
 
     @Test
+    fun taskGrantCreationAndRevocationAreAudited() {
+        store.append(ActionAuditEntry("grant-123", "task_grant", "created", 100L))
+        store.append(ActionAuditEntry("grant-123", "task_grant", "revoked", 200L))
+        assertEquals(
+            listOf(ActionAuditEntry("grant-123", "task_grant", "revoked", 200L)),
+            store.list(),
+        )
+    }
+
+    @Test
     fun malformedStoredDataDoesNotCrash() {
         saved = "not-json"
         assertTrue(store.list().isEmpty())
