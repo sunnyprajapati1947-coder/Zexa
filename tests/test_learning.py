@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from zexa.learning import LearningService, LearningStore
+from zexa.learning import LearningAwareBrain, LearningService, LearningStore
 from zexa.research import SearchResult
 from zexa.skills import Skill
 
@@ -79,6 +79,15 @@ class LearningStoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.search_notes("%")
 
+    def test_natural_language_search_ranks_approved_notes_without_all_words(self):
+        note_id = self.save_note(
+            title="Photosynthesis",
+            body="Plants use sunlight to convert water and carbon dioxide into sugars.",
+        )
+        self.store.review_note(note_id, "approved")
+        results = self.store.search_notes("What did you learn about photosynthesis?")
+        self.assertEqual([item.note_id for item in results], [note_id])
+
     def test_limits_and_review_states_are_validated(self):
         with self.assertRaises(ValueError):
             self.store.list_notes(0)
@@ -114,6 +123,47 @@ class LearningStoreTests(unittest.TestCase):
         self.store.save_skill_draft(note_id, skill)
         self.assertTrue(self.store.delete_note(note_id))
         self.assertEqual(self.store.list_skill_drafts(), [])
+
+
+class LearningAwareBrainTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.store = LearningStore(Path(self.temp.name) / "knowledge.sqlite3")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_only_approved_notes_are_added_as_untrusted_reference_context(self):
+        approved_id = self.store.save_note(
+            "Photosynthesis",
+            "Plants use sunlight to convert water and carbon dioxide into sugars.",
+            source_type="user_text",
+            source_label="Study notes",
+        )
+        self.store.review_note(approved_id, "approved")
+        draft_id = self.store.save_note(
+            "Photosynthesis draft",
+            "Unreviewed secret phrase should not be retrieved.",
+            source_type="user_text",
+            source_label="Draft",
+        )
+        brain = FakeBrain("Answer with a knowledge citation.")
+        aware = LearningAwareBrain(brain, self.store)
+        aware.chat([
+            {"role": "system", "content": "You are Zexa."},
+            {"role": "user", "content": "What did you learn about photosynthesis?"},
+        ])
+        messages = brain.messages[0]
+        self.assertIn("untrusted reference data", messages[1]["content"])
+        self.assertIn(f'"note_id":{approved_id}', messages[1]["content"])
+        self.assertNotIn(str(draft_id), messages[1]["content"])
+        self.assertIn("Plants use sunlight", messages[1]["content"])
+
+    def test_no_matching_approved_note_leaves_messages_unchanged(self):
+        brain = FakeBrain("No saved knowledge.")
+        messages = [{"role": "user", "content": "unknown topic phrase"}]
+        LearningAwareBrain(brain, self.store).chat(messages)
+        self.assertEqual(brain.messages[0], messages)
 
 
 class LearningServiceTests(unittest.TestCase):
