@@ -83,6 +83,40 @@ class LaptopAppRegistryTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             LaptopAppRegistry(self.manifest)
 
+    def test_rejects_symlinked_ancestor_directories(self):
+        if os.name == "nt":
+            self.skipTest("POSIX symlink behavior is platform-specific.")
+        real_dir = self.root / "real-config"
+        real_dir.mkdir()
+        alias = self.root / "config-alias"
+        alias.symlink_to(self.root, target_is_directory=True)
+        nested = alias / "nested"
+        nested.mkdir()
+        manifest = nested / "apps.json"
+        manifest.write_text(json.dumps({
+            "version": 1,
+            "apps": [{
+                "id": "python-tool",
+                "executable": str(self.executable),
+                "arguments": ["--version"],
+                "description": "Python version tool",
+            }],
+        }), encoding="utf-8")
+        with self.assertRaises(PermissionError):
+            LaptopAppRegistry(manifest)
+
+        executable_alias = self.root / "bin-alias"
+        executable_alias.symlink_to(self.root, target_is_directory=True)
+        executable = executable_alias / self.executable.name
+        self.write_manifest([{
+            "id": "python-tool",
+            "executable": str(executable),
+            "arguments": ["--version"],
+            "description": "Python version tool",
+        }])
+        with self.assertRaises(ValueError):
+            LaptopAppRegistry(self.manifest)
+
     def test_rejects_shell_like_executable_names(self):
         self.write_manifest([{
             "id": "shell", "executable": "python",
