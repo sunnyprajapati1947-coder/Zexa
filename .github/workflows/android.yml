@@ -70,22 +70,7 @@ jobs:
           if bad:
               raise SystemExit("FAIL: PT_LOAD alignment below 16 KB: " + ", ".join(hex(v) for v in bad))
           print(f"PASS: all {len(loads)} PT_LOAD segments use at least 16 KB alignment")
-          PY            $1 == "LOAD" {
-              align = $NF
-              if (align !~ /^0x[0-9a-fA-F]+$/ || strtonum(align) < 16384) {
-                print "FAIL: PT_LOAD alignment is below 16 KB: " align
-                failed = 1
-              }
-              count++
-            }
-            END {
-              if (count == 0) {
-                print "FAIL: no PT_LOAD segments found"
-                exit 1
-              }
-              if (failed) exit 1
-              print "PASS: all " count " PT_LOAD segments use at least 16 KB alignment"
-            }'
+          PY
       - uses: actions/upload-artifact@v7
         with:
           name: zexa-bridge-debug-apk
