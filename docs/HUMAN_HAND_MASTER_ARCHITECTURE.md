@@ -28,7 +28,7 @@ The Human Hand is the execution layer. It must not be confused with the language
 
 ### A. Android phone hand
 
-**Existing foundation in the repository:** opt-in AccessibilityService, authenticated loopback bridge, read-only screen snapshots, allowlisted tap/swipe/scroll/back/home/text-entry/app-launch/validated-HTTP(S)-URL requests, and native exact-action approval. This is a foundation, not yet a fully device-validated automation system.
+**Implemented foundation on this branch:** opt-in AccessibilityService, authenticated loopback bridge, read-only screen snapshots, allowlisted tap/swipe/scroll/back/home/text-entry/app-launch/validated-HTTP(S)-URL requests, native exact-action approval, and a bounded task-grant path for eligible navigation actions. The Android Device screen can create, list, copy the ID for, and revoke task grants; authenticated bridge clients can list active grants and execute eligible actions within a matching task/device/action scope. Python exposes task_grants() and perform_granted(). This code is awaiting the current CI run and target-device acceptance testing; it is not yet a claim of full phone automation.
 
 Planned capability groups:
 
@@ -86,7 +86,7 @@ Learning means building retrievable knowledge and reviewed workflows. It does **
 Every capability is registered with a trusted permission and risk class. The model cannot lower risk or approve its own actions.
 
 - **Read-only / low risk:** status checks and explicitly requested, scoped reads may run without a separate approval after the relevant permission has been granted.
-- **Reversible local action:** opening an app or navigating a screen may use a clear user command and a visible action log.
+- **Reversible local action:** opening an app or navigating a screen may use a clear user command and a visible action log. The current bounded task-grant implementation supports only swipe, scroll, back, home, installed-app launch, and validated HTTP(S) URL opening, for up to 5 minutes and 30 actions by default.
 - **Data modification:** file writes, edits, clipboard changes, and form filling require a scoped workspace/target and a preview or confirmation according to the capability policy.
 - **External or consequential action:** sending a message/email, publishing, submitting a form, changing account settings, sharing files, purchases, or deleting data requires fresh confirmation bound to the exact action, destination, content/arguments, device, expiry, and one-time request ID.
 - **Forbidden:** credential theft, covert surveillance, permission bypass, hidden microphone/camera capture, stealth persistence, arbitrary remote command execution, and evasion of platform security controls.
@@ -188,7 +188,7 @@ Security is a set of proportionate controls, not a blanket lock on every action.
 - Never claim a task completed until the adapter returns verifiable success. Report partial completion and skipped steps separately.
 - Security controls must be tested for both sides: unauthorized actions are blocked, while authorized routine tasks complete without unnecessary prompts.
 
-**Current implementation note:** the native Android bridge still asks for approval per queued action. A pure in-memory `TaskActionGrantRegistry` and JVM tests now define the bounded grant rules, including task/device/action scoping, expiry, revocation, operation budgets, and exclusion of coordinate taps and text entry. The registry is not yet connected to the bridge API or approval UI, so task grants are not active and must not be advertised as available. Consequential actions continue to require exact-action approval.
+**Current implementation note:** exact-action approval remains the default. The bounded TaskActionGrantRegistry is now connected to the Android service, visible Device-screen create/list/copy/revoke controls, authenticated GET /v1/grants and grant-aware POST /v1/action routes, and the Python task_grants() / perform_granted() client methods. Grants are in-memory, device-bound, task-bound, action-bound, expire within 5 minutes, and have a maximum 30-action UI budget. They are cleared when the AccessibilityService is interrupted, disabled, reconnected, or destroyed. Coordinate taps, text entry, and all external/consequential actions remain outside grants and require exact-action approval. The integration must pass CI and a target-device test before being treated as production-ready.
 
 ## 11. Current Human Hand implementation progress
 
