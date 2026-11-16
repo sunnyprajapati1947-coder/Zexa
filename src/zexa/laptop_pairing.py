@@ -11,6 +11,7 @@ import base64
 from dataclasses import dataclass
 import hashlib
 import hmac
+import json
 import re
 import secrets
 import threading
@@ -23,6 +24,12 @@ _SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
 _MAX_BODY_BYTES = 1_000_000
 _MAX_PATH_CHARS = 1024
 _MAX_REPLAY_ENTRIES = 512
+_ALLOWED_PERMISSIONS = frozenset({
+    "laptop.workspace.list",
+    "laptop.workspace.read",
+    "laptop.workspace.write",
+})
+_DEFAULT_PERMISSIONS = ("laptop.workspace.list", "laptop.workspace.read")
 
 
 def _b64encode(value: bytes) -> str:
@@ -62,6 +69,7 @@ class PairingOffer:
     server_nonce_b64: str
     expires_in_seconds: int
     iterations: int
+    permissions: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -69,6 +77,10 @@ class PairedLaptopClient:
     client_id: str
     session_key: bytes
     paired_at_epoch: int
+    permissions: tuple[str, ...]
+
+    def allows(self, permission: str) -> bool:
+        return permission in self.permissions
 
 
 class LaptopPairingAuthority:
@@ -99,8 +111,22 @@ class LaptopPairingAuthority:
         self._replays: dict[str, dict[str, float]] = {}
         self._lock = threading.RLock()
 
-    def begin_pairing(self) -> PairingOffer:
-        """Create a new one-time code; any previous unfinished offer is invalidated."""
+    @staticmethod
+    def _permissions(values) -> tuple[str, ...]:
+        if not isinstance(values, (list, tuple, set, frozenset)):
+            raise ValueError("Laptop pairing permissions must be a collection.")
+        if not values or len(values) > len(_ALLOWED_PERMISSIONS):
+            raise ValueError("Laptop pairing must grant at least one known permission.")
+        if any(not isinstance(value, str) or value not in _ALLOWED_PERMISSIONS for value in values):
+            raise ValueError("Laptop pairing contains an unknown permission.")
+        return tuple(sorted(set(values)))
+
+    def begin_pairing(
+        self,
+        permissions: tuple[str, ...] = _DEFAULT_PERMISSIONS,
+    ) -> PairingOffer:
+        """Create a one-time code bound to a locally selected capability scope."""
+        selected_permissions = self._permissions(permissions)
         with self._lock:
             code = f"{secrets.randbelow(10**12):012d}"
             salt = secrets.token_bytes(16)
@@ -111,6 +137,7 @@ class LaptopPairingAuthority:
                 "server_nonce": server_nonce,
                 "expires_at": self._monotonic() + self.ttl_seconds,
                 "attempts": 0,
+                "permissions": selected_permissions,
             }
             return PairingOffer(
                 pairing_code=code,
@@ -118,6 +145,7 @@ class LaptopPairingAuthority:
                 server_nonce_b64=_b64encode(server_nonce),
                 expires_in_seconds=self.ttl_seconds,
                 iterations=self.iterations,
+                permissions=selected_permissions,
             )
 
     @staticmethod
@@ -129,6 +157,7 @@ class LaptopPairingAuthority:
         client_nonce_b64: str,
         *,
         iterations: int = 310_000,
+        permissions: tuple[str, ...] = _DEFAULT_PERMISSIONS,
     ) -> tuple[str, str]:
         """Return (client proof, derived session key) for the phone-side pairing flow."""
         if not isinstance(pairing_code, str) or not re.fullmatch(r"\d{12}", pairing_code):
@@ -137,12 +166,14 @@ class LaptopPairingAuthority:
             raise ValueError("Invalid laptop client identifier.")
         if type(iterations) is not int or not 100_000 <= iterations <= 1_000_000:
             raise ValueError("Invalid pairing KDF work factor.")
+        selected_permissions = LaptopPairingAuthority._permissions(permissions)
         salt = _b64decode(salt_b64, expected_bytes=16)
         server_nonce = _b64decode(server_nonce_b64, expected_bytes=32)
         client_nonce = _b64decode(client_nonce_b64, expected_bytes=32)
+        scope = json.dumps(selected_permissions, separators=(",", ":")).encode("ascii")
         transcript = (
             b"zexa-laptop-pair-v1\0" + server_nonce + client_nonce
-            + client_id.encode("ascii")
+            + client_id.encode("ascii") + b"\0" + scope
         )
         derived = hashlib.pbkdf2_hmac(
             "sha256", pairing_code.encode("ascii"), salt, iterations, dklen=32
@@ -173,9 +204,11 @@ class LaptopPairingAuthority:
             code = offer["code"]
             salt = offer["salt"]
             server_nonce = offer["server_nonce"]
+            selected_permissions = tuple(offer["permissions"])
+            scope = json.dumps(selected_permissions, separators=(",", ":")).encode("ascii")
             transcript = (
                 b"zexa-laptop-pair-v1\0" + server_nonce + client_nonce
-                + client_id.encode("ascii")
+                + client_id.encode("ascii") + b"\0" + scope
             )
             derived = hashlib.pbkdf2_hmac(
                 "sha256", code.encode("ascii"), salt, self.iterations, dklen=32
@@ -193,6 +226,7 @@ class LaptopPairingAuthority:
                 client_id=client_id,
                 session_key=session_key,
                 paired_at_epoch=int(self._wall_clock()),
+                permissions=selected_permissions,
             )
             self._clients[client_id] = record
             self._replays[client_id] = {}
@@ -292,6 +326,10 @@ class LaptopPairingAuthority:
     def list_clients(self) -> list[dict[str, int | str]]:
         with self._lock:
             return [
-                {"client_id": item.client_id, "paired_at_epoch": item.paired_at_epoch}
+                {
+                    "client_id": item.client_id,
+                    "paired_at_epoch": item.paired_at_epoch,
+                    "permissions": list(item.permissions),
+                }
                 for item in sorted(self._clients.values(), key=lambda value: value.client_id)
             ]
