@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,7 +16,9 @@ class LaptopAppRegistryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.executable = Path(sys.executable).resolve()
+        self.executable = self.root / "python-executable"
+        shutil.copy2(Path(sys.executable).resolve(), self.executable)
+        self.executable.chmod(stat.S_IMODE(self.executable.stat().st_mode) & ~0o022)
         self.manifest = self.root / "apps.json"
 
     def tearDown(self):
@@ -66,7 +69,7 @@ class LaptopAppRegistryTests(unittest.TestCase):
             self.skipTest("POSIX executable mode checks are platform-specific.")
         writable_executable = self.root / "writable-python"
         shutil.copy2(self.executable, writable_executable)
-        writable_executable.chmod(writable_executable.stat().st_mode | 0o020)
+        writable_executable.chmod(stat.S_IMODE(writable_executable.stat().st_mode) | 0o020)
         self.write_manifest([{
             "id": "python-tool", "executable": str(writable_executable),
             "arguments": ["--version"], "description": "Tool",
