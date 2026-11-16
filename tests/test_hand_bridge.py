@@ -72,8 +72,21 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
             if args[0] == "POST"
             else {"ok": False, "status": "completed", "request_id": "request-6"}
         )
-        with self.assertRaisesRegex(RuntimeError, "without a successful"):
+        with self.assertRaisesRegex(RuntimeError, "without confirming success"):
             bridge.perform("back", {}, approve=lambda action, payload: True)
+
+    def test_dispatched_gesture_result_is_returned_without_claiming_completion(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: (
+            {"ok": True, "status": "pending_approval", "request_id": "gesture-1"}
+            if args[0] == "POST"
+            else {"ok": True, "status": "dispatched", "request_id": "gesture-1"}
+        )
+        with patch("zexa.hand.time.sleep"):
+            result = bridge.perform("swipe", {"x1": 10, "y1": 20, "x2": 30, "y2": 40},
+                                    approve=lambda action, payload: True)
+        self.assertEqual(result["status"], "dispatched")
+        self.assertTrue(result["ok"])
 
     def test_result_must_match_the_queued_request_id(self):
         bridge = self.make_bridge()
@@ -176,6 +189,16 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         self.assertEqual(calls[0][1], "/v1/action")
         self.assertEqual(calls[0][2]["task_id"], "research-1")
         self.assertEqual(calls[0][2]["grant_id"], "grant-123")
+
+    def test_perform_granted_accepts_dispatched_gesture_result(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: {
+            "ok": True, "status": "dispatched", "grant_id": "grant-123", "remaining_actions": 3
+        }
+        result = bridge.perform_granted("scroll", {"x1": 10, "y1": 20, "x2": 30, "y2": 40},
+                                        "research-1", "grant-123")
+        self.assertEqual(result["status"], "dispatched")
+        self.assertTrue(result["ok"])
 
     def test_task_grant_cannot_run_taps_or_text_entry(self):
         bridge = self.make_bridge()
