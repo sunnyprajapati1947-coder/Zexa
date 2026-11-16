@@ -13,9 +13,9 @@ class ScreenRedactionRulesTest {
         hint: String = "",
         text: String = "",
         description: String = "",
-        sensitiveOtpContext: Boolean = false,
+        sensitiveContext: Boolean = false,
     ) = ScreenRedactionRules.shouldRedact(
-        isPassword, isEditable, className, viewId, hint, text, description, sensitiveOtpContext
+        isPassword, isEditable, className, viewId, hint, text, description, sensitiveContext
     )
 
     @Test
@@ -61,16 +61,16 @@ class ScreenRedactionRulesTest {
     }
 
     @Test
-    fun otpValuesInSiblingNodesAreRedactedWhenLabelIsPresent() {
-        assertTrue(ScreenRedactionRules.isOtpLabel(
+    fun valuesInSiblingNodesAreRedactedWhenSensitiveLabelIsPresent() {
+        assertTrue(ScreenRedactionRules.isSensitiveLabel(
             className = "android.widget.TextView",
             viewId = "",
             hint = "",
-            text = "Verification code",
+            text = "Date of birth",
             description = "",
         ))
-        assertTrue(check(text = "482913", sensitiveOtpContext = true))
-        assertFalse(check(text = "Order 482913", sensitiveOtpContext = true))
+        assertTrue(check(text = "12/03/2009", sensitiveContext = true))
+        assertTrue(check(text = "482913", sensitiveContext = true))
     }
 
     @Test
