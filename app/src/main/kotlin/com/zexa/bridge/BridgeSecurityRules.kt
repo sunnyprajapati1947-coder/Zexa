@@ -1,5 +1,6 @@
 package com.zexa.bridge
 
+import org.json.JSONObject
 import java.security.MessageDigest
 
 /**
@@ -38,4 +39,49 @@ internal object BridgeSecurityRules {
 
     fun packageName(value: String): Boolean =
         value.matches(Regex("^[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+$"))
+
+    /**
+     * Exact allowlisted payload contract. Reject unknown keys and coercible
+     * JSON values (for example strings/booleans where numbers are required).
+     */
+    fun validActionPayload(action: String, payload: JSONObject): Boolean {
+        val required: Set<String>
+        val optional: Set<String>
+        when (action) {
+            "tap" -> { required = setOf("x", "y"); optional = emptySet() }
+            "swipe", "scroll" -> {
+                required = setOf("x1", "y1", "x2", "y2")
+                optional = setOf("duration_ms")
+            }
+            "back", "home" -> { required = emptySet(); optional = emptySet() }
+            "input_text" -> { required = setOf("text"); optional = emptySet() }
+            "launch_app" -> { required = setOf("package_name"); optional = emptySet() }
+            else -> return false
+        }
+        val keys = payload.keys().asSequence().toSet()
+        if (!keys.containsAll(required) || (keys - required - optional).isNotEmpty()) return false
+
+        val coordinateKeys = when (action) {
+            "tap" -> listOf("x", "y")
+            "swipe", "scroll" -> listOf("x1", "y1", "x2", "y2")
+            else -> emptyList()
+        }
+        for (key in coordinateKeys) {
+            val value = payload.opt(key) as? Number ?: return false
+            if (!coordinate(value.toDouble())) return false
+        }
+        if (payload.has("duration_ms")) {
+            val duration = payload.opt("duration_ms") as? Number ?: return false
+            if (duration.toDouble() % 1.0 != 0.0 || !gestureDuration(duration.toLong())) return false
+        }
+        if (action == "input_text") {
+            val value = payload.opt("text") as? String ?: return false
+            if (value.isBlank() || value.length > 500) return false
+        }
+        if (action == "launch_app") {
+            val value = payload.opt("package_name") as? String ?: return false
+            if (!packageName(value)) return false
+        }
+        return true
+    }
 }
