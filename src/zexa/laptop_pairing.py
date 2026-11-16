@@ -76,7 +76,7 @@ def secure_owner_only(path: str | Path, *, directory: bool = False) -> None:
             user_sid = rows[0][1].strip() if identity.returncode == 0 and rows and len(rows[0]) >= 2 else ""
         except (OSError, subprocess.TimeoutExpired, csv.Error, IndexError) as exc:
             raise PermissionError("Could not identify the current Windows user SID.") from exc
-        if not re.fullmatch(r"S-\\d+(?:-\\d+)+", user_sid):
+        if not re.fullmatch(r"S-\d+(?:-\d+)+", user_sid):
             raise PermissionError("Windows did not return a valid current-user SID.")
         suffix = "(OI)(CI)F" if directory else "(F)"
         command = [
