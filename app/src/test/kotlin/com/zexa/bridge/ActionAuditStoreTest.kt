@@ -59,6 +59,15 @@ class ActionAuditStoreTest {
     }
 
     @Test
+    fun uncertainExecutionOutcomeIsAuditedWithoutClaimingFailure() {
+        store.append(ActionAuditEntry("req-unknown", "tap", "execution_unknown", 175L))
+        assertEquals(
+            listOf(ActionAuditEntry("req-unknown", "tap", "execution_unknown", 175L)),
+            store.list(),
+        )
+    }
+
+    @Test
     fun malformedStoredDataDoesNotCrash() {
         saved = "not-json"
         assertTrue(store.list().isEmpty())
