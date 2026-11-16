@@ -21,7 +21,7 @@ class _NoRedirectHandler(HTTPRedirectHandler):
         return None
 
 
-_ALLOWED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
+_ALLOWED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url"}
 _REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 
