@@ -209,7 +209,17 @@ class BridgeServer(
                             .put("grant_id", grantId)
                     }
                     method == "GET" && path == "/v1/screen" -> {
-                        val snapshot = service.screenJson()
+                        val snapshot = try {
+                            service.screenJson()
+                        } catch (error: ActionExecutionUnknownException) {
+                            // A service-thread timeout is not a malformed HTTP request.
+                            // Preserve the unknown outcome so callers do not treat it
+                            // as a validation failure or retry a potentially active read.
+                            JSONObject()
+                                .put("ok", false)
+                                .put("status", "execution_unknown")
+                                .put("error", error.message ?: "Screen snapshot result is unknown.")
+                        }
                         if (snapshot.optBoolean("screen_access_disabled")) responseStatus = 403
                         snapshot
                     }
