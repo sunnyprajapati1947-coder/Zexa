@@ -44,12 +44,12 @@ class LaptopWorkspaceTests(unittest.TestCase):
 
     def test_redacts_common_secrets_before_returning_workspace_text(self):
         source = (
-            "API_KEY=example-secret-value\\n"
-            "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456\\n"
-            "GitHub token: ghp_abcdefghijklmnopqrstuvwxyz123456\\n"
-            "AWS key: AKIA1234567890ABCDEF\\n"
-            "JWT: eyJabcdefghijk.eyJabcdefghijk.eyJabcdefghijk\\n"
-            "-----BEGIN PRIVATE KEY-----\\nprivate-key-material\\n-----END PRIVATE KEY-----"
+            "API_KEY=example-secret-value\n"
+            "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456\n"
+            "GitHub token: ghp_abcdefghijklmnopqrstuvwxyz123456\n"
+            "AWS key: AKIA1234567890ABCDEF\n"
+            "JWT: eyJabcdefghijk.eyJabcdefghijk.eyJabcdefghijk\n"
+            "-----BEGIN PRIVATE KEY-----\nprivate-key-material\n-----END PRIVATE KEY-----"
         )
         (self.root / "config.md").write_text(source, encoding="utf-8")
         result = self.workspace.read_text("config.md")
