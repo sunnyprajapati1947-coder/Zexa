@@ -156,7 +156,7 @@ class LearningAwareBrainTests(unittest.TestCase):
         messages = brain.messages[0]
         self.assertIn("untrusted reference data", messages[1]["content"])
         self.assertIn(f'"note_id":{approved_id}', messages[1]["content"])
-        self.assertNotIn(str(draft_id), messages[1]["content"])
+        self.assertNotIn("Unreviewed secret phrase", messages[1]["content"])
         self.assertIn("Plants use sunlight", messages[1]["content"])
 
     def test_no_matching_approved_note_leaves_messages_unchanged(self):
