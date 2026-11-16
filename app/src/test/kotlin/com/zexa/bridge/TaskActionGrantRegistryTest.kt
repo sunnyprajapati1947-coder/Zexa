@@ -98,13 +98,13 @@ class TaskActionGrantRegistryTest {
             "task-1", "phone-1", setOf("scroll"),
             nowElapsedMs = 1L, nowEpochMs = 100_000L, maxActions = 1,
         )
-        val start = CountDownLatch(1)
+        val gate = CountDownLatch(1)
         val finished = CountDownLatch(2)
         val outcomes = Collections.synchronizedList(mutableListOf<TaskActionGrant?>())
         val threads = (1..2).map { offset ->
             Thread {
                 try {
-                    start.await()
+                    gate.await()
                     outcomes.add(
                         registry.consume(
                             "one-use-grant", "task-1", "phone-1", "scroll", 10L + offset,
@@ -115,7 +115,7 @@ class TaskActionGrantRegistryTest {
                 }
             }.apply { start() }
         }
-        start.countDown()
+        gate.countDown()
         assertTrue("Concurrent grant consumers timed out.", finished.await(5, TimeUnit.SECONDS))
         threads.forEach { it.join(1_000L) }
         assertEquals(2, outcomes.size)
