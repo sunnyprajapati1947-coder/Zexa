@@ -47,6 +47,16 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         with self.assertRaises(TimeoutError):
             bridge.perform("back", {}, approve=lambda action, payload: True)
 
+    def test_audited_expiry_status_raises_timeout_error(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: (
+            {"ok": True, "status": "pending_approval", "request_id": "request-expired"}
+            if args[0] == "POST"
+            else {"ok": False, "status": "expired", "request_id": "request-expired"}
+        )
+        with self.assertRaisesRegex(TimeoutError, "approval expired"):
+            bridge.perform("back", {}, approve=lambda action, payload: True)
+
     def test_native_failure_is_not_reported_as_success(self):
         bridge = self.make_bridge()
         bridge._request = lambda *args, **kwargs: (
