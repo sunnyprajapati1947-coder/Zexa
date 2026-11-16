@@ -2,9 +2,9 @@ package com.zexa.bridge
 
 /**
  * Conservative redaction for accessibility snapshots before they leave the
- * Android service. Password nodes, credential/payment labels, one-time-code
- * fields, common ID patterns, email addresses, and Indian mobile numbers are
- * hidden. The original text is never included in the returned snapshot.
+ * Android service. Flagged values are omitted using heuristic checks for
+ * credentials, financial/identity labels, common ID patterns, email addresses,
+ * and Indian mobile numbers. Detection is not guaranteed.
  */
 internal object ScreenRedactionRules {
     private val sensitiveLabel = Regex(
@@ -17,7 +17,6 @@ internal object ScreenRedactionRules {
     )
     private val paymentNumber = Regex("(?<!\\d)(?:\\d[ -]?){12,19}(?!\\d)")
     private val oneTimeCode = Regex("^\\s*\\d{4,8}\\s*$")
-    private val otpLabel = Regex("(?i)\\b(?:otp|one[- ]?time(?: password| code)?|verification code)\\b")
     private val emailAddress = Regex("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b")
     private val indianMobile = Regex("(?<!\\d)(?:\\+?91[ -]?)?[6-9]\\d{9}(?!\\d)")
     private val panIdentifier = Regex("(?i)\\b[A-Z]{5}\\d{4}[A-Z]\\b")
@@ -57,15 +56,4 @@ internal object ScreenRedactionRules {
         return sensitiveLabel.containsMatchIn(metadata)
     }
 
-    fun isOtpLabel(
-        className: String,
-        viewId: String,
-        hint: String,
-        text: String,
-        description: String,
-    ): Boolean {
-        val metadata = listOf(className, viewId, hint, text, description).joinToString(" ")
-            .replace(Regex("[^A-Za-z0-9]+"), " ")
-        return otpLabel.containsMatchIn(metadata)
-    }
 }
