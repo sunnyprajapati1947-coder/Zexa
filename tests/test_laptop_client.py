@@ -70,6 +70,20 @@ class LaptopClientTests(unittest.TestCase):
         self.assertTrue(client.forget_local_pairing())
         self.assertIsNone(self.store.get("127.0.0.1", 9443, "phone-main"))
 
+    def test_existing_pairing_supplies_saved_tls_fingerprint(self):
+        self.store.save(
+            "127.0.0.1", 9443, "b" * 64, "phone-main",
+            "A" * 43, ("laptop.workspace.read",),
+        )
+        client = LaptopAgentClient(
+            "127.0.0.1", 9443, None, "phone-main", store=self.store
+        )
+        self.assertEqual(client.fingerprint, "b" * 64)
+        with self.assertRaises(PermissionError):
+            LaptopAgentClient(
+                "127.0.0.1", 9443, None, "missing-client", store=self.store
+            )
+
     def test_client_rejects_public_or_hostname_targets(self):
         for host in ("example.com", "8.8.8.8", "0.0.0.0"):
             with self.subTest(host=host), self.assertRaises(ValueError):
