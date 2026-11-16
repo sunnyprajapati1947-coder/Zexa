@@ -193,7 +193,7 @@ def _validate_public_https_url(value: str):
         or parsed.fragment and len(parsed.fragment) > 512
     ):
         raise ValueError("Only public HTTPS URLs on the standard port are supported.")
-    host = parsed.hostname.rstrip(".").lower()
+    host = parsed.hostname.rstrip(".").lower()\n    try:\n        host = host.encode("idna").decode("ascii")\n    except UnicodeError as exc:\n        raise ValueError("Page URL hostname is invalid.") from exc
     if host in {"localhost", "localhost.localdomain"} or host.endswith(".local") or "." not in host:
         raise ValueError("Local and single-label hostnames are not supported.")
     try:
@@ -251,14 +251,15 @@ def fetch_public_page(url: str, *, timeout: float = 10.0) -> FetchedPage:
         connection = _connect_public_https(host, max(2.0, min(float(timeout), 20.0)))
         response = None
         try:
-            connection.sendall(
+            request_text = (
                 f"GET {target} HTTP/1.1\\r\\n"
                 f"Host: {host}\\r\\n"
                 "User-Agent: Mozilla/5.0 (compatible; ZexaResearch/0.1)\\r\\n"
                 "Accept: text/html,text/plain;q=0.9\\r\\n"
                 "Accept-Encoding: identity\\r\\n"
-                "Connection: close\\r\\n\\r\\n".encode("ascii")
+                "Connection: close\\r\\n\\r\\n"
             )
+            connection.sendall(request_text.encode("ascii"))
             response = http.client.HTTPResponse(connection)
             response.begin()
             if response.status in {301, 302, 303, 307, 308}:
