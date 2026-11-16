@@ -368,6 +368,8 @@ class LaptopAgentServer:
         secure_owner_only(key)
         self.authority = authority or LaptopPairingAuthority(storage_path=pairing_path)
         audit_file = Path(audit_path or (Path.home() / ".zexa" / "laptop_audit.sqlite3")).expanduser()
+        if audit_file.is_symlink():
+            raise PermissionError("Laptop audit database must not be a symbolic link.")
         audit_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         secure_owner_only(audit_file.parent, directory=True)
         self.audit = AuditLog(audit_file)
