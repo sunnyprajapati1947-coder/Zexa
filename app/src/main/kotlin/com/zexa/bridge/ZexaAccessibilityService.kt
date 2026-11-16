@@ -58,7 +58,10 @@ class ZexaAccessibilityService : AccessibilityService() {
         // Intentionally do not collect, store, or transmit events.
     }
 
+    @Synchronized
     override fun onInterrupt() {
+        // Serialize interruption with approval execution and request queueing. A request
+        // must not be added after the interruption has invalidated the current queue.
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
         taskActionGrants.clear()
@@ -167,6 +170,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         return result
     }
 
+    @Synchronized
     fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
         recordExpiredApprovals()
         require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
