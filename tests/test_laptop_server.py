@@ -109,6 +109,20 @@ class LaptopServerTests(unittest.TestCase):
         status, _ = self.request("POST", "/v1/shell", b"{}")
         self.assertEqual(status, 404)
 
+    def test_paired_client_can_revoke_its_own_access(self):
+        key = self.pair()
+        revoke_path = "/v1/pair/revoke"
+        status, result = self.request(
+            "POST", revoke_path, headers=self.signed(key, "POST", revoke_path)
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(result["revoked"])
+        list_path = "/v1/workspace/list?" + urlencode({"dir": "."})
+        status, _ = self.request(
+            "GET", list_path, headers=self.signed(key, "GET", list_path)
+        )
+        self.assertEqual(status, 401)
+
     def test_pairing_offer_is_single_use(self):
         self.pair()
         status, result = self.request("GET", "/v1/pair/offer")
