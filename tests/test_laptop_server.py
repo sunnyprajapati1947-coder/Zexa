@@ -152,7 +152,6 @@ class LaptopServerTests(unittest.TestCase):
         with patch("zexa.laptop_server.shutil.which", return_value="/usr/bin/openssl"):
             with patch("zexa.laptop_server.subprocess.run", side_effect=fake_run):
                 fingerprint = generate_laptop_certificate("192.168.1.20", cert, key)
-            fingerprint = generate_laptop_certificate("192.168.1.20", cert, key)
 
         self.assertEqual(len(fingerprint), 64)
         self.assertTrue(cert.is_file())
