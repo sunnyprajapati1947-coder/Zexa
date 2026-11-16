@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -52,6 +53,21 @@ class LearningStoreTests(unittest.TestCase):
         }
         values.update(kwargs)
         return self.store.save_note(**values)
+
+    def test_knowledge_database_uses_owner_only_permissions_and_rejects_symlinks(self):
+        if os.name != "nt":
+            self.assertEqual(self.store.path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(self.store.path.parent.stat().st_mode & 0o777, 0o700)
+            link = Path(self.temp.name) / "knowledge-link.sqlite3"
+            link.symlink_to(self.store.path)
+            with self.assertRaises(PermissionError):
+                LearningStore(link)
+            real_dir = Path(self.temp.name) / "real-store"
+            real_dir.mkdir()
+            parent_link = Path(self.temp.name) / "linked-store"
+            parent_link.symlink_to(real_dir, target_is_directory=True)
+            with self.assertRaises(PermissionError):
+                LearningStore(parent_link / "knowledge.sqlite3")
 
     def test_notes_start_as_drafts_and_need_explicit_review(self):
         note_id = self.save_note()
