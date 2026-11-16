@@ -22,8 +22,11 @@ object BridgeHttpLineReader {
                 }
                 return String(bytes, 0, bytes.size - 1, StandardCharsets.US_ASCII)
             }
+            require(value == 9 || value == 13 || value in 0x20..0x7e) {
+                "HTTP line contains a forbidden control or non-ASCII byte."
+            }
+            require(output.size() < maxBytes) { "HTTP header line is too long." }
             output.write(value)
-            require(output.size() <= maxBytes) { "HTTP header line is too long." }
         }
     }
 }
