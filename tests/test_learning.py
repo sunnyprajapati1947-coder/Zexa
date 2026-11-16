@@ -26,7 +26,7 @@ class FakeBrain:
 
 class FakeSearcher:
     def __init__(self, results=None):
-        self.results = results or [
+        self.results = results if results is not None else [
             SearchResult("Official guide", "https://example.org/guide", "A useful snippet.")
         ]
 
@@ -72,7 +72,8 @@ class LearningStoreTests(unittest.TestCase):
         note_id = self.save_note(body="The 100%_complete guide.")
         self.store.review_note(note_id, "approved")
         self.assertEqual(len(self.store.search_notes("100%_complete")), 1)
-        self.assertEqual(self.store.search_notes("%"), [])
+        with self.assertRaises(ValueError):
+            self.store.search_notes("%")
 
     def test_limits_and_review_states_are_validated(self):
         with self.assertRaises(ValueError):
