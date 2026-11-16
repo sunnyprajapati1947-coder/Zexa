@@ -33,6 +33,7 @@ class LaptopPairingTests(unittest.TestCase):
             client_id,
             client_nonce,
             iterations=offer.iterations,
+            permissions=offer.permissions,
         )
         record = self.authority.complete_pairing(client_id, client_nonce, proof)
         return offer, record, session_key
@@ -47,6 +48,36 @@ class LaptopPairingTests(unittest.TestCase):
         }])
         with self.assertRaises(PermissionError):
             self.authority.complete_pairing("phone-main", encoded(bytes(32)), encoded(bytes(32)))
+
+    def test_pairing_binds_requested_permissions_and_defaults_to_read_only(self):
+        _, read_only, key = self.make_pair()
+        self.assertTrue(read_only.allows("laptop.workspace.read"))
+        self.assertFalse(read_only.allows("laptop.workspace.write"))
+        headers = self.authority.sign_request(
+            key, "POST", "/v1/workspace/write", b"data",
+            timestamp=int(self.wall_now), nonce_b64=encoded(b"w" * 24),
+        )
+        self.assertFalse(self.authority.verify_scoped_request(
+            "phone-main", "laptop.workspace.write", "POST",
+            "/v1/workspace/write", b"data", headers,
+        ))
+
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write"
+        ))
+        client_nonce = encoded(b"z" * 32)
+        proof, session_key = self.authority.make_client_proof(
+            offer.pairing_code, offer.salt_b64, offer.server_nonce_b64,
+            "phone-editor", client_nonce, iterations=offer.iterations,
+            permissions=offer.permissions,
+        )
+        paired = self.authority.complete_pairing("phone-editor", client_nonce, proof)
+        self.assertEqual(encoded(paired.session_key), session_key)
+        self.assertTrue(paired.allows("laptop.workspace.write"))
+
+    def test_pairing_rejects_unknown_permission_scopes(self):
+        with self.assertRaises(ValueError):
+            self.authority.begin_pairing(permissions=("shell.execute",))
 
     def test_wrong_proofs_are_bounded_and_offer_is_invalidated(self):
         offer = self.authority.begin_pairing()
