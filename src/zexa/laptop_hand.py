@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import hashlib
+import re
 import stat
 from pathlib import Path, PurePosixPath
 import tempfile
@@ -28,6 +29,29 @@ _BLOCKED_NAMES = {
     ".env", ".env.local", ".env.production", "credentials", "secrets",
     "id_rsa", "id_ed25519", "known_hosts", "authorized_keys",
 }
+_SECRET_ASSIGNMENT = re.compile(
+    r"(?im)^(\\s*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|"
+    r"client[_-]?secret|password|passwd|secret|authorization)\\s*[:=]\\s*).+$"
+)
+_BEARER_TOKEN = re.compile(r"(?i)\\bBearer\\s+[A-Za-z0-9._~+/=-]{12,}")
+_GITHUB_TOKEN = re.compile(r"\\bgh[pousr]_[A-Za-z0-9_]{20,}\\b")
+_AWS_KEY = re.compile(r"\\bAKIA[0-9A-Z]{16}\\b")
+_JWT = re.compile(r"\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b")
+_PRIVATE_KEY_BLOCK = re.compile(
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+    re.DOTALL,
+)
+
+
+def redact_workspace_text(value: str) -> tuple[str, bool]:
+    """Redact common credential patterns before text leaves the laptop workspace."""
+    redacted = _PRIVATE_KEY_BLOCK.sub("[REDACTED PRIVATE KEY]", value)
+    redacted = _SECRET_ASSIGNMENT.sub(r"\\1[REDACTED]", redacted)
+    redacted = _BEARER_TOKEN.sub("Bearer [REDACTED]", redacted)
+    redacted = _GITHUB_TOKEN.sub("[REDACTED GITHUB TOKEN]", redacted)
+    redacted = _AWS_KEY.sub("[REDACTED AWS KEY]", redacted)
+    redacted = _JWT.sub("[REDACTED JWT]", redacted)
+    return redacted, redacted != value
 
 
 class LaptopWorkspace:
@@ -146,11 +170,13 @@ class LaptopWorkspace:
             text = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise ValueError("Workspace file is not valid UTF-8 text.") from exc
+        safe_text, was_redacted = redact_workspace_text(text)
         return {
             "relative_path": relative_path,
-            "content": text,
+            "content": safe_text,
             "sha256": hashlib.sha256(raw).hexdigest(),
             "size_bytes": len(raw),
+            "redacted": was_redacted,
         }
 
     def write_text(self, relative_path: str, content: str, overwrite: bool = False) -> dict[str, Any]:
@@ -214,7 +240,7 @@ def build_laptop_capabilities(workspace: LaptopWorkspace) -> dict[str, Capabilit
             risk_level="low",
             platform="laptop",
             input_schema={"relative_path": "string"},
-            output_schema={"relative_path": "string", "content": "string", "sha256": "string", "size_bytes": "integer"},
+            output_schema={"relative_path": "string", "content": "string", "sha256": "string", "size_bytes": "integer", "redacted": "boolean"},
             max_output_chars=MAX_READ_BYTES + 2048,
             handler=lambda data: workspace.read_text(data["relative_path"]),
         ),
