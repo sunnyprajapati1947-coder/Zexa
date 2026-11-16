@@ -159,7 +159,7 @@ class LearningServiceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             service.import_text_file(large)
         binary = Path(self.temp.name) / "binary.txt"
-        binary.write_bytes(b"\\xff\\xfe")
+        binary.write_bytes(bytes([0xff, 0xfe]))
         with self.assertRaises(ValueError):
             service.import_text_file(binary)
 
