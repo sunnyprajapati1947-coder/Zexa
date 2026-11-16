@@ -147,10 +147,15 @@ class LearningStore:
                 raise ValueError("Source title must contain 1–300 characters.")
             if not isinstance(url, str) or len(url) > 2048:
                 raise ValueError("Source URL must contain at most 2048 characters.")
-            parsed = urlsplit(url)
+            try:
+                parsed = urlsplit(url)
+                port = parsed.port
+            except ValueError as exc:
+                raise ValueError("Source URL contains an invalid host or port.") from exc
             if (
                 parsed.scheme not in {"http", "https"} or not parsed.hostname
                 or parsed.username is not None or parsed.password is not None
+                or (port is not None and not 1 <= port <= 65535)
             ):
                 raise ValueError("Source URLs must be valid HTTP(S) URLs without credentials.")
             clean.append({"title": title.strip(), "url": url})
@@ -386,7 +391,8 @@ class LearningService:
         path = Path(file_path).expanduser()
         if not path.is_file():
             raise FileNotFoundError(f"Learning source file does not exist: {path}")
-        raw = path.read_bytes()
+        with path.open("rb") as source:
+            raw = source.read(self.MAX_FILE_BYTES + 1)
         if not raw or len(raw) > self.MAX_FILE_BYTES:
             raise ValueError("Learning text file must contain 1 byte to 1 MB.")
         try:
