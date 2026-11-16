@@ -25,7 +25,7 @@ class ActionAuditStore(
     @Synchronized
     fun append(entry: ActionAuditEntry) {
         require(entry.requestId.isNotBlank() && entry.requestId.length <= 64)
-        require(entry.action in ActionApprovalRegistry.ALLOWED_ACTIONS)
+        require(entry.action in ALLOWED_ACTIONS)
         require(entry.status in ALLOWED_STATUSES)
         require(entry.timestampEpochMs >= 0L)
         val entries = readEntries().toMutableList()
@@ -76,7 +76,7 @@ class ActionAuditStore(
                     val status = item.optString("status")
                     val timestamp = item.optLong("timestamp_epoch_ms", -1L)
                     if (id.isNotBlank() && id.length <= 64 &&
-                        action in ActionApprovalRegistry.ALLOWED_ACTIONS &&
+                        action in ALLOWED_ACTIONS &&
                         status in ALLOWED_STATUSES && timestamp >= 0L
                     ) add(ActionAuditEntry(id, action, status, timestamp))
                 }
@@ -88,6 +88,7 @@ class ActionAuditStore(
 
     companion object {
         const val MAX_ENTRIES = 100
-        val ALLOWED_STATUSES = setOf("pending_approval", "completed", "failed", "denied", "interrupted")
+        val ALLOWED_ACTIONS = ActionApprovalRegistry.ALLOWED_ACTIONS + "task_grant"
+        val ALLOWED_STATUSES = setOf("pending_approval", "completed", "failed", "denied", "interrupted", "created", "revoked")
     }
 }
