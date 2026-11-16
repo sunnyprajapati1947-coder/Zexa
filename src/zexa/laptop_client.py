@@ -197,7 +197,7 @@ class LaptopAgentClient:
         self,
         host: str,
         port: int,
-        fingerprint: str,
+        fingerprint: str | None,
         client_id: str,
         store: PairingCredentialStore | None = None,
         timeout: float = 8.0,
@@ -220,16 +220,22 @@ class LaptopAgentClient:
         host = str(address)
         if type(port) is not int or not 1024 <= port <= 65535:
             raise ValueError("Laptop port must be between 1024 and 65535.")
-        normalized = fingerprint.replace(":", "").strip().lower() if isinstance(fingerprint, str) else ""
-        if not _FINGERPRINT.fullmatch(normalized):
-            raise ValueError("A confirmed 64-character SHA-256 TLS fingerprint is required.")
         if not isinstance(client_id, str) or not _CLIENT_ID.fullmatch(client_id):
             raise ValueError("Invalid laptop client identifier.")
+        self.store = store or PairingCredentialStore()
+        if fingerprint is None:
+            saved = self.store.get(host, port, client_id)
+            if saved is None:
+                raise PermissionError("No saved laptop pairing or TLS fingerprint exists for this client.")
+            normalized = saved["fingerprint"]
+        else:
+            normalized = fingerprint.replace(":", "").strip().lower() if isinstance(fingerprint, str) else ""
+            if not _FINGERPRINT.fullmatch(normalized):
+                raise ValueError("A confirmed 64-character SHA-256 TLS fingerprint is required.")
         self.host = host
         self.port = port
         self.fingerprint = normalized
         self.client_id = client_id
-        self.store = store or PairingCredentialStore()
         self.timeout = max(2.0, min(float(timeout), 20.0))
 
     def _request(self, method: str, path: str, body: bytes = b"", headers: dict[str, str] | None = None):
