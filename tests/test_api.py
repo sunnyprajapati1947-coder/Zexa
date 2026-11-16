@@ -83,6 +83,25 @@ class LocalApiTests(unittest.TestCase):
         self.assertNotIn("last_error", item)
         self.assertNotIn("payload", item)
 
+    def test_job_list_rejects_invalid_query_parameters(self):
+        for suffix in ("?limit=0", "?limit=51", "?limit=1&limit=2", "?other=1"):
+            with self.subTest(suffix=suffix):
+                with self.assertRaises(HTTPError) as caught:
+                    self.request("/v1/jobs" + suffix, token=self.token)
+                self.assertEqual(caught.exception.code, 400)
+
+    def test_notification_requires_json_content_type(self):
+        request = Request(
+            self.base + "/v1/notifications",
+            data=b'{"title":"x","message":"y"}',
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "text/plain"},
+            method="POST",
+        )
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(request, timeout=3)
+        self.assertEqual(caught.exception.code, 415)
+        self.assertEqual(self.queue.list_jobs(), [])
+
     def test_rejects_non_loopback_host_and_weak_token(self):
         with self.assertRaisesRegex(ValueError, "32 characters"):
             make_handler("short", self.queue)
