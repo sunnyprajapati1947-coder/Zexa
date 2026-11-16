@@ -114,6 +114,17 @@ class AccessibilityBridge:
                 raise RuntimeError("Android bridge returned an invalid task-grant entry.")
         return grants
 
+    def revoke_task_grant(self, grant_id: str) -> bool:
+        """Revoke one active bounded task grant on this device."""
+        if not isinstance(grant_id, str) or not _REQUEST_ID_PATTERN.fullmatch(grant_id):
+            raise ValueError("Task grant ID is invalid.")
+        result = self._request("POST", "/v1/grants/revoke", {"grant_id": grant_id})
+        if result.get("grant_id") != grant_id or result.get("status") not in {"revoked", "not_found"}:
+            raise RuntimeError("Android bridge returned an invalid task-grant revocation result.")
+        if result.get("ok") is not (result.get("status") == "revoked"):
+            raise RuntimeError("Android bridge returned an inconsistent task-grant revocation result.")
+        return result["status"] == "revoked"
+
     def perform_granted(
         self,
         action: str,
