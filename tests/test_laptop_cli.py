@@ -30,11 +30,16 @@ class FakeLaptopClient:
         self.writes = []
         self.launches = []
         self.browser_opens = []
+        self.page_reads = []
         FakeLaptopClient.instance = self
 
     def open_browser_url(self, url, *, user_confirmed=False):
         self.browser_opens.append((url, user_confirmed))
         return {"opened": True, "host": "example.com"}
+
+    def read_public_page(self, url):
+        self.page_reads.append(url)
+        return {"title": "Example", "url": url, "text": "Page text", "content_sha256": "a" * 64}
 
     def list_apps(self):
         return [{"app_id": "editor", "description": "Approved editor"}]
@@ -243,6 +248,79 @@ class LaptopCliTests(unittest.TestCase):
             cli.main()
         server.return_value.begin_pairing.assert_called_once_with(
             permissions=["laptop.workspace.list", "laptop.workspace.read", "laptop.browser.open"]
+        )
+
+    def test_laptop_read_url_requires_exact_confirmation_and_scope(self):
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "read-url", "--host", "192.168.1.20",
+                "https://example.com/article",
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", FakeLaptopClient),
+            patch("builtins.input", return_value="READ URL https://example.com/article"),
+            patch("builtins.print"),
+        ):
+            cli.main()
+        self.assertEqual(
+            FakeLaptopClient.instance.page_reads, ["https://example.com/article"]
+        )
+
+    def test_laptop_read_url_cancel_sends_no_request(self):
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "read-url", "--host", "192.168.1.20",
+                "https://example.com/article",
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", FakeLaptopClient),
+            patch("builtins.input", return_value="no"),
+            patch("builtins.print"),
+        ):
+            cli.main()
+        self.assertEqual(FakeLaptopClient.instance.page_reads, [])
+
+    def test_laptop_read_url_checks_scope_before_prompting(self):
+        class NoPageReadClient(FakeLaptopClient):
+            def __init__(self, host, port, fingerprint, client_id):
+                super().__init__(host, port, fingerprint, client_id)
+                self.store.permissions = ("laptop.workspace.list", "laptop.workspace.read")
+
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "read-url", "--host", "192.168.1.20",
+                "https://example.com/article",
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", NoPageReadClient),
+            patch("builtins.input") as prompt,
+            patch("builtins.print"),
+        ):
+            with self.assertRaisesRegex(PermissionError, "lacks laptop page-read permission"):
+                cli.main()
+        prompt.assert_not_called()
+
+    def test_laptop_server_can_opt_in_to_public_page_reading(self):
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch("sys.argv", [
+                "zexa", "laptop", "serve", "--host", "192.168.1.20",
+                "--workspace", temp, "--cert", str(Path(temp) / "cert.pem"),
+                "--key", str(Path(temp) / "key.pem"), "--allow-browser-read",
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopWorkspace"),
+            patch.object(cli, "LaptopAgentServer") as server,
+            patch.object(cli, "certificate_fingerprint", return_value="a" * 64),
+        ):
+            server.return_value.begin_pairing.return_value = Mock(
+                pairing_code="123456789012", expires_in_seconds=120,
+                permissions=("laptop.workspace.list", "laptop.workspace.read", "laptop.browser.read"),
+            )
+            server.return_value.serve_forever.side_effect = KeyboardInterrupt
+            cli.main()
+        server.return_value.begin_pairing.assert_called_once_with(
+            permissions=["laptop.workspace.list", "laptop.workspace.read", "laptop.browser.read"]
         )
 
     def test_remote_write_cancel_sends_no_data(self):
