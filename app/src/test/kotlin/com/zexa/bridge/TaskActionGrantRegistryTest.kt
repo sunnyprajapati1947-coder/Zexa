@@ -81,7 +81,7 @@ class TaskActionGrantRegistryTest {
         assertFalse(registry.revoke("revoke-1"))
         assertNull(registry.consume("revoke-1", "task-1", "phone-1", "back", 2L))
 
-        registry.create("task-2", "phone-1", setOf("home"), 3L, 100_000L, idFactoryNotAvailable())
+        registry.create("task-2", "phone-1", setOf("home"), 3L, 100_000L)
         registry.clear()
         assertTrue(registry.list(4L).isEmpty())
     }
