@@ -15,4 +15,10 @@ object BridgeHttpRouteRules {
         if (path.matches(Regex("^/v1/action/[A-Za-z0-9-]{1,64}$"))) return setOf("GET")
         return null
     }
+
+    /** Returns null for unknown paths, otherwise whether the method is allowed. */
+    fun isMethodAllowed(method: String, path: String): Boolean? {
+        val methods = allowedMethods(path) ?: return null
+        return method in methods
+    }
 }
