@@ -118,10 +118,13 @@ On the laptop, generate a self-signed TLS certificate for its private LAN IPv4 a
 The server displays its SHA-256 certificate fingerprint and a 12-digit one-time pairing code (valid for two minutes). On the phone in Termux, verify the fingerprint locally on the laptop, then pair:
 
     zexa laptop pair --host 192.168.1.20 --fingerprint FINGERPRINT_FROM_LAPTOP --client-id zexa-phone
+    zexa laptop status --host 192.168.1.20 --client-id zexa-phone
     zexa laptop list --host 192.168.1.20
     zexa laptop apps --host 192.168.1.20
     zexa laptop read --host 192.168.1.20 README.md
     zexa laptop revoke --host 192.168.1.20
+
+`zexa laptop status` reads only the phone-side local pairing record and displays the host, client ID, certificate fingerprint, and granted permissions; it never prints the session key and does not contact the laptop.
 
 From a separate laptop terminal, the owner can inspect or immediately revoke a paired phone using the same pairing database. The running server refreshes persisted client records on each authenticated request, so owner-side revocation takes effect without restarting it:
 
