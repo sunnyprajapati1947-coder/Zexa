@@ -130,6 +130,18 @@ class BridgeServer(
             val response = try {
                 when {
                     method == "GET" && path == "/v1/status" -> service.statusJson()
+                    method == "GET" && path == "/v1/grants" -> {
+                        val grants = org.json.JSONArray()
+                        service.activeTaskActionGrants().forEach { grant ->
+                            grants.put(JSONObject()
+                                .put("grant_id", grant.grantId)
+                                .put("task_id", grant.taskId)
+                                .put("allowed_actions", org.json.JSONArray(grant.allowedActions.toList()))
+                                .put("expires_at_epoch_ms", grant.expiresAtEpochMs)
+                                .put("remaining_actions", grant.remainingActions))
+                        }
+                        JSONObject().put("ok", true).put("grants", grants)
+                    }
                     method == "GET" && path == "/v1/screen" -> {
                         if (!service.isScreenAccessEnabled()) {
                             responseStatus = 403
@@ -147,11 +159,29 @@ class BridgeServer(
                             offset += read
                         }
                         val json = JSONObject(String(body, StandardCharsets.UTF_8))
+                        require(json.keys().asSequence().all { it in setOf("action", "payload", "task_id", "grant_id") }) {
+                            "Unexpected action request field."
+                        }
                         val action = json.optString("action", "")
                         val payload = json.optJSONObject("payload")
                             ?: error("Action payload must be a JSON object.")
-                        responseStatus = 202
-                        service.queueActionForApproval(action, payload)
+                        val hasTaskId = json.has("task_id")
+                        val hasGrantId = json.has("grant_id")
+                        require(hasTaskId == hasGrantId) { "Task and grant identifiers must be supplied together." }
+                        if (hasTaskId) {
+                            val taskId = json.optString("task_id", "")
+                            val grantId = json.optString("grant_id", "")
+                            require(BridgeSecurityRules.validTaskId(taskId)) { "Invalid task identifier." }
+                            require(grantId.matches(Regex("^[A-Za-z0-9-]{1,64}$"))) { "Invalid grant identifier." }
+                            val granted = service.performGrantedAction(taskId, grantId, action, payload)
+                            if (granted.optString("status") == "grant_scope_mismatch_or_expired" ||
+                                granted.optString("status") == "grant_unavailable"
+                            ) responseStatus = 403
+                            granted
+                        } else {
+                            responseStatus = 202
+                            service.queueActionForApproval(action, payload)
+                        }
                     }
                     method == "GET" && path.startsWith("/v1/action/") -> {
                         val requestId = path.removePrefix("/v1/action/")
