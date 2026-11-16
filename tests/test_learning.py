@@ -113,6 +113,7 @@ class LearningStoreTests(unittest.TestCase):
 
     def test_skill_drafts_are_inert_until_separate_approval(self):
         note_id = self.save_note()
+        self.store.review_note(note_id, "approved")
         skill = Skill(
             name="approved_notes_helper",
             description="Explains approved notes.",
@@ -127,6 +128,28 @@ class LearningStoreTests(unittest.TestCase):
         self.assertEqual(draft.status, "review_required")
         self.assertTrue(self.store.review_skill_draft(draft_id, "approved"))
         self.assertEqual(self.store.list_skill_drafts()[0].status, "approved")
+
+    def test_store_requires_approved_source_and_withdraws_skill_approval(self):
+        note_id = self.save_note()
+        skill = Skill(
+            name="source_bound_skill",
+            description="Uses approved source notes.",
+            system_instruction="Use only the approved source.",
+            enabled=False,
+        )
+        with self.assertRaises(PermissionError):
+            self.store.save_skill_draft(note_id, skill)
+        self.store.review_note(note_id, "approved")
+        draft_id = self.store.save_skill_draft(note_id, skill)
+        with self.assertRaises(PermissionError):
+            self.store.review_skill_draft(draft_id, "approved")
+        self.store.review_note(note_id, "approved")
+        self.assertTrue(self.store.review_skill_draft(draft_id, "approved"))
+        self.assertEqual(self.store.list_skill_drafts()[0].status, "approved")
+        self.store.review_note(note_id, "archived")
+        self.assertEqual(self.store.list_skill_drafts()[0].status, "review_required")
+        with self.assertRaises(PermissionError):
+            self.store.review_skill_draft(draft_id, "approved")
 
     def test_enabled_skills_cannot_be_saved_as_learned_drafts(self):
         note_id = self.save_note()
