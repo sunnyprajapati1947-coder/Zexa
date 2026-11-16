@@ -15,6 +15,7 @@ internal object ScreenRedactionRules {
     )
     private val paymentNumber = Regex("(?<!\\d)(?:\\d[ -]?){12,19}(?!\\d)")
     private val oneTimeCode = Regex("^\\s*\\d{4,8}\\s*$")
+    private val otpLabel = Regex("(?i)\\b(?:otp|one[- ]?time(?: password| code)?|verification code)\\b")
     private val emailAddress = Regex("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b")
     private val indianMobile = Regex("(?<!\\d)(?:\\+?91[ -]?)?[6-9]\\d{9}(?!\\d)")
     private val panIdentifier = Regex("(?i)\\b[A-Z]{5}\\d{4}[A-Z]\\b")
@@ -27,6 +28,7 @@ internal object ScreenRedactionRules {
         hint: String,
         text: String,
         description: String,
+        sensitiveOtpContext: Boolean = false,
     ): Boolean {
         if (isPassword) return true
         val metadata = listOf(className, viewId, hint, text, description).joinToString(" ")
@@ -37,6 +39,19 @@ internal object ScreenRedactionRules {
         if (values.any { paymentNumber.containsMatchIn(it) || emailAddress.containsMatchIn(it) ||
                 indianMobile.containsMatchIn(it) || panIdentifier.containsMatchIn(it) }) return true
 
-        return isEditable && oneTimeCode.matches(text)
+        return (isEditable && oneTimeCode.matches(text)) ||
+            (sensitiveOtpContext && values.any { oneTimeCode.matches(it) })
+    }
+
+    fun isOtpLabel(
+        className: String,
+        viewId: String,
+        hint: String,
+        text: String,
+        description: String,
+    ): Boolean {
+        val metadata = listOf(className, viewId, hint, text, description).joinToString(" ")
+            .replace(Regex("[^A-Za-z0-9]+"), " ")
+        return otpLabel.containsMatchIn(metadata)
     }
 }
