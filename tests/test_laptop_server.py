@@ -294,7 +294,7 @@ class LaptopServerTests(unittest.TestCase):
             "Content-Type": "application/json",
             "Content-Length": str(len(body)),
         })
-        with patch("zexa.laptop_server.open_browser_url") as open_browser:
+        with patch("zexa.laptop_browser.webbrowser.open") as open_browser:
             status, _ = self.request("POST", path, body, headers)
         self.assertEqual(status, 400)
         open_browser.assert_not_called()
