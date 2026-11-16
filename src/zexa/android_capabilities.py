@@ -13,7 +13,7 @@ from .hand import AccessibilityBridge
 ANDROID_ACTIONS = frozenset({
     "tap", "swipe", "scroll", "back", "home", "input_text", "launch_app",
 })
-_PACKAGE_NAME = re.compile(r"[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+")
+_PACKAGE_NAME = re.compile(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+")
 _COORDINATE_LIMIT = 10_000.0
 
 
