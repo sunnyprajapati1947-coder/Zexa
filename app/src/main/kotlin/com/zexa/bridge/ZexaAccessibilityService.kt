@@ -389,8 +389,18 @@ class ZexaAccessibilityService : AccessibilityService() {
         if (Looper.myLooper() == Looper.getMainLooper()) return block()
         val completed = CountDownLatch(1)
         val outcome = AtomicReference<Result<T>?>(null)
+        val gate = Any()
+        var cancelledBeforeStart = false
+        var started = false
         val handler = Handler(Looper.getMainLooper())
         if (!handler.post {
+                synchronized(gate) {
+                    if (cancelledBeforeStart) {
+                        completed.countDown()
+                        return@post
+                    }
+                    started = true
+                }
                 outcome.set(runCatching(block))
                 completed.countDown()
             }
@@ -399,7 +409,15 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
         try {
             if (!completed.await(10, TimeUnit.SECONDS)) {
-                error("Android service thread did not complete the requested operation in time.")
+                synchronized(gate) {
+                    if (!started) {
+                        cancelledBeforeStart = true
+                        error("Android service thread did not start the requested operation in time.")
+                    }
+                }
+                if (!completed.await(20, TimeUnit.SECONDS)) {
+                    error("Android service thread did not complete the requested operation in time.")
+                }
             }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
