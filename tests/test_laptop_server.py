@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
+import stat
 import sys
 from unittest.mock import patch
 import tempfile
@@ -166,11 +168,14 @@ class LaptopServerTests(unittest.TestCase):
         ))
         key = self.pair(offer)
         manifest = Path(self.temp.name) / "apps.json"
+        executable = Path(self.temp.name) / "python-executable"
+        shutil.copy2(Path(sys.executable).resolve(), executable)
+        executable.chmod(stat.S_IMODE(executable.stat().st_mode) & ~0o022)
         manifest.write_text(json.dumps({
             "version": 1,
             "apps": [{
                 "id": "python-tool",
-                "executable": str(Path(sys.executable).resolve()),
+                "executable": str(executable),
                 "arguments": ["--version"],
                 "description": "Python version tool",
             }],
