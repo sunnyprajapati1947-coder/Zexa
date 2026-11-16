@@ -159,9 +159,12 @@ class LaptopClientTests(unittest.TestCase):
 
         def fake_request(method, path, body=b"", headers=None):
             calls.append((method, path))
-            self.assertTrue(LaptopPairingAuthority.verify_scoped_request(
-                "phone-main", "laptop.apps.launch", method, path, body, headers
-            ) is False or headers is not None)
+            self.assertEqual(method, "GET")
+            self.assertEqual(path, "/v1/apps")
+            self.assertEqual(headers["X-Zexa-Client-ID"], "phone-main")
+            self.assertTrue(all(key in headers for key in (
+                "X-Zexa-Timestamp", "X-Zexa-Nonce", "X-Zexa-MAC"
+            )))
             return 200, {"ok": True, "result": {"apps": [
                 {"app_id": "editor", "description": "Approved editor"}
             ]}}
