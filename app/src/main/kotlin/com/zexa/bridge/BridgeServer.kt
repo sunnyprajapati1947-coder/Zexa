@@ -182,7 +182,7 @@ class BridgeServer(
                             if (read < 0) error("Incomplete request body.")
                             offset += read
                         }
-                        val json = JSONObject(String(body, StandardCharsets.UTF_8))
+                        val json = JSONObject(BridgeHttpBody.decodeUtf8(body))
                         require(json.keys().asSequence().toSet() == setOf("grant_id")) {
                             "Grant revoke request must contain only grant_id."
                         }
@@ -212,7 +212,7 @@ class BridgeServer(
                             if (read < 0) error("Incomplete request body.")
                             offset += read
                         }
-                        val json = JSONObject(String(body, StandardCharsets.UTF_8))
+                        val json = JSONObject(BridgeHttpBody.decodeUtf8(body))
                         require(json.keys().asSequence().all { it in setOf("action", "payload", "task_id", "grant_id") }) {
                             "Unexpected action request field."
                         }
