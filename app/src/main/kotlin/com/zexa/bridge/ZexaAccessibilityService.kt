@@ -357,7 +357,19 @@ class ZexaAccessibilityService : AccessibilityService() {
         .put("accessibility_enabled", true)
         .put("bridge_enabled", bridgeServer?.isRunning == true)
 
-    fun screenJson(): JSONObject = onServiceThread { buildScreenSnapshot() }
+    fun screenJson(): JSONObject = onServiceThread {
+        // Re-check permission on the service looper immediately before reading the
+        // active window. The UI toggle also runs on this looper, so it cannot race
+        // between this check and snapshot traversal.
+        if (!isScreenAccessEnabled()) {
+            JSONObject()
+                .put("ok", false)
+                .put("screen_access_disabled", true)
+                .put("error", "Screen access is disabled in Zexa settings.")
+        } else {
+            buildScreenSnapshot()
+        }
+    }
 
     private fun buildScreenSnapshot(): JSONObject {
         val root = rootInActiveWindow ?: return JSONObject()
