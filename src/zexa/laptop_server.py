@@ -19,7 +19,7 @@ from pathlib import Path
 import ssl
 from urllib.parse import parse_qs, urlsplit
 
-from .laptop_hand import LaptopWorkspace
+from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_pairing import LaptopPairingAuthority
 
 
@@ -166,7 +166,9 @@ def make_laptop_handler():
                 raise ValueError("A valid Content-Length is required.") from exc
             if not 1 <= length <= limit:
                 raise ValueError("Request body is empty or too large.")
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            raw = self.rfile.read(length)
+            self._last_body = raw
+            payload = json.loads(raw.decode("utf-8"))
             if not isinstance(payload, dict):
                 raise ValueError("Request body must be a JSON object.")
             return payload
@@ -225,6 +227,23 @@ def make_laptop_handler():
             return self._send(404, {"error": "not_found"})
 
         def do_POST(self):
+            if self.path == "/v1/workspace/write":
+                try:
+                    payload = self._read_json(limit=MAX_WRITE_CHARS + 4096)
+                    if set(payload) != {"relative_path", "content", "overwrite"}:
+                        raise ValueError("Invalid workspace write fields.")
+                    if not self._authorized("laptop.workspace.write", self._last_body):
+                        return
+                    result = self.server.workspace.write_text(
+                        payload["relative_path"], payload["content"], payload["overwrite"]
+                    )
+                    return self._send(200, {"ok": True, "result": result})
+                except PermissionError:
+                    return self._send(403, {"error": "workspace_scope_denied"})
+                except FileExistsError:
+                    return self._send(409, {"error": "workspace_file_exists"})
+                except (ValueError, OSError, TypeError) as exc:
+                    return self._send(400, {"error": str(exc)[:200]})
             if self.path == "/v1/pair/revoke":
                 client_id = self.headers.get("X-Zexa-Client-ID", "")
                 if not self._authorized("laptop.workspace.list"):
