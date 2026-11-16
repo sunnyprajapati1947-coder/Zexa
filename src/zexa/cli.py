@@ -261,6 +261,8 @@ def main() -> None:
     bridge_sub.add_parser("status", help="Read bridge status")
     bridge_sub.add_parser("screen", help="Read the current accessibility snapshot")
     bridge_sub.add_parser("grants", help="List active user-approved navigation task grants")
+    bridge_grant_revoke = bridge_sub.add_parser("grant-revoke", help="Revoke one active navigation task grant")
+    bridge_grant_revoke.add_argument("grant_id")
     bridge_granted_action = bridge_sub.add_parser(
         "grant-action", help="Run one navigation action inside an existing native task grant"
     )
@@ -625,6 +627,9 @@ def main() -> None:
                 result = bridge.screen()
             elif args.bridge_command == "grants":
                 result = {"ok": True, "grants": bridge.task_grants()}
+            elif args.bridge_command == "grant-revoke":
+                revoked = bridge.revoke_task_grant(args.grant_id)
+                result = {"ok": revoked, "status": "revoked" if revoked else "not_found", "grant_id": args.grant_id}
             elif args.bridge_command == "grant-action":
                 try:
                     payload = json.loads(args.payload)
