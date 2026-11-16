@@ -92,8 +92,25 @@ class AccessibilityBridge:
         grants = result.get("grants")
         if result.get("ok") is not True or not isinstance(grants, list):
             raise RuntimeError("Android bridge returned an invalid task-grant list.")
-        if any(not isinstance(item, dict) for item in grants):
-            raise RuntimeError("Android bridge returned an invalid task-grant entry.")
+        for item in grants:
+            if not isinstance(item, dict) or set(item) != {
+                "grant_id", "task_id", "allowed_actions", "expires_at_epoch_ms", "remaining_actions"
+            }:
+                raise RuntimeError("Android bridge returned an invalid task-grant entry.")
+            if (
+                not isinstance(item["grant_id"], str)
+                or not _REQUEST_ID_PATTERN.fullmatch(item["grant_id"])
+                or not isinstance(item["task_id"], str)
+                or not _TASK_ID_PATTERN.fullmatch(item["task_id"])
+                or not isinstance(item["allowed_actions"], list)
+                or not item["allowed_actions"]
+                or any(action not in _GRANTABLE_ACTIONS for action in item["allowed_actions"])
+                or type(item["expires_at_epoch_ms"]) is not int
+                or item["expires_at_epoch_ms"] < 0
+                or type(item["remaining_actions"]) is not int
+                or not 1 <= item["remaining_actions"] <= 30
+            ):
+                raise RuntimeError("Android bridge returned an invalid task-grant entry.")
         return grants
 
     def perform_granted(
