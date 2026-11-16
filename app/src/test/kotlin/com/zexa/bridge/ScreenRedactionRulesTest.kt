@@ -50,6 +50,19 @@ class ScreenRedactionRulesTest {
     }
 
     @Test
+    fun otpValuesInSiblingNodesAreRedactedWhenLabelIsPresent() {
+        assertTrue(ScreenRedactionRules.isOtpLabel(
+            className = "android.widget.TextView",
+            viewId = "",
+            hint = "",
+            text = "Verification code",
+            description = "",
+        ))
+        assertTrue(check(text = "482913", sensitiveOtpContext = true))
+        assertFalse(check(text = "Order 482913", sensitiveOtpContext = true))
+    }
+
+    @Test
     fun ordinaryUiTextRemainsAvailable() {
         assertFalse(check(text = "Settings"))
         assertFalse(check(text = "Continue to next page"))
