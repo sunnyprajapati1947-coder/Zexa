@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -63,14 +64,15 @@ class LaptopAppRegistryTests(unittest.TestCase):
     def test_rejects_writable_executable_and_manifest_symlink(self):
         if os.name == "nt":
             self.skipTest("POSIX executable mode checks are platform-specific.")
-        self.write_manifest()
-        original = self.executable.stat().st_mode
-        try:
-            self.executable.chmod(original | 0o020)
-            with self.assertRaises(PermissionError):
-                LaptopAppRegistry(self.manifest)
-        finally:
-            self.executable.chmod(original)
+        writable_executable = self.root / "writable-python"
+        shutil.copy2(self.executable, writable_executable)
+        writable_executable.chmod(writable_executable.stat().st_mode | 0o020)
+        self.write_manifest([{
+            "id": "python-tool", "executable": str(writable_executable),
+            "arguments": ["--version"], "description": "Tool",
+        }])
+        with self.assertRaises(PermissionError):
+            LaptopAppRegistry(self.manifest)
         target = self.root / "real.json"
         self.write_manifest()
         self.manifest.rename(target)
