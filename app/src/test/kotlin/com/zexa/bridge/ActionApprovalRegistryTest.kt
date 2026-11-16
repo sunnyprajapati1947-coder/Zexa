@@ -44,6 +44,16 @@ class ActionApprovalRegistryTest {
     }
 
     @Test
+    fun atomicExpiryDrainCollectsBoundaryExpiryExactlyOnce() {
+        val registry = ActionApprovalRegistry(ttlMs = 1_000L, idFactory = { "atomic-expiry" })
+        registry.create("back", "{}", 2_000L, 100_000L)
+
+        assertEquals("atomic-expiry", registry.expireAndDrain(3_000L).single().requestId)
+        assertTrue(registry.expireAndDrain(3_001L).isEmpty())
+        assertNull(registry.approve("atomic-expiry", 3_002L))
+    }
+
+    @Test
     fun expiredTicketsAreRetainedForAuditWhenListTriggersExpiry() {
         val registry = ActionApprovalRegistry(ttlMs = 1_000L, idFactory = { "audit-expiry" })
         registry.create("tap", "{}", 5_000L, 100_000L)
