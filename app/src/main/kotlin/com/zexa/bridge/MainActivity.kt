@@ -1214,7 +1214,6 @@ class MainActivity : Activity() {
             "back" to "Back",
             "home" to "Home",
             "launch_app" to "Open installed app",
-            "open_url" to "Open validated HTTP(S) website",
         ).forEach { (action, label) ->
             val check = CheckBox(this).apply {
                 text = label
@@ -1225,7 +1224,7 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("Create bounded task grant")
-            .setMessage("The grant lasts 5 minutes or 30 actions, whichever comes first. It may open validated HTTP(S) URLs and perform selected navigation only. No coordinate taps, text entry, messages, purchases or deletion.")
+            .setMessage("The grant lasts 5 minutes or 30 actions, whichever comes first. It covers selected navigation and installed-app launch only. URL opening requires a separate exact approval. No coordinate taps, text entry, messages, purchases or deletion.")
             .setView(panel)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Approve this task grant", null)
