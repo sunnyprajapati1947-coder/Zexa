@@ -26,7 +26,7 @@ from .execution import (
 )
 from .brain import build_brain_router
 from .intent import route_utterance
-from .learning import LearningService, LearningStore
+from .learning import LearningAwareBrain, LearningService, LearningStore
 from .laptop_client import LaptopAgentClient
 from .laptop_hand import LaptopWorkspace
 from .laptop_server import LaptopAgentServer, certificate_fingerprint, generate_laptop_certificate
@@ -579,6 +579,11 @@ def main() -> None:
             mode,
             xai_config=xai_config,
         )
+        knowledge_path = Path.home() / ".zexa" / "knowledge.sqlite3"
+        conversation_brain = (
+            LearningAwareBrain(brain, LearningStore(knowledge_path))
+            if knowledge_path.is_file() else brain
+        )
         config = groq_config  # Keep legacy planner/voice call signatures compatible.
         if args.command == "learn":
             store = LearningStore()
@@ -698,7 +703,7 @@ Sources:")
                     print(f"[{index}] {item.title} — {item.url}")
             return
         if args.command == "agent":
-            results = AgentOrchestrator(brain, registry).run(" ".join(args.goal))
+            results = AgentOrchestrator(conversation_brain, registry).run(" ".join(args.goal))
             print(json.dumps(results, ensure_ascii=False, indent=2))
             return
         if args.command == "voice":
@@ -755,7 +760,7 @@ Sources:")
                         print(f"Zexa: {answer}")
                         voice.speak(answer)
                         continue
-                    routed = route_utterance(config, messages[1:], transcript, brain=brain)
+                    routed = route_utterance(config, messages[1:], transcript, brain=conversation_brain)
                     intent = routed["intent"]
                     answer = routed["reply"]
                     if intent == "noise" or not answer:
@@ -773,10 +778,10 @@ Sources:")
                 print("\nZexa: Voice conversation ended.")
             return
         if args.command == "plan":
-            print(json.dumps(create_plan(config, registry, " ".join(args.goal), brain=brain), indent=2))
+            print(json.dumps(create_plan(config, registry, " ".join(args.goal), brain=conversation_brain), indent=2))
             print("\nPlan only: no tools or external actions were executed.")
             return
-        answer = brain.chat(
+        answer = conversation_brain.chat(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": " ".join(args.prompt)},
