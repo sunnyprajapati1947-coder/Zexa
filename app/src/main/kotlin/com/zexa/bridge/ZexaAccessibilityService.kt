@@ -129,7 +129,11 @@ class ZexaAccessibilityService : AccessibilityService() {
         ) ?: return JSONObject().put("ok", false).put("status", "grant_scope_mismatch_or_expired")
         val result = try {
             val execution = perform(action, payload)
-            execution.put("status", if (execution.optBoolean("ok", false)) "completed" else "failed")
+            execution.put("status", when {
+                    execution.optString("status") == "dispatched" -> "dispatched"
+                    execution.optBoolean("ok", false) -> "completed"
+                    else -> "failed"
+                })
                 .put("grant_id", grantId)
                 .put("remaining_actions", consumed.remainingActions)
         } catch (error: Exception) {
@@ -212,7 +216,11 @@ class ZexaAccessibilityService : AccessibilityService() {
         val result = try {
             val execution = perform(ticket.action, JSONObject(ticket.payloadJson))
             execution
-                .put("status", if (execution.optBoolean("ok", false)) "completed" else "failed")
+                .put("status", when {
+                    execution.optString("status") == "dispatched" -> "dispatched"
+                    execution.optBoolean("ok", false) -> "completed"
+                    else -> "failed"
+                })
                 .put("request_id", ticket.requestId)
         } catch (error: Exception) {
             JSONObject()
@@ -271,7 +279,22 @@ class ZexaAccessibilityService : AccessibilityService() {
             .put("ok", true).put("package", "").put("nodes", JSONArray())
         val nodes = JSONArray()
         var count = 0
-        fun visit(node: AccessibilityNodeInfo?, depth: Int) {
+        fun hasOtpLabelChild(parent: AccessibilityNodeInfo): Boolean {
+            for (index in 0 until parent.childCount) {
+                val child = parent.getChild(index) ?: continue
+                val hasLabel = ScreenRedactionRules.isOtpLabel(
+                    className = child.className?.toString()?.take(160) ?: "",
+                    viewId = child.viewIdResourceName?.take(200) ?: "",
+                    hint = child.hintText?.toString()?.take(300) ?: "",
+                    text = child.text?.toString()?.take(500) ?: "",
+                    description = child.contentDescription?.toString()?.take(300) ?: "",
+                )
+                child.recycle()
+                if (hasLabel) return true
+            }
+            return false
+        }
+        fun visit(node: AccessibilityNodeInfo?, depth: Int, sensitiveOtpContext: Boolean = false) {
             if (node == null || depth > 12 || count >= 150) return
             count++
             val bounds = Rect()
@@ -289,6 +312,7 @@ class ZexaAccessibilityService : AccessibilityService() {
                 hint = hint,
                 text = text,
                 description = description,
+                sensitiveOtpContext = sensitiveOtpContext,
             )
             val item = JSONObject()
                 .put("index", count - 1)
@@ -304,9 +328,10 @@ class ZexaAccessibilityService : AccessibilityService() {
                     .put("left", bounds.left).put("top", bounds.top)
                     .put("right", bounds.right).put("bottom", bounds.bottom))
             nodes.put(item)
+            val childOtpContext = sensitiveOtpContext || hasOtpLabelChild(node)
             for (i in 0 until node.childCount) {
                 val child = node.getChild(i)
-                visit(child, depth + 1)
+                visit(child, depth + 1, childOtpContext)
                 child?.recycle()
             }
         }
@@ -434,7 +459,10 @@ class ZexaAccessibilityService : AccessibilityService() {
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
             .build()
-        return JSONObject().put("ok", dispatchGesture(gesture, null, null))
+        val accepted = dispatchGesture(gesture, null, null)
+        return JSONObject()
+            .put("ok", accepted)
+            .put("status", if (accepted) "dispatched" else "failed")
     }
 
     override fun onDestroy() {
