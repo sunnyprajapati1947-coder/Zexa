@@ -25,7 +25,7 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 _ALLOWED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url"}
 _REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
 _TASK_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,64}")
-_GRANTABLE_ACTIONS = {"swipe", "scroll", "back", "home", "launch_app"}
+_GRANTABLE_ACTIONS = {"swipe", "scroll", "back", "home", "launch_app", "open_url"}
 
 
 class AccessibilityBridge:
