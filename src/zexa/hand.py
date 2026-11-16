@@ -149,6 +149,8 @@ class AccessibilityBridge:
         })
         if result.get("status") in {"grant_scope_mismatch_or_expired", "grant_unavailable"}:
             raise PermissionError("Task grant is expired, revoked, or outside its approved scope.")
+        if result.get("status") == "execution_unknown":
+            raise TimeoutError("Android action may have started, but its result is unknown. Do not retry automatically; inspect the device first.")
         if result.get("status") not in {"completed", "dispatched"} or result.get("ok") is not True:
             raise RuntimeError("Android bridge did not confirm successful granted action execution.")
         if result.get("grant_id") != grant_id:
@@ -197,6 +199,8 @@ class AccessibilityBridge:
                 raise PermissionError("Android user denied the device action.")
             if status == "expired_or_unknown":
                 raise TimeoutError("Android action approval expired or is no longer available.")
+            if status == "execution_unknown":
+                raise TimeoutError("Android action may have started, but its result is unknown. Do not retry automatically; inspect the device first.")
             if status == "failed":
                 raise RuntimeError("Android device action failed; no success was reported.")
             if status != "pending_approval" or result.get("ok") is not True:
