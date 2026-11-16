@@ -570,7 +570,17 @@ class ZexaAccessibilityService : AccessibilityService() {
             }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
-            val operationStarted = synchronized(gate) { started }
+            // If the caller is interrupted before the main-thread callback starts,
+            // cancel that queued callback so it cannot perform an action after the
+            // caller has already received an interruption failure.
+            val operationStarted = synchronized(gate) {
+                if (!started) {
+                    cancelledBeforeStart = true
+                    false
+                } else {
+                    true
+                }
+            }
             if (operationStarted) {
                 throw ActionExecutionUnknownException(
                     "Android operation started before the wait was interrupted; its result is unknown. Do not retry automatically."
