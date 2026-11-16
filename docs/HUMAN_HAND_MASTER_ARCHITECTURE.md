@@ -81,6 +81,14 @@ When the user says "learn this", "study this", or "make a skill":
 
 Learning means building retrievable knowledge and reviewed workflows. It does **not** mean silently changing model weights, executing arbitrary downloaded code, or allowing a webpage or imported skill to rewrite Zexa's security policy.
 
+### Implemented learning foundation (current branch)
+- `LearningStore` persists local knowledge notes and skill contracts in SQLite with source labels, HTTP(S) source references, content SHA-256 digests, timestamps, and explicit review states.
+- `LearningService.research()` summarizes public search-result snippets and saves the result as a draft with numbered source provenance; it does not claim to have opened full pages.
+- `LearningService.import_text_file()` studies UTF-8 local text files up to 1 MB and saves a draft summary; imported text is treated as untrusted data and never executed.
+- `LearningService.draft_skill()` requires an approved note, validates a typed skill contract, and stores it disabled with `review_required` status.
+- Termux CLI commands are available as `zexa learn research`, `import`, `list`, `show`, `search`, `review`, `draft-skill`, `skill-drafts`, and `review-skill`.
+- Approved knowledge notes are searchable; draft/rejected notes are excluded from normal retrieval. Reviewing a skill contract does not enable execution. Skill activation, version history, document formats beyond UTF-8 text, full-page crawling, and model-weight training are not implemented by this foundation.
+
 ## 5. Permission and approval model
 
 Every capability is registered with a trusted permission and risk class. The model cannot lower risk or approve its own actions.
