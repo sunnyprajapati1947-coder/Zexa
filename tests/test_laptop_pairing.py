@@ -67,10 +67,22 @@ class LaptopPairingTests(unittest.TestCase):
             "laptop.workspace.list", "laptop.workspace.read"
         ))
 
-    def test_pairing_rejects_unknown_or_unimplemented_permission_scopes(self):
-        for scope in ("shell.execute", "laptop.workspace.write"):
-            with self.subTest(scope=scope), self.assertRaises(ValueError):
-                self.authority.begin_pairing(permissions=(scope,))
+        offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write"
+        ))
+        client_nonce = encoded(b"z" * 32)
+        proof, session_key = self.authority.make_client_proof(
+            offer.pairing_code, offer.salt_b64, offer.server_nonce_b64,
+            "phone-editor", client_nonce, iterations=offer.iterations,
+            permissions=offer.permissions,
+        )
+        paired = self.authority.complete_pairing("phone-editor", client_nonce, proof)
+        self.assertEqual(encoded(paired.session_key), session_key)
+        self.assertTrue(paired.allows("laptop.workspace.write"))
+
+    def test_pairing_rejects_unknown_permission_scopes(self):
+        with self.assertRaises(ValueError):
+            self.authority.begin_pairing(permissions=("shell.execute",))
 
     def test_wrong_proofs_are_bounded_and_offer_is_invalidated(self):
         offer = self.authority.begin_pairing()
