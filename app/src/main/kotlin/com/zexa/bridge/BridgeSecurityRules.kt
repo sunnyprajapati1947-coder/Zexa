@@ -29,8 +29,11 @@ internal object BridgeSecurityRules {
     }
 
     fun contentLength(raw: String?): Int? {
-        if (raw == null || !raw.matches(Regex("^[0-9]{1,5}$"))) return null
-        val length = raw.toIntOrNull() ?: return null
+        if (raw == null || raw.length !in 1..8_192 || !raw.matches(Regex("^[0-9]+$"))) return null
+        // RFC 9110 permits leading zeroes; bound the significant digits before parsing.
+        val significant = raw.trimStart('0')
+        if (significant.isEmpty() || significant.length > 5) return null
+        val length = significant.toIntOrNull() ?: return null
         return length.takeIf { it in 1..16_000 }
     }
 
