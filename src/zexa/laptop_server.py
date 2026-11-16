@@ -254,14 +254,14 @@ def make_laptop_handler():
 
         def do_POST(self):
             if self.path == "/v1/apps/launch":
-                if self.server.app_registry is None:
-                    return self._send(404, {"error": "app_launch_not_enabled"})
                 try:
                     payload = self._read_json(limit=4096)
                     if set(payload) != {"app_id"}:
                         raise ValueError("Invalid app launch fields.")
                     if not self._authorized("laptop.apps.launch", self._last_body):
                         return
+                    if self.server.app_registry is None:
+                        return self._send(404, {"error": "app_launch_not_enabled"})
                     result = self.server.app_registry.launch(payload["app_id"])
                     self._audit(
                         "laptop_app_launch", self.headers.get("X-Zexa-Client-ID", ""),
