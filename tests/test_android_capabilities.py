@@ -81,7 +81,6 @@ class AndroidCapabilityTests(unittest.TestCase):
             "input_text": {"text": "Hello"},
             "launch_app": {"package_name": "com.example.app"},
             "open_url": {"url": "https://example.com/path?q=1"},
-            "open_url_valid_port": {"url": "https://example.com:443/path"},
         }
         for action, payload in valid.items():
             with self.subTest(action=action):
@@ -90,6 +89,11 @@ class AndroidCapabilityTests(unittest.TestCase):
                 spec = build_android_capabilities(bridge, [action])[f"android.{action}"]
                 spec.handler({"payload": payload})
                 bridge.perform.assert_called_once()
+
+        bridge = Mock(spec=AccessibilityBridge)
+        spec = build_android_capabilities(bridge, ["open_url"])["android.open_url"]
+        spec.handler({"payload": {"url": "https://example.com:443/path"}})
+        bridge.perform.assert_called_once()
 
     def test_invalid_action_payloads_are_rejected_before_bridge_call(self):
         invalid = [
