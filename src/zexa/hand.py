@@ -23,6 +23,8 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 
 _ALLOWED_ACTIONS = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url"}
 _REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
+_TASK_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,64}")
+_GRANTABLE_ACTIONS = {"swipe", "scroll", "back", "home", "launch_app", "open_url"}
 
 
 class AccessibilityBridge:
@@ -81,6 +83,46 @@ class AccessibilityBridge:
     def screen(self) -> dict:
         """Read the current UI accessibility snapshot."""
         return self._request("GET", "/v1/screen")
+
+    def task_grants(self) -> list[dict]:
+        """List active bounded grants created and approved in the Android app."""
+        result = self._request("GET", "/v1/grants")
+        grants = result.get("grants")
+        if result.get("ok") is not True or not isinstance(grants, list):
+            raise RuntimeError("Android bridge returned an invalid task-grant list.")
+        if any(not isinstance(item, dict) for item in grants):
+            raise RuntimeError("Android bridge returned an invalid task-grant entry.")
+        return grants
+
+    def perform_granted(
+        self,
+        action: str,
+        payload: dict,
+        task_id: str,
+        grant_id: str,
+    ) -> dict:
+        """Execute one eligible navigation action inside a previously approved native task grant."""
+        if action not in _GRANTABLE_ACTIONS:
+            raise ValueError("Action is not eligible for a bounded task grant.")
+        if not isinstance(payload, dict):
+            raise ValueError("Action payload must be an object.")
+        if not isinstance(task_id, str) or not _TASK_ID_PATTERN.fullmatch(task_id):
+            raise ValueError("Task ID is invalid.")
+        if not isinstance(grant_id, str) or not _REQUEST_ID_PATTERN.fullmatch(grant_id):
+            raise ValueError("Task grant ID is invalid.")
+        result = self._request("POST", "/v1/action", {
+            "action": action,
+            "payload": payload,
+            "task_id": task_id,
+            "grant_id": grant_id,
+        })
+        if result.get("status") in {"grant_scope_mismatch_or_expired", "grant_unavailable"}:
+            raise PermissionError("Task grant is expired, revoked, or outside its approved scope.")
+        if result.get("status") != "completed" or result.get("ok") is not True:
+            raise RuntimeError("Android bridge did not confirm successful granted action execution.")
+        if result.get("grant_id") != grant_id:
+            raise RuntimeError("Android bridge returned a result for a different task grant.")
+        return result
 
     def perform(
         self,
