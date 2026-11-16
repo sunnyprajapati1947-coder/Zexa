@@ -103,6 +103,8 @@ class LaptopWorkspaceTests(unittest.TestCase):
             self.workspace.write_text(".env", "TOKEN=secret")
         with self.assertRaises(ValueError):
             self.workspace.write_text("empty.txt", "  ")
+        with self.assertRaises(ValueError):
+            self.workspace.write_text("control.txt", "bad\\x00text")
 
     def test_capability_budgets_match_workspace_read_and_write_limits(self):
         large_text = "x" * 40_000
