@@ -1,7 +1,8 @@
-"""TLS-only, read-scoped laptop Human Hand HTTP server.
+"""TLS-only, scope-limited laptop Human Hand HTTP server.
 
-The server exposes pairing plus workspace list/read. It never exposes a shell,
-process execution, app launch, arbitrary URL fetch, or remote write endpoint.
+The server exposes pairing, workspace list/read, and optional explicitly scoped
+text writes. It never exposes a shell, process execution, app launch, or
+arbitrary URL fetch.
 """
 from __future__ import annotations
 
