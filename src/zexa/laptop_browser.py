@@ -1,8 +1,8 @@
 """Visible, user-approved browser navigation for the laptop Human Hand.
 
-This adapter only opens a validated HTTPS URL in the laptop owner's default
-browser. It does not read browser profiles, cookies, passwords, page contents,
-or automate clicks/forms/submissions.
+This adapter opens validated HTTPS URLs in the laptop owner's default browser
+and separately retrieves bounded public-page text. It never reads browser
+profiles, cookies, passwords, or active tabs, and never automates page controls.
 """
 from __future__ import annotations
 
@@ -84,4 +84,5 @@ def read_public_page(value: str) -> dict[str, object]:
         "url": page.url,
         "text": page.text[:40_000],
         "content_sha256": page.content_sha256,
+        "content_trust": "untrusted_reference",
     }
