@@ -602,7 +602,7 @@ class LearningService:
             },
             {
                 "role": "user",
-                "content": "Document filename: " + path.name + "\\nDocument text:\\n" + source_text,
+                "content": "Document filename: " + path.name + "\nDocument text:\n" + source_text,
             },
         ])
         summary = reply.text.strip()
