@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -19,7 +20,7 @@ class LaptopClientTests(unittest.TestCase):
         self.authority = LaptopPairingAuthority(
             iterations=100_000,
             monotonic=lambda: self.monotonic_now,
-            wall_clock=lambda: self.wall_now,
+            wall_clock=time.time,
         )
         self.offer = self.authority.begin_pairing()
 
