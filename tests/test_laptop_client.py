@@ -129,6 +129,34 @@ class LaptopClientTests(unittest.TestCase):
         result = client.write_text("notes.md", "content", user_confirmed=True)
         self.assertTrue(result["written"])
 
+    def test_app_launch_requires_exact_permission_and_fresh_confirmation(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.apps.launch",),
+        )
+        client = self.make_client()
+        calls = []
+
+        def fake_request(method, path, body=b"", headers=None):
+            calls.append((method, path, json.loads(body.decode("utf-8"))))
+            return 200, {"ok": True, "result": {"app_id": "editor", "spawned": True}}
+
+        client._request = fake_request
+        with self.assertRaises(PermissionError):
+            client.launch_app("editor")
+        self.assertEqual(calls, [])
+        result = client.launch_app("editor", user_confirmed=True)
+        self.assertTrue(result["spawned"])
+        self.assertEqual(calls[0], ("POST", "/v1/apps/launch", {"app_id": "editor"}))
+
+    def test_app_launch_rejects_pairing_without_launch_permission(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.workspace.read",),
+        )
+        with self.assertRaises(PermissionError):
+            self.make_client().launch_app("editor", user_confirmed=True)
+
     def test_client_rejects_public_or_hostname_targets(self):
         for host in ("example.com", "8.8.8.8", "0.0.0.0"):
             with self.subTest(host=host), self.assertRaises(ValueError):
