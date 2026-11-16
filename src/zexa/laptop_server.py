@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import tempfile
 import stat
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import ssl
@@ -102,7 +103,31 @@ class _LaptopHTTPServer(ThreadingHTTPServer):
     def __init__(self, address, handler, workspace, authority):
         self.workspace = workspace
         self.authority = authority
+        self._worker_slots = threading.BoundedSemaphore(8)
         super().__init__(address, handler)
+
+    def process_request(self, request, client_address):
+        if not self._worker_slots.acquire(blocking=False):
+            try:
+                request.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\\r\\n"
+                    b"Connection: close\\r\\nContent-Length: 0\\r\\n\\r\\n"
+                )
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._worker_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._worker_slots.release()
 
 
 def make_laptop_handler():
