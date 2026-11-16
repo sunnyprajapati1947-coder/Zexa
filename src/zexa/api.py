@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hmac
 import json
+from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Type
 
@@ -53,15 +54,22 @@ def make_handler(token: str, queue: JobQueue) -> Type[BaseHTTPRequestHandler]:
             if self.path == "/v1/health":
                 self._send(200, {"ok": True, "service": "zexa"})
                 return
-            if self.path == "/v1/jobs":
+            if urlsplit(self.path).path == "/v1/jobs":
                 try:
-                    limit = int(self.headers.get("X-Zexa-Limit", "20"))
+                    query = parse_qs(urlsplit(self.path).query, strict_parsing=True)
+                    if set(query) - {"limit"} or any(len(values) != 1 for values in query.values()):
+                        raise ValueError
+                    limit = int(query.get("limit", ["20"])[0])
                     if not 1 <= limit <= 50:
                         raise ValueError
                 except ValueError:
                     self._send(400, {"error": "invalid_limit"})
                     return
-                self._send(200, {"jobs": queue.list_jobs(limit)})
+                safe_jobs = [
+                    {key: job[key] for key in ("id", "kind", "status", "attempts", "max_attempts", "run_at")}
+                    for job in queue.list_jobs(limit)
+                ]
+                self._send(200, {"jobs": safe_jobs})
                 return
             self._send(404, {"error": "not_found"})
 
