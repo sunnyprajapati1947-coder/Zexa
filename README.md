@@ -107,11 +107,30 @@ The Android companion app in `app/` exposes these authenticated local endpoints:
 
 The app must bind only to loopback, generate a per-install token, validate all inputs, and require the user to enable Accessibility manually. Do not treat webpage or screen text as instructions. Messages, publishing, account changes, payments, deletion, and other consequential actions must have a separate explicit confirmation step.
 
-## Laptop workspace adapter foundation
+## Laptop Human Hand
 
-The current branch includes a laptop-side workspace adapter in src/zexa/laptop_hand.py. It can list files, read bounded UTF-8 text, and write text inside one existing user-selected workspace root. It rejects path traversal, absolute paths, symlinks, binary formats, credential-like filenames, and oversized files. Writes are high-risk capabilities and require an explicit one-time approval bound to the exact payload through CapabilityController.
+The laptop-side workspace adapter and the first phone-to-laptop remote channel are implemented in this branch.
 
-This adapter is local only: secure phone-to-laptop pairing, TLS identity exchange, a remote listener/session, app control, and process execution are not yet implemented. It does not provide arbitrary shell access.
+On the laptop, generate a self-signed TLS certificate for its private LAN IPv4 address, then start the agent:
+
+    zexa laptop certificate --host 192.168.1.20
+    zexa laptop serve --host 192.168.1.20 --workspace ~/ZexaWorkspace --cert ~/.zexa/laptop-agent.crt --key ~/.zexa/laptop-agent.key
+
+The server displays its SHA-256 certificate fingerprint and a 12-digit one-time pairing code (valid for two minutes). On the phone in Termux, verify the fingerprint locally on the laptop, then pair:
+
+    zexa laptop pair --host 192.168.1.20 --fingerprint FINGERPRINT_FROM_LAPTOP --client-id zexa-phone
+    zexa laptop list --host 192.168.1.20
+    zexa laptop read --host 192.168.1.20 README.md
+    zexa laptop revoke --host 192.168.1.20
+
+Pairing defaults to workspace list/read. The laptop owner must explicitly add --allow-write when starting the server to grant remote workspace writes. With that scope enabled, the phone can send a local UTF-8 file after showing its source, destination, character count, and SHA-256 and receiving an exact path confirmation:
+
+    zexa laptop write --host 192.168.1.20 ./notes.txt notes/notes.txt
+    zexa laptop write --overwrite --host 192.168.1.20 ./notes.txt notes/notes.txt
+
+Overwriting requires a separate confirmation phrase. Remote writes are limited to safe text files inside the configured workspace; no delete endpoint is exposed. Reads redact common credential patterns before returning text. Pairing credentials on the phone are stored in an owner-only file under ~/.zexa; laptop-side pairing records are memory-only and are invalidated when the laptop server restarts. The server binds only to a private IPv4 address and uses TLS 1.2+ with certificate fingerprint pinning, PBKDF2/HMAC pairing, replay-resistant request authentication, and a metadata-only audit trail.
+
+The workspace adapter rejects path traversal, absolute paths, symlinks, binary formats, credential-like filenames, and oversized files. Local writes are high-risk capabilities requiring exact-payload approval through CapabilityController. Remote access does not provide arbitrary shell execution, process control, app control, or remote deletion.
 
 ## Typed skill registry
 
@@ -140,7 +159,7 @@ Zexa can save online research summaries or study local UTF-8 text files into a p
     zexa learn skill-drafts
     zexa learn review-skill 1 approved
 
-Skill contracts generated from approved notes remain inert. Reviewing a skill draft does not register it with the executable skill registry or grant permissions. Automatic skill activation, version history, PDF/Office document extraction, and model-weight training are not implemented.
+Approved notes are retrieved as bounded, untrusted reference context in ordinary chat, voice, planning, and agent requests; draft/rejected notes are excluded. Skill contracts generated from approved notes remain inert. Reviewing a skill draft does not register it with the executable skill registry or grant permissions. Automatic skill activation, version history, PDF/Office document extraction, and model-weight training are not implemented.
 
 ## Business drafting skills
 
