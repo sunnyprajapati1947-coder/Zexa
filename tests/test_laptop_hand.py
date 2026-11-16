@@ -85,6 +85,34 @@ class LaptopWorkspaceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.workspace.write_text("empty.txt", "  ")
 
+    def test_capability_budgets_match_workspace_read_and_write_limits(self):
+        large_text = "x" * 40_000
+        (self.root / "large.md").write_text(large_text, encoding="utf-8")
+        audit = AuditLog(Path(self.temp.name) / "budget-audit.sqlite3")
+        approvals = ApprovalManager(ttl_seconds=60)
+        controller = CapabilityController(
+            PermissionPolicy({"laptop.workspace.read", "laptop.workspace.write"}),
+            approvals,
+            audit,
+            build_laptop_capabilities(self.workspace),
+        )
+        self.assertEqual(
+            len(controller.execute("laptop.workspace.read", {"relative_path": "large.md"})["content"]),
+            40_000,
+        )
+        payload = {
+            "relative_path": "large-write.md",
+            "content": "y" * 20_000,
+            "overwrite": False,
+        }
+        grant = controller.issue_approval(
+            "laptop.workspace.write", payload, user_confirmed=True
+        )
+        result = controller.execute(
+            "laptop.workspace.write", payload, approval_token=grant.token
+        )
+        self.assertEqual(result["size_bytes"], 20_000)
+
     def test_capability_contracts_require_permission_and_exact_write_approval(self):
         audit = AuditLog(Path(self.temp.name) / "audit.sqlite3")
         approvals = ApprovalManager(ttl_seconds=60)
