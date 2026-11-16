@@ -105,12 +105,15 @@ class LaptopClientTests(unittest.TestCase):
                 self.store.get("127.0.0.1", 9443, "phone-main")
 
     def test_credential_store_rejects_unknown_permission_and_invalid_key(self):
-        for permission in ("shell.execute", "laptop.workspace.write"):
-            with self.subTest(permission=permission), self.assertRaises(ValueError):
-                self.store.save(
-                    "127.0.0.1", 9443, "a" * 64, "phone-main",
-                    "A" * 43, (permission,),
-                )
+        with self.assertRaises(ValueError):
+            self.store.save(
+                "127.0.0.1", 9443, "a" * 64, "phone-main",
+                "A" * 43, ("shell.execute",),
+            )
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-editor",
+            "A" * 43, ("laptop.workspace.write",),
+        )
         with self.assertRaises(ValueError):
             self.store.save(
                 "127.0.0.1", 9443, "a" * 64, "phone-main",
