@@ -13,7 +13,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-import stat
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -370,15 +369,9 @@ class LaptopAgentServer:
         self.authority = authority or LaptopPairingAuthority(storage_path=pairing_path)
         audit_file = Path(audit_path or (Path.home() / ".zexa" / "laptop_audit.sqlite3")).expanduser()
         audit_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        try:
-            os.chmod(audit_file.parent, 0o700)
-        except OSError:
-            pass
+        secure_owner_only(audit_file.parent, directory=True)
         self.audit = AuditLog(audit_file)
-        try:
-            os.chmod(audit_file, 0o600)
-        except OSError:
-            pass
+        secure_owner_only(audit_file)
         self.workspace = workspace
         self.host = host
         self.port = port
