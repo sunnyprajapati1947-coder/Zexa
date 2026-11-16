@@ -1,4 +1,4 @@
-""""Trusted Android capability definitions for the shared Human Hand controller."""
+"""Trusted Android capability definitions for the shared Human Hand controller."""
 from __future__ import annotations
 
 from collections.abc import Iterable
