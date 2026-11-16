@@ -404,6 +404,10 @@ class ZexaAccessibilityService : AccessibilityService() {
             val text = node.text?.toString()?.take(500) ?: ""
             val description = node.contentDescription?.toString()?.take(300) ?: ""
             val hint = node.hintText?.toString()?.take(300) ?: ""
+            // A parent may itself carry a combined label/value string while a
+            // child exposes the sensitive field label. Redact the parent as well
+            // as descendants whenever a sensitive child label is detected.
+            val childSensitiveContext = sensitiveContext || hasSensitiveLabelChild(node)
             val redacted = ScreenRedactionRules.shouldRedact(
                 isPassword = node.isPassword,
                 isEditable = node.isEditable,
@@ -412,7 +416,7 @@ class ZexaAccessibilityService : AccessibilityService() {
                 hint = hint,
                 text = text,
                 description = description,
-                sensitiveContext = sensitiveContext,
+                sensitiveContext = childSensitiveContext,
             )
             val item = JSONObject()
                 .put("index", count - 1)
@@ -428,7 +432,6 @@ class ZexaAccessibilityService : AccessibilityService() {
                     .put("left", bounds.left).put("top", bounds.top)
                     .put("right", bounds.right).put("bottom", bounds.bottom))
             nodes.put(item)
-            val childSensitiveContext = sensitiveContext || hasSensitiveLabelChild(node)
             // Bound child retrieval as well as emitted nodes; hostile or malformed
             // accessibility trees must not force unbounded traversal work.
             val childLimit = minOf(node.childCount, 150 - count)
