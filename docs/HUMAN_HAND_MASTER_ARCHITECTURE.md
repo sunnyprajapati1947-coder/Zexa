@@ -55,6 +55,8 @@ Required design:
 
 A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, optional exact-confirmed text writes, owner-only persistent server-side pairing/replay storage, optional owner-allowlisted app launch, and optional exact-confirmed opening of public HTTPS URLs in the laptop owner's visible default browser (`zexa laptop open-url`). Browser navigation has its own opt-in `laptop.browser.open` pairing scope and `--allow-browser-open` server flag; audit records retain only the destination host, not URL paths or query strings. This is navigation only: it does not inspect browser tabs, read browser profiles/cookies/passwords, click page controls, fill forms, or submit transactions. It is not yet production-ready; real phone-to-laptop LAN validation, visible laptop-side session controls, and platform-specific installation are still required.
 
+Laptop browser navigation is opt-in at pairing time: start the laptop agent with `--allow-browser-open`, pair again to grant `laptop.browser.open`, then use `zexa laptop open-url --host <private-ip> https://example.com`. The CLI displays the full destination and requires typing the exact `OPEN URL <normalized-url>` phrase before sending it. Cancelling sends no request.
+
 ### C. Browser and internet hand
 
 - Separate read-only research from interactive browser control.
