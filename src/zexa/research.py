@@ -193,7 +193,11 @@ def _validate_public_https_url(value: str):
         or parsed.fragment and len(parsed.fragment) > 512
     ):
         raise ValueError("Only public HTTPS URLs on the standard port are supported.")
-    host = parsed.hostname.rstrip(".").lower()\n    try:\n        host = host.encode("idna").decode("ascii")\n    except UnicodeError as exc:\n        raise ValueError("Page URL hostname is invalid.") from exc
+    host = parsed.hostname.rstrip(".").lower()
+    try:
+        host = host.encode("idna").decode("ascii")
+    except UnicodeError as exc:
+        raise ValueError("Page URL hostname is invalid.") from exc
     if host in {"localhost", "localhost.localdomain"} or host.endswith(".local") or "." not in host:
         raise ValueError("Local and single-label hostnames are not supported.")
     try:
