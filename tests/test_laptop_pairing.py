@@ -45,6 +45,7 @@ class LaptopPairingTests(unittest.TestCase):
         self.assertEqual(self.authority.list_clients(), [{
             "client_id": "phone-main",
             "paired_at_epoch": int(self.wall_now),
+            "permissions": ["laptop.workspace.list", "laptop.workspace.read"],
         }])
         with self.assertRaises(PermissionError):
             self.authority.complete_pairing("phone-main", encoded(bytes(32)), encoded(bytes(32)))
