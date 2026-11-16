@@ -553,7 +553,9 @@ class ZexaAccessibilityService : AccessibilityService() {
             .put("status", if (accepted) "dispatched" else "failed")
     }
 
+    @Synchronized
     override fun onDestroy() {
+        interruptionGeneration += 1L
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
         taskActionGrants.clear()
