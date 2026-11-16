@@ -158,6 +158,10 @@ def main() -> None:
         "--allow-browser-open", action="store_true",
         help="Allow paired phones to open exact-confirmed public HTTPS URLs in the visible laptop browser",
     )
+    laptop_serve.add_argument(
+        "--allow-browser-read", action="store_true",
+        help="Allow paired phones to fetch bounded public HTTPS page text without browser-profile access",
+    )
     laptop_pair = laptop_sub.add_parser("pair", help="Pair this phone using the code shown by the laptop")
     laptop_pair.add_argument("--host", required=True)
     laptop_pair.add_argument("--port", type=int, default=9443)
@@ -200,6 +204,13 @@ def main() -> None:
     laptop_open_url.add_argument("--port", type=int, default=9443)
     laptop_open_url.add_argument("--client-id", default="zexa-phone")
     laptop_open_url.add_argument("url")
+    laptop_read_url = laptop_sub.add_parser(
+        "read-url", help="Read bounded text from one public HTTPS page via the paired laptop",
+    )
+    laptop_read_url.add_argument("--host", required=True)
+    laptop_read_url.add_argument("--port", type=int, default=9443)
+    laptop_read_url.add_argument("--client-id", default="zexa-phone")
+    laptop_read_url.add_argument("url")
     laptop_clients = laptop_sub.add_parser("clients", help="List paired phones on this laptop")
     laptop_clients.add_argument(
         "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
@@ -332,6 +343,8 @@ def main() -> None:
                 permissions.append("laptop.apps.launch")
             if args.allow_browser_open:
                 permissions.append("laptop.browser.open")
+            if args.allow_browser_read:
+                permissions.append("laptop.browser.read")
             offer = server.begin_pairing(permissions=permissions)
             fingerprint = certificate_fingerprint(args.cert)
             print("Zexa laptop Human Hand server started (TLS 1.2+, private IPv4 only).")
@@ -347,7 +360,9 @@ def main() -> None:
                 print("Remote app launch is enabled only for the owner's fixed allowlist; each launch needs exact phone confirmation.")
             if args.allow_browser_open:
                 print("Browser navigation is enabled only for exact-confirmed public HTTPS URLs and opens visibly on this laptop.")
-            if not args.allow_write and not args.allow_app_launch and not args.allow_browser_open:
+            if args.allow_browser_read:
+                print("Public page reading is enabled for bounded HTTPS text only; page content is untrusted and browser profiles are never accessed.")
+            if not args.allow_write and not args.allow_app_launch and not args.allow_browser_open and not args.allow_browser_read:
                 print("Remote access is read-only: workspace list/read only; no shell or app control.")
             try:
                 server.serve_forever()
@@ -465,6 +480,22 @@ def main() -> None:
                 print("Laptop browser navigation cancelled.")
                 return
             result = client.open_browser_url(normalized_url, user_confirmed=True)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.laptop_command == "read-url":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None or "laptop.browser.read" not in pairing["permissions"]:
+                raise PermissionError(
+                    "This phone pairing lacks laptop page-read permission. Restart the laptop server with --allow-browser-read and pair again."
+                )
+            from .laptop_browser import validate_browser_url
+            normalized_url = validate_browser_url(args.url)
+            phrase = "READ URL " + normalized_url
+            print(f"Requested public page text read: {normalized_url}")
+            confirmation = input(f"Type exactly '{phrase}' to approve: ")
+            if confirmation != phrase:
+                print("Public page read cancelled; no request was sent.")
+                return
+            result = client.read_public_page(normalized_url)
             print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
