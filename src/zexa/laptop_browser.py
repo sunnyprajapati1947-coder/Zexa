@@ -10,6 +10,8 @@ import ipaddress
 import webbrowser
 from urllib.parse import urlsplit
 
+from .research import fetch_public_page
+
 
 def validate_browser_url(value: str) -> str:
     """Return a normalized public HTTPS URL or reject unsafe/ambiguous targets."""
@@ -69,3 +71,17 @@ def open_browser_url(value: str) -> dict[str, object]:
     if opened is not True:
         raise RuntimeError("The laptop did not report that a browser window was opened.")
     return {"opened": True, "host": urlsplit(url).hostname}
+
+
+def read_public_page(value: str) -> dict[str, object]:
+    """Fetch bounded public HTTPS page text without browser-profile access or scripts."""
+    url = validate_browser_url(value)
+    page = fetch_public_page(url)
+    if not isinstance(page.text, str) or not page.text.strip() or len(page.text) > 40_000:
+        raise RuntimeError("Public page returned no readable text or exceeded the text limit.")
+    return {
+        "title": page.title[:300],
+        "url": page.url,
+        "text": page.text[:40_000],
+        "content_sha256": page.content_sha256,
+    }
