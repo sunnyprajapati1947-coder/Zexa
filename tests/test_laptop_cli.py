@@ -24,7 +24,8 @@ class FakeLaptopClient:
         self.port = port
         self.client_id = client_id
         self.store = FakeStore((
-            "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write"
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write",
+            "laptop.apps.launch",
         ))
         self.writes = []
         self.launches = []
