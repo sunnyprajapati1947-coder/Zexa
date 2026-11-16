@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .audit import AuditLog
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
-from .laptop_pairing import LaptopPairingAuthority
+from .laptop_pairing import LaptopPairingAuthority, secure_owner_only
 
 
 MAX_PAIR_BODY = 16_384
@@ -54,10 +54,7 @@ def generate_laptop_certificate(
     if not openssl:
         raise RuntimeError("OpenSSL is required to generate the laptop TLS certificate.")
     cert.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    try:
-        os.chmod(cert.parent, 0o700)
-    except OSError:
-        pass
+    secure_owner_only(cert.parent, directory=True)
     with tempfile.TemporaryDirectory(prefix=".zexa-tls-", dir=cert.parent) as temp_dir:
         temp_cert = Path(temp_dir) / "laptop.crt"
         temp_key = Path(temp_dir) / "laptop.key"
@@ -76,8 +73,9 @@ def generate_laptop_certificate(
             raise RuntimeError(detail) from exc
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError("OpenSSL certificate generation timed out.") from exc
-        os.chmod(temp_key, 0o600)
+        secure_owner_only(temp_key)
         os.replace(temp_key, key)
+        secure_owner_only(key)
         os.replace(temp_cert, cert)
     return certificate_fingerprint(cert)
 
@@ -368,8 +366,7 @@ class LaptopAgentServer:
             or cert.stat().st_size > 64_000 or key.stat().st_size > 64_000
         ):
             raise FileNotFoundError("TLS certificate and private key must be bounded regular files, not symlinks.")
-        if os.name != "nt" and stat.S_IMODE(key.stat().st_mode) & 0o077:
-            raise PermissionError("Laptop TLS private key permissions must be owner-only (0600).")
+        secure_owner_only(key)
         self.authority = authority or LaptopPairingAuthority(storage_path=pairing_path)
         audit_file = Path(audit_path or (Path.home() / ".zexa" / "laptop_audit.sqlite3")).expanduser()
         audit_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
