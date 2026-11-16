@@ -55,6 +55,40 @@ class LaptopCliTests(unittest.TestCase):
             cli.main()
         return FakeLaptopClient.instance
 
+    def test_laptop_owner_can_list_and_revoke_paired_clients(self):
+        authority = unittest.mock.Mock()
+        authority.list_clients.return_value = [{
+            "client_id": "phone-main", "paired_at_epoch": 123,
+            "permissions": ["laptop.workspace.read"],
+        }]
+        authority.revoke_client.return_value = True
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "clients", "--pairings", "/tmp/pairings.sqlite3"
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopPairingAuthority", return_value=authority),
+            patch("builtins.print"),
+        ):
+            cli.main()
+        authority.list_clients.assert_called_once_with()
+
+        authority.reset_mock()
+        authority.revoke_client.return_value = True
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "revoke-client", "phone-main",
+                "--pairings", "/tmp/pairings.sqlite3",
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopPairingAuthority", return_value=authority),
+            patch.object(cli, "AuditLog") as audit,
+            patch("builtins.print"),
+        ):
+            cli.main()
+        authority.revoke_client.assert_called_once_with("phone-main")
+        audit.return_value.record.assert_called_once()
+
     def test_server_refuses_app_launch_without_owner_manifest(self):
         with (
             tempfile.TemporaryDirectory() as temp,
