@@ -188,7 +188,7 @@ Security is a set of proportionate controls, not a blanket lock on every action.
 - Never claim a task completed until the adapter returns verifiable success. Report partial completion and skipped steps separately.
 - Security controls must be tested for both sides: unauthorized actions are blocked, while authorized routine tasks complete without unnecessary prompts.
 
-**Current implementation note:** the native Android bridge currently asks for approval per queued action. This is intentionally conservative during the initial validation phase, but it is not the desired final interaction model for routine navigation. A bounded, revocable task grant for low-risk actions is a planned usability improvement and must be implemented with tests before it is enabled. Consequential actions keep exact-action approval.
+**Current implementation note:** the native Android bridge still asks for approval per queued action. A pure in-memory `TaskActionGrantRegistry` and JVM tests now define the bounded grant rules, including task/device/action scoping, expiry, revocation, operation budgets, and exclusion of coordinate taps and text entry. The registry is not yet connected to the bridge API or approval UI, so task grants are not active and must not be advertised as available. Consequential actions continue to require exact-action approval.
 
 ## 11. Current Human Hand implementation progress
 
