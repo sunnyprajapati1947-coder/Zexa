@@ -226,6 +226,12 @@ def main() -> None:
     laptop_revoke_client.add_argument(
         "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
     )
+    laptop_revoke_all = laptop_sub.add_parser(
+        "revoke-all", help="Emergency: revoke every paired phone from this laptop",
+    )
+    laptop_revoke_all.add_argument(
+        "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
+    )
 
     skill_parser = subparsers.add_parser("skill", help="Run one registered skill through the execution gateway")
     skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
@@ -375,10 +381,31 @@ def main() -> None:
             finally:
                 server.close()
             return
-        if args.laptop_command in {"clients", "revoke-client"}:
+        if args.laptop_command in {"clients", "revoke-client", "revoke-all"}:
             authority = LaptopPairingAuthority(storage_path=args.pairings)
             if args.laptop_command == "clients":
                 print(json.dumps(authority.list_clients(), ensure_ascii=False, indent=2))
+                return
+            if args.laptop_command == "revoke-all":
+                phrase = "REVOKE ALL LAPTOP CLIENTS"
+                if input(f"Type {phrase} to revoke every paired phone: ").strip() != phrase:
+                    print("Cancelled; no laptop pairing was changed.")
+                    return
+                revoked_count = authority.revoke_all_clients()
+                if revoked_count:
+                    audit_path = Path.home() / ".zexa" / "laptop_audit.sqlite3"
+                    if audit_path.is_symlink():
+                        raise PermissionError("Laptop audit database must not be a symbolic link.")
+                    audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    secure_owner_only(audit_path.parent, directory=True)
+                    audit = AuditLog(audit_path)
+                    secure_owner_only(audit_path)
+                    audit.record(
+                        "laptop_pairing_revoke_all", actor="laptop_owner",
+                        action="pairing.revoke_all", decision="revoked",
+                        details={"client_count": revoked_count, "source": "local_owner_cli"},
+                    )
+                print(f"Revoked {revoked_count} paired phone(s); the running laptop server will reject them on their next request.")
                 return
             revoked = authority.revoke_client(args.client_id)
             if revoked:
