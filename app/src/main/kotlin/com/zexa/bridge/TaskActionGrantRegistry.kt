@@ -152,6 +152,6 @@ class TaskActionGrantRegistry(
         const val MAX_GRANTS = 4
         const val DEFAULT_ACTIONS = 30
         const val MAX_ACTIONS = 100
-        val GRANTABLE_ACTIONS = setOf("swipe", "scroll", "back", "home", "launch_app", "open_url")
+        val GRANTABLE_ACTIONS = setOf("swipe", "scroll", "back", "home", "launch_app")
     }
 }
