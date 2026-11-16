@@ -270,6 +270,9 @@ class BridgeServer(
         val header = "HTTP/1.1 $status $reason\r\n" +
             "Content-Type: application/json; charset=utf-8\r\n" +
             "Content-Length: ${bytes.size}\r\n" +
+            "Cache-Control: no-store\r\n" +
+            "Pragma: no-cache\r\n" +
+            "X-Content-Type-Options: nosniff\r\n" +
             "Connection: close\r\n\r\n"
         socket.getOutputStream().apply {
             write(header.toByteArray(StandardCharsets.US_ASCII))
