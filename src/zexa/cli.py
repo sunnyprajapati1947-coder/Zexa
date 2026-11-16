@@ -25,6 +25,7 @@ from .execution import (
 )
 from .brain import build_brain_router
 from .intent import route_utterance
+from .learning import LearningService, LearningStore
 from .jobs import JobQueue, JobWorker
 from .hand import AccessibilityBridge
 from .memory import MemoryStore
@@ -73,6 +74,30 @@ def main() -> None:
     research_parser = subparsers.add_parser("research", help="Search public web snippets and summarize with source references")
     research_parser.add_argument("--limit", type=int, default=5)
     research_parser.add_argument("query", nargs="+", help="Research question")
+
+    learn_parser = subparsers.add_parser("learn", help="Study web or local text into reviewed knowledge")
+    learn_sub = learn_parser.add_subparsers(dest="learn_command", required=True)
+    learn_research = learn_sub.add_parser("research", help="Research a topic online and save a draft note")
+    learn_research.add_argument("--limit", type=int, default=5)
+    learn_research.add_argument("query", nargs="+")
+    learn_import = learn_sub.add_parser("import", help="Summarize a local UTF-8 text file into a draft note")
+    learn_import.add_argument("path")
+    learn_list = learn_sub.add_parser("list", help="List knowledge notes")
+    learn_list.add_argument("--status", choices=["draft", "approved", "rejected", "archived"])
+    learn_list.add_argument("--limit", type=int, default=50)
+    learn_show = learn_sub.add_parser("show", help="Show one knowledge note")
+    learn_show.add_argument("note_id", type=int)
+    learn_search = learn_sub.add_parser("search", help="Search approved knowledge notes")
+    learn_search.add_argument("query", nargs="+")
+    learn_review = learn_sub.add_parser("review", help="Approve, reject, or archive a knowledge note")
+    learn_review.add_argument("note_id", type=int)
+    learn_review.add_argument("decision", choices=["approved", "rejected", "archived"])
+    learn_skill = learn_sub.add_parser("draft-skill", help="Draft an inert skill from an approved note")
+    learn_skill.add_argument("note_id", type=int)
+    learn_sub.add_parser("skill-drafts", help="List generated skill drafts")
+    learn_skill_review = learn_sub.add_parser("review-skill", help="Review a generated skill contract; approval does not enable execution")
+    learn_skill_review.add_argument("draft_id", type=int)
+    learn_skill_review.add_argument("decision", choices=["approved", "rejected"])
 
     skill_parser = subparsers.add_parser("skill", help="Run one registered skill through the execution gateway")
     skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
@@ -465,6 +490,67 @@ def main() -> None:
             xai_config=xai_config,
         )
         config = groq_config  # Keep legacy planner/voice call signatures compatible.
+        if args.command == "learn":
+            store = LearningStore()
+            if args.learn_command == "research":
+                note_id = LearningService(store, brain).research(" ".join(args.query), args.limit)
+                print(f"Research saved as draft knowledge note #{note_id}. Review it with: zexa learn show {note_id}")
+            elif args.learn_command == "import":
+                note_id = LearningService(store, brain).import_text_file(args.path)
+                print(f"Local study notes saved as draft knowledge note #{note_id}.")
+            elif args.learn_command == "list":
+                print(json.dumps([
+                    {
+                        "note_id": note.note_id, "title": note.title,
+                        "source_type": note.source_type, "source_label": note.source_label,
+                        "status": note.status, "updated_at": note.updated_at,
+                    }
+                    for note in store.list_notes(args.limit, args.status)
+                ], ensure_ascii=False, indent=2))
+            elif args.learn_command == "show":
+                note = store.get_note(args.note_id)
+                if note is None:
+                    print("Knowledge note not found.")
+                else:
+                    print(json.dumps({
+                        "note_id": note.note_id, "title": note.title, "body": note.body,
+                        "sources": list(note.sources), "source_type": note.source_type,
+                        "source_label": note.source_label, "content_sha256": note.content_sha256,
+                        "status": note.status, "created_at": note.created_at,
+                        "updated_at": note.updated_at,
+                    }, ensure_ascii=False, indent=2))
+            elif args.learn_command == "search":
+                print(json.dumps([
+                    {"note_id": note.note_id, "title": note.title, "body": note.body}
+                    for note in store.search_notes(" ".join(args.query))
+                ], ensure_ascii=False, indent=2))
+            elif args.learn_command == "review":
+                if not store.review_note(args.note_id, args.decision):
+                    print("Knowledge note not found.")
+                else:
+                    print(f"Knowledge note #{args.note_id} marked {args.decision}.")
+            elif args.learn_command == "draft-skill":
+                draft_id = LearningService(store, brain).draft_skill(args.note_id)
+                print(f"Skill contract saved as review-required draft #{draft_id}; it remains non-executable.")
+            elif args.learn_command == "skill-drafts":
+                print(json.dumps([
+                    {
+                        "draft_id": item.draft_id, "note_id": item.note_id,
+                        "name": item.name, "description": item.description,
+                        "risk_level": item.risk_level, "status": item.status,
+                    }
+                    for item in store.list_skill_drafts()
+                ], ensure_ascii=False, indent=2))
+            elif args.learn_command == "review-skill":
+                if not store.review_skill_draft(args.draft_id, args.decision):
+                    print("Skill draft not found.")
+                else:
+                    print(
+                        f"Skill draft #{args.draft_id} marked {args.decision}. "
+                        "Review approval records review only; execution remains disabled."
+                    )
+            return
+
         if args.command == "skill" and args.skill_command == "run":
             try:
                 payload = json.loads(args.payload)
