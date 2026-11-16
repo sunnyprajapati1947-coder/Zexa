@@ -146,7 +146,7 @@ The imported community reference pack contains 320 validated entries, all disabl
 
 ## Reviewed knowledge and learning
 
-Zexa can save online search summaries, fetch one bounded public HTTPS webpage, or study local UTF-8 text files into a provenance-aware SQLite knowledge library. New notes are drafts and do not enter normal retrieval until approved. Search summaries cite result titles/snippets; `learn fetch` extracts readable text from one page (maximum 1 MB) without running scripts or following links. Private/local addresses and unsafe redirects are rejected. Local text imports are bounded to 1 MB and are summarized without executing document instructions.
+Zexa can save online search summaries, fetch one bounded public HTTPS webpage, or study local UTF-8 text files into a provenance-aware SQLite knowledge library. The knowledge database and its parent directory use owner-only permissions (Unix 0600/0700; Windows restricted ACL) and reject symlink paths. New notes are drafts and do not enter normal retrieval until approved. Search summaries cite result titles/snippets; `learn fetch` extracts readable text from one page (maximum 1 MB) without running scripts or following links. Private/local addresses and unsafe redirects are rejected. Local text imports are bounded to 1 MB and are summarized without executing document instructions.
 
     zexa learn research "topic to study"
     zexa learn fetch https://example.org/guide
