@@ -220,6 +220,36 @@ class LaptopPairingAuthority:
             )
             self._replays[client_id] = {}
 
+    def _get_client_locked(self, client_id: str) -> PairedLaptopClient | None:
+        """Refresh persisted client state so laptop-owner revocation takes effect live."""
+        if self.storage_path is None:
+            return self._clients.get(client_id)
+        try:
+            with closing(self._connect_storage()) as db:
+                row = db.execute(
+                    "SELECT session_key, paired_at_epoch, permissions_json "
+                    "FROM paired_clients WHERE client_id=?",
+                    (client_id,),
+                ).fetchone()
+        except sqlite3.Error:
+            return None
+        if row is None:
+            self._clients.pop(client_id, None)
+            self._replays.pop(client_id, None)
+            return None
+        try:
+            session_key = row[0]
+            paired_at_epoch = row[1]
+            permissions = self._permissions(json.loads(row[2]))
+            if not isinstance(session_key, bytes) or len(session_key) != 32 or type(paired_at_epoch) is not int:
+                return None
+            record = PairedLaptopClient(client_id, session_key, paired_at_epoch, permissions)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return None
+        self._clients[client_id] = record
+        self._replays.setdefault(client_id, {})
+        return record
+
     def _persist_client(self, record: PairedLaptopClient) -> None:
         if self.storage_path is None:
             return
@@ -418,7 +448,7 @@ class LaptopPairingAuthority:
         if abs(now - timestamp) > 30:
             return False
         with self._lock:
-            record = self._clients.get(client_id)
+            record = self._get_client_locked(client_id)
             if record is None:
                 return False
             message = self._request_message(method, path, body, timestamp, nonce)
@@ -469,7 +499,7 @@ class LaptopPairingAuthority:
     ) -> bool:
         """Authenticate a request and enforce the capability scope selected at pairing."""
         with self._lock:
-            record = self._clients.get(client_id)
+            record = self._get_client_locked(client_id)
             if record is None or not record.allows(permission):
                 return False
             return self.verify_request(client_id, method, path, body, headers)
@@ -516,6 +546,32 @@ class LaptopPairingAuthority:
 
     def list_clients(self) -> list[dict[str, int | str]]:
         with self._lock:
+            if self.storage_path is not None:
+                try:
+                    with closing(self._connect_storage()) as db:
+                        rows = db.execute(
+                            "SELECT client_id, paired_at_epoch, permissions_json "
+                            "FROM paired_clients ORDER BY client_id"
+                        ).fetchall()
+                except sqlite3.Error:
+                    return []
+                result = []
+                for client_id, paired_at_epoch, permissions_json in rows:
+                    try:
+                        permissions = self._permissions(json.loads(permissions_json))
+                        if (
+                            not isinstance(client_id, str) or not _CLIENT_ID.fullmatch(client_id)
+                            or type(paired_at_epoch) is not int
+                        ):
+                            continue
+                    except (ValueError, TypeError, json.JSONDecodeError):
+                        continue
+                    result.append({
+                        "client_id": client_id,
+                        "paired_at_epoch": paired_at_epoch,
+                        "permissions": list(permissions),
+                    })
+                return result
             return [
                 {
                     "client_id": item.client_id,
