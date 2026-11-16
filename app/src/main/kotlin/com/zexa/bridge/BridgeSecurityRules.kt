@@ -2,6 +2,7 @@ package com.zexa.bridge
 
 import org.json.JSONObject
 import java.security.MessageDigest
+import java.net.URI
 
 /**
  * Pure validation rules shared by the local bridge and JVM unit tests.
@@ -40,6 +41,23 @@ internal object BridgeSecurityRules {
     fun packageName(value: String): Boolean =
         value.matches(Regex("^[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)+$"))
 
+    /** Accept only explicit HTTP(S) URLs without embedded credentials. */
+    fun safeWebUrl(value: String): Boolean {
+        if (value.isBlank() || value.length > 2_048 || value.any { it.isWhitespace() || it.isISOControl() }) {
+            return false
+        }
+        return try {
+            val uri = URI(value)
+            val scheme = uri.scheme?.lowercase()
+            (scheme == "https" || scheme == "http") &&
+                !uri.host.isNullOrBlank() &&
+                uri.rawUserInfo == null &&
+                uri.port <= 65_535
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /**
      * Exact allowlisted payload contract. Reject unknown keys and coercible
      * JSON values (for example strings/booleans where numbers are required).
@@ -56,6 +74,7 @@ internal object BridgeSecurityRules {
             "back", "home" -> { required = emptySet(); optional = emptySet() }
             "input_text" -> { required = setOf("text"); optional = emptySet() }
             "launch_app" -> { required = setOf("package_name"); optional = emptySet() }
+            "open_url" -> { required = setOf("url"); optional = emptySet() }
             else -> return false
         }
         val keys = payload.keys().asSequence().toSet()
@@ -81,6 +100,10 @@ internal object BridgeSecurityRules {
         if (action == "launch_app") {
             val value = payload.opt("package_name") as? String ?: return false
             if (!packageName(value)) return false
+        }
+        if (action == "open_url") {
+            val value = payload.opt("url") as? String ?: return false
+            if (!safeWebUrl(value)) return false
         }
         return true
     }
