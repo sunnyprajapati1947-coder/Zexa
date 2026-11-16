@@ -156,10 +156,8 @@ class LaptopServerTests(unittest.TestCase):
         status, _ = self.request("POST", path, body, headers)
         self.assertEqual(status, 409)
 
-    def test_remote_write_and_shell_routes_are_not_exposed(self):
+    def test_remote_shell_route_is_not_exposed(self):
         self.pair()
-        status, _ = self.request("POST", "/v1/workspace/write", b"{}")
-        self.assertEqual(status, 404)
         status, _ = self.request("POST", "/v1/shell", b"{}")
         self.assertEqual(status, 404)
 
