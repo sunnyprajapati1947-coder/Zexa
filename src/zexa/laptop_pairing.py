@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import closing
+import getpass
 from dataclasses import dataclass
 import hashlib
 import hmac
@@ -18,6 +19,8 @@ from pathlib import Path
 import re
 import sqlite3
 import secrets
+import shutil
+import subprocess
 import threading
 import time
 from typing import Callable
@@ -51,6 +54,34 @@ def _b64decode(value: str, *, expected_bytes: int) -> bytes:
     if len(decoded) != expected_bytes:
         raise ValueError("Encoded pairing value has an invalid length.")
     return decoded
+
+
+def secure_owner_only(path: str | Path, *, directory: bool = False) -> None:
+    """Restrict a sensitive file or directory to its owner (plus Windows system admins)."""
+    target = Path(path)
+    if target.is_symlink():
+        raise PermissionError("Sensitive Zexa storage must not be a symbolic link.")
+    if os.name == "nt":
+        icacls = shutil.which("icacls")
+        if not icacls:
+            raise PermissionError("Windows icacls is required to secure Zexa pairing files.")
+        suffix = "(OI)(CI)F" if directory else "(F)"
+        command = [
+            icacls, str(target), "/inheritance:r",
+            "/grant:r", f"{getpass.getuser()}:{suffix}",
+            "/grant:r", f"*S-1-5-18:{suffix}",
+            "/grant:r", f"*S-1-5-32-544:{suffix}",
+        ]
+        try:
+            result = subprocess.run(
+                command, check=False, capture_output=True, text=True, timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise PermissionError("Could not apply a restricted Windows ACL to Zexa storage.") from exc
+        if result.returncode != 0:
+            raise PermissionError("Windows rejected the restricted Zexa storage ACL.")
+    else:
+        os.chmod(target, 0o700 if directory else 0o600)
 
 
 def verify_tls_fingerprint(certificate_der: bytes, expected_sha256: str) -> bool:
@@ -134,8 +165,7 @@ class LaptopPairingAuthority:
         if path.is_symlink():
             raise PermissionError("Laptop pairing database must not be a symbolic link.")
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if os.name != "nt":
-            os.chmod(path.parent, 0o700)
+        secure_owner_only(path.parent, directory=True)
         with closing(self._connect_storage()) as db, db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS paired_clients (
@@ -156,8 +186,7 @@ class LaptopPairingAuthority:
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_replay_seen_at ON replay_nonces(seen_at_epoch)"
             )
-        if os.name != "nt":
-            os.chmod(path, 0o600)
+        secure_owner_only(path)
         with self._connect_storage() as db:
             rows = db.execute(
                 "SELECT client_id, session_key, paired_at_epoch, permissions_json FROM paired_clients"
