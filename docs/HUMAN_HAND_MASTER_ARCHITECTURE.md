@@ -172,7 +172,14 @@ A feature is not "done" because it appears in a catalogue or UI. It must have:
 
 ## 10. Current implementation boundary
 
-At the architecture baseline, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. Laptop pairing, general browser automation, full-page research, production app connectors, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
+At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. Laptop pairing, general browser automation, full-page research, production app connectors, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
+
+### Laptop workspace adapter foundation
+- LaptopWorkspace constrains file listing, UTF-8 reads, and writes to one existing user-selected root directory.
+- Absolute paths, parent traversal, Windows-style path separators, symlinks, binary formats, credential-like filenames, and oversized files are rejected or excluded.
+- Reads are bounded to 256 KB; writes are bounded to 128,000 characters and use a temporary file plus atomic replacement.
+- Trusted CapabilitySpec definitions expose list/read as low-risk and write as high-risk; CapabilityController enforces explicit permissions and one-time exact-payload approval for writes.
+- This is a laptop-side local adapter only. It has no network listener, device pairing, TLS identity exchange, remote session, process execution, arbitrary shell, or app-control implementation.
 
 
 ## 12. Security without blocking useful work
