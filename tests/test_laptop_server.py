@@ -139,9 +139,9 @@ class LaptopServerTests(unittest.TestCase):
         key = Path(self.temp.name) / "generated.key"
         der = b"test certificate DER"
         pem = (
-            "-----BEGIN CERTIFICATE-----\\n"
+            "-----BEGIN CERTIFICATE-----\n"
             + base64.b64encode(der).decode("ascii")
-            + "\\n-----END CERTIFICATE-----\\n"
+            + "\n-----END CERTIFICATE-----\n"
         )
 
         def fake_run(command, **kwargs):
