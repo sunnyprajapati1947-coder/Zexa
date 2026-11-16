@@ -53,7 +53,7 @@ Required design:
 - Never read browser passwords, password-manager stores, private keys, session cookies, or other credentials. Do not bypass login, endpoint protection, OS permissions, or security prompts.
 - The laptop agent must have a visible running indicator, pause/stop control, local audit log, and a way to revoke the phone's pairing.
 
-A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, optional exact-confirmed text writes, and owner-only persistent server-side pairing/replay storage. It is not yet production-ready; real phone-to-laptop LAN validation, visible laptop-side session controls, and platform-specific installation are still required.
+A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, optional exact-confirmed text writes, owner-only persistent server-side pairing/replay storage, and optional owner-allowlisted app launch. It is not yet production-ready; real phone-to-laptop LAN validation, visible laptop-side session controls, and platform-specific installation are still required.
 
 ### C. Browser and internet hand
 
@@ -172,7 +172,7 @@ A feature is not "done" because it appears in a catalogue or UI. It must have:
 
 ## 10. Current implementation boundary
 
-At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. A TLS-pinned, private-IPv4 laptop workspace channel now supports explicit pairing, scoped listing/reading, and optional exact-confirmed text writes. General browser automation, multi-page crawling, production app connectors, remote laptop app/process control, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
+At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. A TLS-pinned, private-IPv4 laptop workspace channel now supports explicit pairing, scoped listing/reading, and optional exact-confirmed text writes. General browser automation, multi-page crawling, production app connectors, arbitrary laptop process control, remote app discovery, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
 
 ### Laptop workspace and remote pairing foundation
 - LaptopWorkspace constrains file listing, UTF-8 reads, and writes to one existing user-selected root directory.
@@ -183,7 +183,7 @@ At the current branch, Android Accessibility and Termux integrations exist as fo
 - Remote pairing defaults to workspace list/read. The laptop owner may opt into workspace writes when starting the server; the phone CLI previews source, destination, character count, and SHA-256 and requires an exact path confirmation for every write, with a distinct overwrite confirmation.
 - Phone-side session credentials are stored with owner-restricted permissions. Laptop-side paired-client keys and replay nonces persist in a restricted SQLite database (default ~/.zexa/laptop-pairings.sqlite3), survive server restarts, and are removed when a client revokes pairing. Unix uses mode 0600/0700; Windows applies an ACL for the current user plus SYSTEM/Administrators and fails closed if icacls is unavailable.
 - A metadata-only SQLite audit trail records pairing, workspace list/read/write, and revocation events without storing file contents or authentication secrets.
-- Remote deletion, arbitrary shell/process execution, laptop app control, and general browser automation are not exposed.
+- Remote deletion, arbitrary shell/process execution, arbitrary laptop process control, remote app discovery, and general browser automation are not exposed. Optional app launch is limited to an owner-authored fixed executable/argument manifest, requires a separate pairing permission, and requires exact confirmation on the phone.
 
 
 ## 12. Security without blocking useful work
