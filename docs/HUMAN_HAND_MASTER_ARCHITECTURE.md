@@ -53,7 +53,7 @@ Required design:
 - Never read browser passwords, password-manager stores, private keys, session cookies, or other credentials. Do not bypass login, endpoint protection, OS permissions, or security prompts.
 - The laptop agent must have a visible running indicator, pause/stop control, local audit log, and a way to revoke the phone's pairing.
 
-A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, and optional exact-confirmed text writes. It is not yet production-ready; real phone-to-laptop LAN validation, persistent server-side pairing storage, visible laptop-side session controls, and platform-specific installation are still required.
+A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, optional exact-confirmed text writes, and owner-only persistent server-side pairing/replay storage. It is not yet production-ready; real phone-to-laptop LAN validation, visible laptop-side session controls, and platform-specific installation are still required.
 
 ### C. Browser and internet hand
 
@@ -181,7 +181,7 @@ At the current branch, Android Accessibility and Termux integrations exist as fo
 - Trusted CapabilitySpec definitions expose list/read as low-risk and local write as high-risk; CapabilityController enforces explicit permissions and one-time exact-payload approval for local writes.
 - LaptopAgentServer binds only to a private IPv4 address and requires TLS 1.2+ with a locally displayed SHA-256 certificate fingerprint. Pairing uses a 12-digit one-time code, PBKDF2/HMAC challenge proof, explicit capability scopes, and replay-resistant request MACs with timestamps and nonces.
 - Remote pairing defaults to workspace list/read. The laptop owner may opt into workspace writes when starting the server; the phone CLI previews source, destination, character count, and SHA-256 and requires an exact path confirmation for every write, with a distinct overwrite confirmation.
-- Phone-side session credentials are stored in an owner-only file. Laptop-side paired-client records are process-local and are invalidated when the server restarts. Clients can revoke their own pairing.
+- Phone-side session credentials are stored in an owner-only file. Laptop-side paired-client keys and replay nonces persist in an owner-only SQLite database (default ~/.zexa/laptop-pairings.sqlite3), survive server restarts, and are removed when a client revokes pairing.
 - A metadata-only SQLite audit trail records pairing, workspace list/read/write, and revocation events without storing file contents or authentication secrets.
 - Remote deletion, arbitrary shell/process execution, laptop app control, and general browser automation are not exposed.
 
