@@ -49,6 +49,11 @@ class LaptopClientTests(unittest.TestCase):
                     "permissions": list(record.permissions),
                     "paired_at_epoch": record.paired_at_epoch,
                 }
+            if method == "POST" and path == "/v1/pair/revoke":
+                self.assertTrue(self.authority.verify_scoped_request(
+                    "phone-main", "laptop.workspace.list", method, path, b"", headers
+                ))
+                return 200, {"ok": True, "revoked": self.authority.revoke_client("phone-main")}
             if method == "GET" and path.startswith("/v1/workspace/list?"):
                 self.assertTrue(self.authority.verify_scoped_request(
                     "phone-main", "laptop.workspace.list", method, path, b"", headers
@@ -67,7 +72,7 @@ class LaptopClientTests(unittest.TestCase):
         self.assertIsNotNone(self.store.get("127.0.0.1", 9443, "phone-main"))
         self.assertEqual(client.list_directory()["entries"], [])
         self.assertEqual(client.read_text("lesson.txt")["content"], "hello")
-        self.assertTrue(client.forget_local_pairing())
+        self.assertTrue(client.revoke_pairing())
         self.assertIsNone(self.store.get("127.0.0.1", 9443, "phone-main"))
 
     def test_existing_pairing_supplies_saved_tls_fingerprint(self):
