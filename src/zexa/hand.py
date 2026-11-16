@@ -67,6 +67,8 @@ class AccessibilityBridge:
                     raise RuntimeError("Accessibility bridge response exceeded the size limit.")
                 result = json.loads(raw.decode("utf-8"))
         except HTTPError as exc:
+            if exc.code == 403:
+                raise PermissionError("Accessibility bridge denied this request or its permission scope.") from exc
             raise RuntimeError(f"Accessibility bridge returned HTTP {exc.code}.") from exc
         except URLError as exc:
             raise RuntimeError("Accessibility bridge is not reachable on this device.") from exc
