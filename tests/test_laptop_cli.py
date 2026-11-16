@@ -39,7 +39,7 @@ class FakeLaptopClient:
 
     def read_public_page(self, url):
         self.page_reads.append(url)
-        return {"title": "Example", "url": url, "text": "Page text", "content_sha256": "a" * 64}
+        return {"title": "Example", "url": url, "text": "Page text", "content_sha256": "a" * 64, "content_trust": "untrusted_reference"}
 
     def list_apps(self):
         return [{"app_id": "editor", "description": "Approved editor"}]
