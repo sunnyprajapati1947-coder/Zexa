@@ -119,6 +119,10 @@ def main() -> None:
     laptop_serve.add_argument("--cert", required=True, help="PEM TLS certificate file")
     laptop_serve.add_argument("--key", required=True, help="PEM TLS private key file")
     laptop_serve.add_argument(
+        "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
+        help="Owner-only SQLite file for persistent paired clients and replay protection",
+    )
+    laptop_serve.add_argument(
         "--allow-write", action="store_true",
         help="Allow paired phones to request workspace writes after exact phone-side confirmation",
     )
@@ -255,6 +259,7 @@ def main() -> None:
             workspace = LaptopWorkspace(args.workspace)
             server = LaptopAgentServer(
                 args.host, args.port, args.cert, args.key, workspace,
+                pairing_path=args.pairings,
             )
             permissions = (
                 ("laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write")
@@ -264,6 +269,7 @@ def main() -> None:
             offer = server.begin_pairing(permissions=permissions)
             fingerprint = certificate_fingerprint(args.cert)
             print("Zexa laptop Human Hand server started (TLS 1.2+, private IPv4 only).")
+            print(f"Persistent pairing store: {Path(args.pairings).expanduser()} (owner-only permissions)")
             print(f"Address: https://{args.host}:{args.port}")
             print(f"TLS SHA-256 fingerprint: {fingerprint}")
             print(f"One-time pairing code: {offer.pairing_code}")
