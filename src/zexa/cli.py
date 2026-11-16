@@ -29,7 +29,7 @@ from .intent import route_utterance
 from .learning import LearningService, LearningStore
 from .laptop_client import LaptopAgentClient
 from .laptop_hand import LaptopWorkspace
-from .laptop_server import LaptopAgentServer, certificate_fingerprint
+from .laptop_server import LaptopAgentServer, certificate_fingerprint, generate_laptop_certificate
 from .jobs import JobQueue, JobWorker
 from .hand import AccessibilityBridge
 from .memory import MemoryStore
@@ -105,6 +105,10 @@ def main() -> None:
 
     laptop_parser = subparsers.add_parser("laptop", help="Pair with and use a scoped laptop Human Hand")
     laptop_sub = laptop_parser.add_subparsers(dest="laptop_command", required=True)
+    laptop_cert = laptop_sub.add_parser("certificate", help="Generate a self-signed TLS certificate for the laptop agent")
+    laptop_cert.add_argument("--host", required=True, help="Laptop's private LAN IPv4 address")
+    laptop_cert.add_argument("--cert", default=str(Path.home() / ".zexa" / "laptop-agent.crt"))
+    laptop_cert.add_argument("--key", default=str(Path.home() / ".zexa" / "laptop-agent.key"))
     laptop_serve = laptop_sub.add_parser("serve", help="Run the TLS laptop agent on a private IPv4 address")
     laptop_serve.add_argument("--host", required=True, help="Laptop's private LAN IPv4 address")
     laptop_serve.add_argument("--port", type=int, default=9443)
@@ -227,6 +231,14 @@ def main() -> None:
     router = default_router()
 
     if args.command == "laptop":
+        if args.laptop_command == "certificate":
+            fingerprint = generate_laptop_certificate(args.host, args.cert, args.key)
+            print("TLS certificate created.")
+            print(f"Certificate: {Path(args.cert).expanduser()}")
+            print(f"Private key: {Path(args.key).expanduser()} (owner-only permissions)")
+            print(f"SHA-256 fingerprint: {fingerprint}")
+            print("Confirm this fingerprint locally on the laptop before entering it on the phone.")
+            return
         if args.laptop_command == "serve":
             workspace = LaptopWorkspace(args.workspace)
             server = LaptopAgentServer(
