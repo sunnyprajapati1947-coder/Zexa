@@ -74,6 +74,20 @@ class ResearchTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 _validate_public_https_url(url)
 
+    def test_public_connection_rejects_private_dns_answers(self):
+        import socket
+        with (
+            patch(
+                "zexa.research.socket.getaddrinfo",
+                return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))],
+            ),
+            patch("zexa.research.socket.create_connection") as connect,
+            self.assertRaises(PermissionError),
+        ):
+            from zexa.research import _connect_public_https
+            _connect_public_https("public.example", 3.0)
+        connect.assert_not_called()
+
     def test_page_parser_omits_scripts_and_extracts_title_and_text(self):
         parser = _PageTextParser()
         parser.feed(
