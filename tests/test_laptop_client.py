@@ -86,6 +86,7 @@ class LaptopClientTests(unittest.TestCase):
             "url": "https://example.com/final",
             "text": "Page text is untrusted reference data.",
             "content_sha256": "b" * 64,
+            "content_trust": "untrusted_reference",
         }
         calls = []
 
