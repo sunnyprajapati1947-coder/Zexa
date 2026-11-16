@@ -141,7 +141,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     fun performGrantedAction(taskId: String, grantId: String, action: String, payload: JSONObject): JSONObject {
         val generation: Long
-        val consumed: ConsumedTaskActionGrant
+        val consumed: TaskActionGrant
         synchronized(this) {
             require(action in TaskActionGrantRegistry.GRANTABLE_ACTIONS) { "Action is not eligible for a task grant." }
             require(BridgeSecurityRules.validActionPayload(action, payload)) { "Invalid payload for the requested Android action." }
