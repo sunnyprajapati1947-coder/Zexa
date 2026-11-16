@@ -52,7 +52,7 @@ internal object BridgeSecurityRules {
             (scheme == "https" || scheme == "http") &&
                 !uri.host.isNullOrBlank() &&
                 uri.rawUserInfo == null &&
-                uri.port <= 65_535
+                (uri.port == -1 || uri.port in 1..65_535)
         } catch (_: Exception) {
             false
         }
