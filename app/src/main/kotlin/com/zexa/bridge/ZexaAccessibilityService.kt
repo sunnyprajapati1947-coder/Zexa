@@ -362,14 +362,17 @@ class ZexaAccessibilityService : AccessibilityService() {
         fun hasOtpLabelChild(parent: AccessibilityNodeInfo): Boolean {
             for (index in 0 until minOf(parent.childCount, 150)) {
                 val child = parent.getChild(index) ?: continue
-                val hasLabel = ScreenRedactionRules.isOtpLabel(
-                    className = child.className?.toString()?.take(160) ?: "",
-                    viewId = child.viewIdResourceName?.take(200) ?: "",
-                    hint = child.hintText?.toString()?.take(300) ?: "",
-                    text = child.text?.toString()?.take(500) ?: "",
-                    description = child.contentDescription?.toString()?.take(300) ?: "",
-                )
-                child.recycle()
+                val hasLabel = try {
+                    ScreenRedactionRules.isOtpLabel(
+                        className = child.className?.toString()?.take(160) ?: "",
+                        viewId = child.viewIdResourceName?.take(200) ?: "",
+                        hint = child.hintText?.toString()?.take(300) ?: "",
+                        text = child.text?.toString()?.take(500) ?: "",
+                        description = child.contentDescription?.toString()?.take(300) ?: "",
+                    )
+                } finally {
+                    child.recycle()
+                }
                 if (hasLabel) return true
             }
             return false
@@ -411,17 +414,22 @@ class ZexaAccessibilityService : AccessibilityService() {
             val childOtpContext = sensitiveOtpContext || hasOtpLabelChild(node)
             for (i in 0 until node.childCount) {
                 val child = node.getChild(i)
-                visit(child, depth + 1, childOtpContext)
-                child?.recycle()
+                try {
+                    visit(child, depth + 1, childOtpContext)
+                } finally {
+                    child?.recycle()
+                }
             }
         }
-        visit(root, 0)
-        val result = JSONObject()
-            .put("ok", true)
-            .put("package", root.packageName?.toString() ?: "")
-            .put("nodes", nodes)
-        root.recycle()
-        return result
+        return try {
+            visit(root, 0)
+            JSONObject()
+                .put("ok", true)
+                .put("package", root.packageName?.toString() ?: "")
+                .put("nodes", nodes)
+        } finally {
+            root.recycle()
+        }
     }
 
     fun perform(action: String, payload: JSONObject): JSONObject =
