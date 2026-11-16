@@ -121,6 +121,21 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             bridge.task_grants()
 
+    def test_task_grant_list_rejects_unapproved_action_names(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: {
+            "ok": True,
+            "grants": [{
+                "grant_id": "grant-1",
+                "task_id": "research-1",
+                "allowed_actions": ["open_url"],
+                "expires_at_epoch_ms": 200_000,
+                "remaining_actions": 3,
+            }],
+        }
+        with self.assertRaises(RuntimeError):
+            bridge.task_grants()
+
     def test_perform_granted_accepts_only_success_for_same_grant(self):
         bridge = self.make_bridge()
         calls = []
