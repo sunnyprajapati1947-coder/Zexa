@@ -73,12 +73,22 @@ class BridgeServer(
                         try { socket.close() } catch (_: Exception) {}
                         break
                     }
-                    Thread({
-                        try { handle(socket) } finally {
-                            activeClients.remove(socket)
-                            clientSlots.release()
+                    try {
+                        Thread({
+                            try { handle(socket) } finally {
+                                activeClients.remove(socket)
+                                clientSlots.release()
+                            }
+                        }, "zexa-bridge-client").apply {
+                            isDaemon = true
+                            start()
                         }
-                    }, "zexa-bridge-client").apply { isDaemon = true; start() }
+                    } catch (_: Exception) {
+                        // A failed worker launch must not permanently consume a client slot.
+                        activeClients.remove(socket)
+                        clientSlots.release()
+                        try { socket.close() } catch (_: Exception) {}
+                    }
                 }
             } catch (_: Exception) {
                 // Server is intentionally silent; status is visible in the app.
