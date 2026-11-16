@@ -12,7 +12,7 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         bridge = self.make_bridge()
         responses = iter([
             {"ok": True, "status": "pending_approval", "request_id": "request-123"},
-            {"ok": True, "status": "pending_approval", "request_id": "request-123"},
+            {"ok": True, "status": "executing", "request_id": "request-123"},
             {"ok": True, "status": "completed", "request_id": "request-123"},
         ])
         calls = []
