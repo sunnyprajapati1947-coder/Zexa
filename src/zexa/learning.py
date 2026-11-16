@@ -248,15 +248,28 @@ class LearningStore:
         terms = [part for part in re.findall(r"[A-Za-z0-9_\u0900-\u097f-]{2,}", query)[:8]]
         if not terms:
             raise ValueError("Knowledge search query has no searchable terms.")
-        clauses = " AND ".join("(instr(lower(title), lower(?)) > 0 OR instr(lower(body), lower(?)) > 0)" for _ in terms)
-        params: list[str | int] = []
+        score_parts: list[str] = []
+        score_params: list[str] = []
+        match_parts: list[str] = []
+        match_params: list[str] = []
         for term in terms:
-            params.extend((term, term))
-        sql = "SELECT * FROM knowledge_notes WHERE " + clauses
+            score_parts.extend((
+                "CASE WHEN instr(lower(title), lower(?)) > 0 THEN 3 ELSE 0 END",
+                "CASE WHEN instr(lower(body), lower(?)) > 0 THEN 1 ELSE 0 END",
+            ))
+            score_params.extend((term, term))
+            match_parts.append(
+                "(instr(lower(title), lower(?)) > 0 OR instr(lower(body), lower(?)) > 0)"
+            )
+            match_params.extend((term, term))
+        sql = (
+            "SELECT *, (" + " + ".join(score_parts) + ") AS relevance "
+            "FROM knowledge_notes WHERE (" + " OR ".join(match_parts) + ")"
+        )
         if approved_only:
             sql += " AND status='approved'"
-        sql += " ORDER BY updated_at DESC LIMIT ?"
-        params.append(limit)
+        sql += " ORDER BY relevance DESC, updated_at DESC LIMIT ?"
+        params: list[str | int] = score_params + match_params + [limit]
         with closing(self._connect()) as db:
             rows = db.execute(sql, params).fetchall()
         return [self._note(row) for row in rows]
