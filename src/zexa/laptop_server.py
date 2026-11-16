@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .audit import AuditLog
 from .laptop_apps import LaptopAppRegistry
-from .laptop_browser import open_browser_url
+from .laptop_browser import open_browser_url, read_public_page
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_pairing import LaptopPairingAuthority, secure_owner_only
 
@@ -263,6 +263,31 @@ def make_laptop_handler():
                 except PermissionError:
                     return self._send(403, {"error": "workspace_scope_denied"})
                 except (ValueError, OSError) as exc:
+                    return self._send(400, {"error": str(exc)[:200]})
+
+            if parsed.path == "/v1/browser/read":
+                try:
+                    query = parse_qs(parsed.query, strict_parsing=True, keep_blank_values=True)
+                    if set(query) != {"url"} or len(query["url"]) != 1:
+                        raise ValueError("Exactly one public HTTPS URL query is required.")
+                    if not self._authorized("laptop.browser.read"):
+                        return
+                    result = read_public_page(query["url"][0])
+                    from urllib.parse import urlsplit as _urlsplit
+                    self._audit(
+                        "laptop_browser_read",
+                        self.headers.get("X-Zexa-Client-ID", ""),
+                        "browser.read", "completed",
+                        {
+                            "host": _urlsplit(result["url"]).hostname,
+                            "size_chars": len(result["text"]),
+                            "content_sha256": result["content_sha256"],
+                        },
+                    )
+                    return self._send(200, {"ok": True, "result": result})
+                except PermissionError:
+                    return self._send(403, {"error": "browser_read_scope_denied"})
+                except (ValueError, RuntimeError, TypeError) as exc:
                     return self._send(400, {"error": str(exc)[:200]})
 
             return self._send(404, {"error": "not_found"})
