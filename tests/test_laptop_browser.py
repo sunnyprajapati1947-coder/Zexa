@@ -49,6 +49,7 @@ class LaptopBrowserTests(unittest.TestCase):
             "url": "https://example.com/article",
             "text": "Extracted public text.",
             "content_sha256": "a" * 64,
+            "content_trust": "untrusted_reference",
         })
         fetch.assert_called_once_with("https://example.com/article")
 
