@@ -377,8 +377,17 @@ class ZexaAccessibilityService : AccessibilityService() {
         val nodes = JSONArray()
         var count = 0
         fun hasSensitiveLabelChild(parent: AccessibilityNodeInfo): Boolean {
-            for (index in 0 until minOf(parent.childCount, 150)) {
-                val child = parent.getChild(index) ?: continue
+            val childCount = try {
+                parent.childCount
+            } catch (_: RuntimeException) {
+                return false
+            }
+            for (index in 0 until minOf(childCount, 150)) {
+                val child = try {
+                    parent.getChild(index)
+                } catch (_: RuntimeException) {
+                    null
+                } ?: continue
                 val hasLabel = try {
                     ScreenRedactionRules.isSensitiveLabel(
                         className = child.className?.toString()?.take(160) ?: "",
@@ -387,6 +396,8 @@ class ZexaAccessibilityService : AccessibilityService() {
                         text = child.text?.toString()?.take(500) ?: "",
                         description = child.contentDescription?.toString()?.take(300) ?: "",
                     )
+                } catch (_: RuntimeException) {
+                    false
                 } finally {
                     child.recycle()
                 }
@@ -434,9 +445,18 @@ class ZexaAccessibilityService : AccessibilityService() {
             nodes.put(item)
             // Bound child retrieval as well as emitted nodes; hostile or malformed
             // accessibility trees must not force unbounded traversal work.
-            val childLimit = minOf(node.childCount, 150 - count)
+            val childCount = try {
+                node.childCount
+            } catch (_: RuntimeException) {
+                0
+            }
+            val childLimit = minOf(childCount, 150 - count)
             for (i in 0 until childLimit) {
-                val child = node.getChild(i)
+                val child = try {
+                    node.getChild(i)
+                } catch (_: RuntimeException) {
+                    null
+                }
                 try {
                     visit(child, depth + 1, childSensitiveContext)
                 } finally {
