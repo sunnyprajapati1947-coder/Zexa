@@ -230,10 +230,7 @@ class BridgeServer(
                                 .put("status", "expired_or_unknown")
                                 .put("request_id", requestId)
                     }
-                    path in setOf(
-                        "/v1/status", "/v1/grants", "/v1/grants/revoke",
-                        "/v1/screen", "/v1/action"
-                    ) || path.matches(Regex("^/v1/action/[A-Za-z0-9-]{1,64}$")) ->
+                    BridgeHttpRouteRules.allowedMethods(path)?.let { method !in it } == true ->
                         return respond(client, 405, JSONObject().put("error", "Method not allowed"))
                     else -> return respond(client, 404, JSONObject().put("error", "Not found"))
                 }
