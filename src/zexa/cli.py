@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -26,6 +27,9 @@ from .execution import (
 from .brain import build_brain_router
 from .intent import route_utterance
 from .learning import LearningService, LearningStore
+from .laptop_client import LaptopAgentClient
+from .laptop_hand import LaptopWorkspace
+from .laptop_server import LaptopAgentServer, certificate_fingerprint
 from .jobs import JobQueue, JobWorker
 from .hand import AccessibilityBridge
 from .memory import MemoryStore
@@ -98,6 +102,34 @@ def main() -> None:
     learn_skill_review = learn_sub.add_parser("review-skill", help="Review a generated skill contract; approval does not enable execution")
     learn_skill_review.add_argument("draft_id", type=int)
     learn_skill_review.add_argument("decision", choices=["approved", "rejected"])
+
+    laptop_parser = subparsers.add_parser("laptop", help="Pair with and use a scoped laptop Human Hand")
+    laptop_sub = laptop_parser.add_subparsers(dest="laptop_command", required=True)
+    laptop_serve = laptop_sub.add_parser("serve", help="Run the TLS laptop agent on a private IPv4 address")
+    laptop_serve.add_argument("--host", required=True, help="Laptop's private LAN IPv4 address")
+    laptop_serve.add_argument("--port", type=int, default=9443)
+    laptop_serve.add_argument("--workspace", required=True, help="Existing directory to expose")
+    laptop_serve.add_argument("--cert", required=True, help="PEM TLS certificate file")
+    laptop_serve.add_argument("--key", required=True, help="PEM TLS private key file")
+    laptop_pair = laptop_sub.add_parser("pair", help="Pair this phone using the code shown by the laptop")
+    laptop_pair.add_argument("--host", required=True)
+    laptop_pair.add_argument("--port", type=int, default=9443)
+    laptop_pair.add_argument("--fingerprint", required=True, help="SHA-256 certificate fingerprint confirmed on the laptop")
+    laptop_pair.add_argument("--client-id", default="zexa-phone")
+    laptop_list = laptop_sub.add_parser("list", help="List the paired laptop workspace")
+    laptop_list.add_argument("--host", required=True)
+    laptop_list.add_argument("--port", type=int, default=9443)
+    laptop_list.add_argument("--client-id", default="zexa-phone")
+    laptop_list.add_argument("--dir", default=".")
+    laptop_read = laptop_sub.add_parser("read", help="Read one UTF-8 text file from the paired laptop workspace")
+    laptop_read.add_argument("--host", required=True)
+    laptop_read.add_argument("--port", type=int, default=9443)
+    laptop_read.add_argument("--client-id", default="zexa-phone")
+    laptop_read.add_argument("path")
+    laptop_revoke = laptop_sub.add_parser("revoke", help="Revoke remote pairing and delete the local credential")
+    laptop_revoke.add_argument("--host", required=True)
+    laptop_revoke.add_argument("--port", type=int, default=9443)
+    laptop_revoke.add_argument("--client-id", default="zexa-phone")
 
     skill_parser = subparsers.add_parser("skill", help="Run one registered skill through the execution gateway")
     skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
@@ -193,6 +225,51 @@ def main() -> None:
     load_env_file(Path(os.getenv("ZEXA_ENV_FILE", str(Path.cwd() / ".env"))))
     registry = default_registry()
     router = default_router()
+
+    if args.command == "laptop":
+        if args.laptop_command == "serve":
+            workspace = LaptopWorkspace(args.workspace)
+            server = LaptopAgentServer(
+                args.host, args.port, args.cert, args.key, workspace,
+            )
+            offer = server.begin_pairing()
+            fingerprint = certificate_fingerprint(args.cert)
+            print("Zexa laptop Human Hand server started (TLS 1.2+, private IPv4 only).")
+            print(f"Address: https://{args.host}:{args.port}")
+            print(f"TLS SHA-256 fingerprint: {fingerprint}")
+            print(f"One-time pairing code: {offer.pairing_code}")
+            print(f"Pairing expires in: {offer.expires_in_seconds} seconds")
+            print("Remote permissions: " + ", ".join(offer.permissions))
+            print("Remote access is read-only: workspace list/read only; no shell, app control, or file writes.")
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                print("\nLaptop Human Hand server stopped.")
+            finally:
+                server.close()
+            return
+        if args.laptop_command == "pair":
+            code = getpass.getpass("Enter the 12-digit pairing code shown locally on the laptop: ")
+            client = LaptopAgentClient(
+                args.host, args.port, args.fingerprint, args.client_id,
+            )
+            result = client.pair(code)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            print("Pairing key stored in the private local Zexa credential file.")
+            return
+        client = LaptopAgentClient(
+            args.host, args.port, None, args.client_id,
+        )
+        if args.laptop_command == "list":
+            print(json.dumps(client.list_directory(args.dir), ensure_ascii=False, indent=2))
+        elif args.laptop_command == "read":
+            print(json.dumps(client.read_text(args.path), ensure_ascii=False, indent=2))
+        elif args.laptop_command == "revoke":
+            if client.revoke_pairing():
+                print("Remote laptop pairing revoked and local credential deleted.")
+            else:
+                print("Laptop had no active pairing; local credential deleted.")
+        return
 
     if args.command == "schedule-skill":
         try:
