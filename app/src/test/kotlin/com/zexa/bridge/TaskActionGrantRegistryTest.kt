@@ -87,6 +87,26 @@ class TaskActionGrantRegistryTest {
     }
 
     @Test
+    fun duplicateGrantIdsAndExcessActiveGrantsAreRejected() {
+        val duplicateRegistry = TaskActionGrantRegistry(idFactory = { "same-id" })
+        duplicateRegistry.create("task-1", "phone-1", setOf("back"), 1L, 100_000L)
+        assertRejected {
+            duplicateRegistry.create("task-2", "phone-1", setOf("home"), 2L, 100_000L)
+        }
+
+        var nextId = 0
+        val boundedRegistry = TaskActionGrantRegistry(
+            maxGrants = 2,
+            idFactory = { "grant-${++nextId}" },
+        )
+        boundedRegistry.create("task-1", "phone-1", setOf("back"), 1L, 100_000L)
+        boundedRegistry.create("task-2", "phone-1", setOf("home"), 2L, 100_000L)
+        assertRejected {
+            boundedRegistry.create("task-3", "phone-1", setOf("scroll"), 3L, 100_000L)
+        }
+    }
+
+    @Test
     fun rejectsInvalidBoundsAndIdentifiers() {
         val registry = TaskActionGrantRegistry()
         assertRejected { registry.create("../task", "phone-1", setOf("back"), 1L, 100_000L) }
