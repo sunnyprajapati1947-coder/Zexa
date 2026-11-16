@@ -190,6 +190,20 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         self.assertEqual(calls[0][2]["task_id"], "research-1")
         self.assertEqual(calls[0][2]["grant_id"], "grant-123")
 
+    def test_perform_granted_surfaces_unknown_execution_without_retry(self):
+        bridge = self.make_bridge()
+        calls = []
+        bridge._request = lambda *args, **kwargs: (
+            calls.append(args) or {
+                "ok": False, "status": "execution_unknown", "grant_id": "grant-123",
+                "error": "Do not retry automatically.",
+            }
+        )
+        with self.assertRaisesRegex(TimeoutError, "Do not retry automatically"):
+            bridge.perform_granted("scroll", {"x1": 10, "y1": 20, "x2": 30, "y2": 40},
+                                   "research-1", "grant-123")
+        self.assertEqual(len(calls), 1)
+
     def test_perform_granted_accepts_dispatched_gesture_result(self):
         bridge = self.make_bridge()
         bridge._request = lambda *args, **kwargs: {
