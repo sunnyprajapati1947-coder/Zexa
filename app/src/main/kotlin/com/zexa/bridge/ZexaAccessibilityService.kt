@@ -280,7 +280,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         val nodes = JSONArray()
         var count = 0
         fun hasOtpLabelChild(parent: AccessibilityNodeInfo): Boolean {
-            for (index in 0 until parent.childCount) {
+            for (index in 0 until minOf(parent.childCount, 150)) {
                 val child = parent.getChild(index) ?: continue
                 val hasLabel = ScreenRedactionRules.isOtpLabel(
                     className = child.className?.toString()?.take(160) ?: "",
