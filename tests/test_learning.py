@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from zexa.learning import LearningAwareBrain, LearningService, LearningStore
 from zexa.research import SearchResult
