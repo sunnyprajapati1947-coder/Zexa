@@ -77,6 +77,11 @@ class BridgeSecurityRulesTest {
         assertTrue(BridgeSecurityRules.validActionPayload("back", org.json.JSONObject()))
         assertTrue(BridgeSecurityRules.validActionPayload("input_text", org.json.JSONObject("""{"text":"hello"}""")))
         assertTrue(BridgeSecurityRules.validActionPayload("launch_app", org.json.JSONObject("""{"package_name":"com.example.app"}""")))
+        assertTrue(BridgeSecurityRules.validActionPayload("open_url", org.json.JSONObject("""{"url":"https://example.com/path?q=1"}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("open_url", org.json.JSONObject("""{"url":"javascript:alert(1)"}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("open_url", org.json.JSONObject("""{"url":"https://user:pass@example.com"}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("open_url", org.json.JSONObject("""{"url":"https://example.com","extra":true}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("open_url", org.json.JSONObject("""{"url":"https://exa mple.com"}""")))
         assertFalse(BridgeSecurityRules.validActionPayload("tap", org.json.JSONObject("""{"x":1,"y":2,"extra":true}""")))
         assertFalse(BridgeSecurityRules.validActionPayload("tap", org.json.JSONObject("""{"x":"1","y":2}""")))
         assertFalse(BridgeSecurityRules.validActionPayload("tap", org.json.JSONObject("""{"x":true,"y":2}""")))
@@ -85,6 +90,18 @@ class BridgeSecurityRulesTest {
         assertFalse(BridgeSecurityRules.validActionPayload("input_text", org.json.JSONObject("""{"text":"   "}""")))
         assertFalse(BridgeSecurityRules.validActionPayload("launch_app", org.json.JSONObject("""{"package_name":"../../bad"}""")))
         assertFalse(BridgeSecurityRules.validActionPayload("run_shell", org.json.JSONObject()))
+    }
+
+    @Test
+    fun webUrlsRequireHttpSchemeHostAndNoEmbeddedCredentials() {
+        assertTrue(BridgeSecurityRules.safeWebUrl("https://example.com"))
+        assertTrue(BridgeSecurityRules.safeWebUrl("http://example.com/path"))
+        assertFalse(BridgeSecurityRules.safeWebUrl("javascript:alert(1)"))
+        assertFalse(BridgeSecurityRules.safeWebUrl("file:///etc/passwd"))
+        assertFalse(BridgeSecurityRules.safeWebUrl("https://user:pass@example.com"))
+        assertFalse(BridgeSecurityRules.safeWebUrl("https://"))
+        assertFalse(BridgeSecurityRules.safeWebUrl("https://example.com/has space"))
+        assertFalse(BridgeSecurityRules.safeWebUrl("https://example.com/" + "a".repeat(2_050)))
     }
 
     @Test
