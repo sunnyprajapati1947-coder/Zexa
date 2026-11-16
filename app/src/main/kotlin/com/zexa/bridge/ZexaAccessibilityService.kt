@@ -258,7 +258,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             recordExpiredApprovals()
             ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
                 ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
-            generation = interruptionGeneration
+            generation = actionInterruptionGate.current()
             val executing = JSONObject()
                 .put("ok", true)
                 .put("status", "executing")
@@ -268,7 +268,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
         val result = try {
             val execution = onServiceThread {
-                check(interruptionGeneration == generation) { "Android accessibility service was interrupted before action dispatch." }
+                actionInterruptionGate.requireCurrent(generation) { "Android accessibility service was interrupted before action dispatch." }
                 performOnServiceThread(ticket.action, JSONObject(ticket.payloadJson))
             }
             execution
@@ -555,7 +555,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     @Synchronized
     override fun onDestroy() {
-        interruptionGeneration += 1L
+        actionInterruptionGate.current() += 1L
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
         taskActionGrants.clear()
