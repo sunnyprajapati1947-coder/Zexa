@@ -44,13 +44,13 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [x] Low-risk background skill jobs routed through the same skill engine and gateway.
 - [x] Stable job database path, early environment-file loading, pending-job cancellation, failed-job retry, and safe error identifiers.
 - [x] Termux:Services installer and optional Termux:Boot startup hook.
-- [x] Optional Termux:Widget installer creates tap-to-run voice, continuous voice, jobs, and capability shortcuts; existing same-name shortcuts are backed up.
-- [ ] Dedicated authenticated loopback-only Termux control API; not implemented yet and must not be represented as available.
+- [x] Optional Termux:Widget installer creates tap-to-run voice, continuous voice, jobs, and capability shortcuts; existing same-name shortcuts are backed up with unique names. Boot hooks and worker entrypoints are also backed up before replacement.
+- [x] Dedicated authenticated loopback-only Termux control API: bearer-token authentication, IPv4 loopback-only bind, bounded JSON bodies, allowlisted health/jobs/notification routes, and no arbitrary command or skill execution. CI tests cover auth, validation, safe queueing, and restricted response fields.
 - [x] 320 pinned community skill references imported with provenance and SHA-256 metadata; all are disabled, and one requires manual review.
 - [x] Read-only `zexa skillpacks status/list` commands; imported references are not executable capabilities.
 - [x] Android bridge limits concurrent clients, reports actual readiness, and can recover after a bind failure.
 - [x] Android bridge JVM unit tests cover token comparison, body-size limits, coordinates, gesture duration, and package-name validation.
-- [x] Python CI covers 3.11, 3.12, and 3.13; Termux shell scripts are syntax-checked.
+- [x] Python CI covers 3.11, 3.12, 3.13, and 3.14; Termux shell scripts are syntax-checked.
 - [x] Python CodeQL security analysis workflow.
 - [x] Android CI runs JVM unit tests and builds the debug APK; run `43671195011` passed for commit `ee4ec705eddf04d0fb7c2085ef3aefbca9f931d9`.
 - [x] Android CI run `43671941890` passed for the app-private SQLite chat-history integration.
@@ -60,7 +60,8 @@ This file separates work that is implemented and CI-verified on the feature bran
 
 - [ ] Install the current branch on the OPPO Android 16 device and validate Termux commands. (Not performed by GitHub CI.)
 - [ ] Enable Accessibility manually and test the local bridge, approval prompts, and every supported action. (Not performed by GitHub CI.)
-- [ ] Validate Termux:Services and optional Termux:Boot across app restart and device reboot. (Not performed by GitHub CI.)
+- [ ] Validate Termux:Services, Termux:Widget and optional Termux:Boot across app restart and device reboot. (Not performed by GitHub CI.)
+- [ ] Start `zexa api` on-device with a private `ZEXA_API_TOKEN`; verify authenticated health/jobs/notification requests from local clients and confirm LAN access is unavailable. (Not performed by GitHub CI.)
 - [ ] Verify notifications, Doze/battery restrictions, process recovery, and queue persistence on-device. (Not performed by GitHub CI.)
 - [ ] Confirm the installed APK on the physical device; CI assembly is not a device test.
 - [ ] Test microphone permission, on-device speech recognition, Hindi/Hinglish language pack behavior and installed TTS voice on the OPPO Android 16 device.
@@ -77,6 +78,8 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [ ] Signed release build, release provenance/SBOM, and repository-level secret-scanning configuration.
 
 ## Latest GitHub Actions verification
+
+- [ ] Latest Termux-first API and installer hardening commits are awaiting their final GitHub CI runs; do not mark them green until the run for the PR head SHA completes.
 
 - [x] Android Bridge Build run `43680303215` passed on commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`; JVM tests, native CMake build, debug APK assembly and artifact upload succeeded. Artifact ID `14147249453`; SHA-256 `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`. [Open the workflow run](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215).
 - [x] The previous Kotlin syntax failure and local-JVM Android `org.json` test-stub issue were corrected and the latest Android CI is green.
