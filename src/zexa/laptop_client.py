@@ -28,7 +28,7 @@ _CLIENT_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _APP_ID = re.compile(r"^[a-z][a-z0-9._-]{1,63}$")
 _ALLOWED_PERMISSIONS = {
     "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write",
-    "laptop.apps.launch",
+    "laptop.apps.launch", "laptop.browser.open",
 }
 
 
