@@ -43,7 +43,8 @@ def validate_browser_url(value: str) -> str:
     else:
         if not address.is_global:
             raise ValueError("Private, local, and reserved browser destinations are not supported.")
-    normalized = parsed._replace(scheme="https", netloc=host, fragment="").geturl()
+    netloc = f"[{host}]" if ":" in host else host
+    normalized = parsed._replace(scheme="https", netloc=netloc).geturl()
     if len(normalized) > 2048:
         raise ValueError("Browser URL is too long.")
     return normalized
