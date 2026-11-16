@@ -31,7 +31,7 @@ class LaptopWorkspaceTests(unittest.TestCase):
         self.assertTrue(nested["entries"][0]["readable_text"])
 
     def test_rejects_absolute_parent_and_windows_paths(self):
-        for path in ("../outside.txt", "/etc/passwd", "notes/../../outside", r"..\\outside.txt", "C:/Windows"):
+        for path in ("../outside.txt", "/etc/passwd", "notes/../../outside", r"..\\outside.txt", "C:/Windows", "notes\\nsecret.txt"):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 self.workspace.read_text(path)
 
