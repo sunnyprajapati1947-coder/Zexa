@@ -96,7 +96,7 @@ def make_laptop_handler():
                 raise ValueError("Request body must be a JSON object.")
             return payload
 
-        def _authorized(self, permission: str) -> bool:
+        def _authorized(self, permission: str, body: bytes = b"") -> bool:
             client_id = self.headers.get("X-Zexa-Client-ID", "")
             signed_headers = {
                 "X-Zexa-Timestamp": self.headers.get("X-Zexa-Timestamp", ""),
@@ -104,7 +104,7 @@ def make_laptop_handler():
                 "X-Zexa-MAC": self.headers.get("X-Zexa-MAC", ""),
             }
             if not self.server.authority.verify_scoped_request(
-                client_id, permission, self.command, self.path, b"", signed_headers
+                client_id, permission, self.command, self.path, body, signed_headers
             ):
                 self._send(401, {"error": "unauthorized_or_scope_denied"})
                 return False
@@ -150,6 +150,13 @@ def make_laptop_handler():
             return self._send(404, {"error": "not_found"})
 
         def do_POST(self):
+            if self.path == "/v1/pair/revoke":
+                client_id = self.headers.get("X-Zexa-Client-ID", "")
+                if not self._authorized("laptop.workspace.list"):
+                    return
+                if self.server.authority.revoke_client(client_id):
+                    return self._send(200, {"ok": True, "revoked": True})
+                return self._send(404, {"error": "paired_client_not_found"})
             if self.path != "/v1/pair/complete":
                 return self._send(404, {"error": "not_found"})
             try:
