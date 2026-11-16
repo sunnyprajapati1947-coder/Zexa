@@ -253,6 +253,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         return result
     }
 
+    @Synchronized
     fun denyAction(requestId: String): JSONObject {
         val ticket = actionApprovals.deny(requestId, SystemClock.elapsedRealtime())
         val denied = ticket != null
