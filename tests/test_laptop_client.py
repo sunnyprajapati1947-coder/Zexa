@@ -149,6 +149,57 @@ class LaptopClientTests(unittest.TestCase):
         self.assertTrue(result["spawned"])
         self.assertEqual(calls[0], ("POST", "/v1/apps/launch", {"app_id": "editor"}))
 
+    def test_browser_navigation_requires_scope_and_exact_confirmation(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.browser.open",),
+        )
+        client = self.make_client()
+        calls = []
+
+        def fake_request(method, path, body=b"", headers=None):
+            calls.append((method, path, json.loads(body.decode("utf-8"))))
+            self.assertTrue(self.authority.verify_scoped_request(
+                "phone-main", "laptop.browser.open", method, path, body, headers
+            ))
+            return 200, {"ok": True, "result": {"opened": True, "host": "example.com"}}
+
+        client._request = fake_request
+        with self.assertRaises(PermissionError):
+            client.open_browser_url("https://example.com/docs")
+        self.assertEqual(calls, [])
+        result = client.open_browser_url(
+            "https://example.com/docs", user_confirmed=True
+        )
+        self.assertEqual(result, {"opened": True, "host": "example.com"})
+        self.assertEqual(calls[0][0:2], ("POST", "/v1/browser/open"))
+        self.assertEqual(calls[0][2], {"url": "https://example.com/docs"})
+
+    def test_browser_navigation_rejects_unsafe_url_before_network_request(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.browser.open",),
+        )
+        client = self.make_client()
+        client._request = lambda *args, **kwargs: self.fail("unsafe URL must not be sent")
+        for url in (
+            "http://example.com", "https://user:pass@example.com",
+            "https://localhost", "https://127.0.0.1",
+            "https://example.com:8443", "javascript:alert(1)",
+        ):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                client.open_browser_url(url, user_confirmed=True)
+
+    def test_browser_navigation_rejects_pairing_without_browser_scope(self):
+        self.store.save(
+            "127.0.0.1", 9443, "a" * 64, "phone-main",
+            "A" * 43, ("laptop.workspace.read",),
+        )
+        with self.assertRaises(PermissionError):
+            self.make_client().open_browser_url(
+                "https://example.com", user_confirmed=True
+            )
+
     def test_app_inventory_requires_scope_and_validates_response(self):
         self.store.save(
             "127.0.0.1", 9443, "a" * 64, "phone-main",
