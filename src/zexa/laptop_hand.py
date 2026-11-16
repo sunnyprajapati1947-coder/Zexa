@@ -184,8 +184,12 @@ class LaptopWorkspace:
         path = self._resolve_file(relative_path, must_exist=False)
         if self._sensitive_name(path) or path.suffix.casefold() not in _TEXT_SUFFIXES:
             raise PermissionError("This file type or filename is excluded from workspace writing.")
-        if not isinstance(content, str) or not content.strip() or len(content) > MAX_WRITE_CHARS:
-            raise ValueError("Workspace content must contain 1–128000 non-empty characters.")
+        if (
+            not isinstance(content, str) or not content.strip()
+            or len(content) > MAX_WRITE_CHARS
+            or any((ord(char) < 32 and char not in "\\r\\n\\t") or ord(char) == 127 for char in content)
+        ):
+            raise ValueError("Workspace content must contain 1–128000 characters without unsupported control codes.")
         if type(overwrite) is not bool:
             raise ValueError("overwrite must be a boolean.")
         if path.exists() and not overwrite:
