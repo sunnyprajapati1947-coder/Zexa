@@ -71,6 +71,9 @@ class ZexaAccessibilityService : AccessibilityService() {
             .getBoolean("bridge_enabled", false)
         if (enabled) {
             if (bridgeServer?.isRunning != true) {
+                // A bridge listener restart is a new control session. Do not
+                // revive grants that were active before the listener stopped.
+                taskActionGrants.clear()
                 bridgeServer?.stop()
                 val token = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
                     .getString("token", null) ?: return
