@@ -5,6 +5,9 @@ package com.zexa.bridge
  * Only origin-form targets are accepted; absolute-form and control characters are rejected.
  */
 data class BridgeHttpRequestLine(val method: String, val target: String, val version: String) {
+    /** Origin-form request target without its optional query component. */
+    val routePath: String
+        get() = target.substringBefore('?')
     companion object {
         private val methodPattern = Regex("^[A-Z]{1,16}$")
         private val targetPattern = Regex("^/[A-Za-z0-9._~!\$&'()*+,;=:@%/?-]{0,2047}$")
