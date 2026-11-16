@@ -141,6 +141,7 @@ class LearningStoreTests(unittest.TestCase):
             self.store.save_skill_draft(note_id, skill)
         self.store.review_note(note_id, "approved")
         draft_id = self.store.save_skill_draft(note_id, skill)
+        self.store.review_note(note_id, "rejected")
         with self.assertRaises(PermissionError):
             self.store.review_skill_draft(draft_id, "approved")
         self.store.review_note(note_id, "approved")
