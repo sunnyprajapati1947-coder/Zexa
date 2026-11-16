@@ -68,6 +68,7 @@ class LaptopWorkspace:
         if (
             not isinstance(value, str) or not value.strip() or len(value) > 240
             or "\x00" in value or "\\" in value
+            or any(ord(char) < 32 or ord(char) == 127 for char in value)
         ):
             raise ValueError("Workspace paths must be non-empty relative POSIX paths.")
         path = PurePosixPath(value)
