@@ -70,8 +70,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     /** Persist expiry before any caller observes a missing approval ticket. */
     @Synchronized
     private fun recordExpiredApprovals() {
-        actionApprovals.list(SystemClock.elapsedRealtime())
-        actionApprovals.drainExpired().forEach { ticket ->
+        actionApprovals.expireAndDrain(SystemClock.elapsedRealtime()).forEach { ticket ->
             val result = JSONObject()
                 .put("ok", false)
                 .put("status", "expired")
