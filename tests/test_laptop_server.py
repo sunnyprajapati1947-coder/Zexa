@@ -417,6 +417,17 @@ class LaptopServerTests(unittest.TestCase):
         self.assertEqual(read_event["details"]["relative_path"], "lesson.txt")
         self.assertNotIn("hello laptop", json.dumps(read_event["details"]))
 
+    def test_client_can_revoke_pairing_without_workspace_list_scope(self):
+        offer = self.authority.begin_pairing(permissions=("laptop.browser.read",))
+        key = self.pair(offer)
+        revoke_path = "/v1/pair/revoke"
+        status, result = self.request(
+            "POST", revoke_path, headers=self.signed(key, "POST", revoke_path)
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(result["revoked"])
+        self.assertEqual(self.authority.list_clients(), [])
+
     def test_agent_server_rejects_wildcard_and_public_bind_addresses(self):
         for host in ("0.0.0.0", "8.8.8.8", "example.com"):
             with self.subTest(host=host), self.assertRaises(ValueError):
