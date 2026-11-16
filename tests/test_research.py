@@ -151,8 +151,8 @@ class ResearchTests(unittest.TestCase):
         self.assertIn("Safe learning content.", page.text)
         self.assertEqual(len(page.content_sha256), 64)
         self.assertIn(b"GET /guide HTTP/1.1", connection.request)
-        self.assertIn(b"\\r\\nHost: example.com\\r\\n", connection.request)
-        self.assertIn(b"\\r\\n\\r\\n", connection.request)
+        self.assertIn(b"\r\nHost: example.com\r\n", connection.request)
+        self.assertIn(b"\r\n\r\n", connection.request)
         self.assertTrue(connection.closed)
         self.assertTrue(response.closed)
 
@@ -181,8 +181,7 @@ class ResearchTests(unittest.TestCase):
         ):
             page = fetch_public_page("https://[2606:4700:4700::1111]/guide")
         self.assertIn("IPv6 page text", page.text)
-        self.assertIn(b"Host: [2606:4700:4700::1111]
-", connection.request)
+        self.assertIn(b"Host: [2606:4700:4700::1111]\r\n", connection.request)
 
     def test_fetch_public_page_revalidates_redirect_target(self):
         class FakeSocket:
