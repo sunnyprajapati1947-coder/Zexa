@@ -54,6 +54,22 @@ class LaptopCliTests(unittest.TestCase):
             cli.main()
         return FakeLaptopClient.instance
 
+    def test_server_refuses_app_launch_without_owner_manifest(self):
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch("sys.argv", [
+                "zexa", "laptop", "serve", "--host", "192.168.1.20",
+                "--workspace", temp, "--cert", str(Path(temp) / "cert.pem"),
+                "--key", str(Path(temp) / "key.pem"), "--allow-app-launch",
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopWorkspace"),
+            patch.object(cli, "LaptopAgentServer") as server,
+        ):
+            with self.assertRaisesRegex(ValueError, "--apps manifest"):
+                cli.main()
+        server.assert_not_called()
+
     def test_laptop_app_launch_requires_exact_confirmation(self):
         with (
             patch("sys.argv", [
