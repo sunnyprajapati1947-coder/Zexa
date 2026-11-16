@@ -27,6 +27,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
+class ActionExecutionUnknownException(message: String) : IllegalStateException(message)
+
 class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
     private val actionApprovals = ActionApprovalRegistry()
@@ -136,6 +138,11 @@ class ZexaAccessibilityService : AccessibilityService() {
                 })
                 .put("grant_id", grantId)
                 .put("remaining_actions", consumed.remainingActions)
+        } catch (error: ActionExecutionUnknownException) {
+            JSONObject().put("ok", false).put("status", "execution_unknown")
+                .put("grant_id", grantId)
+                .put("error", error.message ?: "Execution result is unknown; do not retry automatically.")
+                .put("remaining_actions", consumed.remainingActions)
         } catch (error: Exception) {
             JSONObject().put("ok", false).put("status", "failed")
                 .put("grant_id", grantId)
@@ -222,6 +229,12 @@ class ZexaAccessibilityService : AccessibilityService() {
                     else -> "failed"
                 })
                 .put("request_id", ticket.requestId)
+        } catch (error: ActionExecutionUnknownException) {
+            JSONObject()
+                .put("ok", false)
+                .put("status", "execution_unknown")
+                .put("request_id", ticket.requestId)
+                .put("error", error.message ?: "Execution result is unknown; do not retry automatically.")
         } catch (error: Exception) {
             JSONObject()
                 .put("ok", false)
@@ -444,11 +457,19 @@ class ZexaAccessibilityService : AccessibilityService() {
                     }
                 }
                 if (!completed.await(20, TimeUnit.SECONDS)) {
-                    error("Android service thread did not complete the requested operation in time.")
+                    throw ActionExecutionUnknownException(
+                        "Android operation started but did not report a result in time; do not retry automatically."
+                    )
                 }
             }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
+            val operationStarted = synchronized(gate) { started }
+            if (operationStarted) {
+                throw ActionExecutionUnknownException(
+                    "Android operation started before the wait was interrupted; its result is unknown. Do not retry automatically."
+                )
+            }
             throw IllegalStateException("Interrupted while waiting for the Android service thread.", interrupted)
         }
         return outcome.get()?.getOrThrow()
