@@ -67,6 +67,20 @@ class ZexaAccessibilityService : AccessibilityService() {
         actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
     }
 
+    /** Persist expiry before any caller observes a missing approval ticket. */
+    @Synchronized
+    private fun recordExpiredApprovals() {
+        actionApprovals.list(SystemClock.elapsedRealtime())
+        actionApprovals.drainExpired().forEach { ticket ->
+            val result = JSONObject()
+                .put("ok", false)
+                .put("status", "expired")
+                .put("request_id", ticket.requestId)
+            rememberActionResult(ticket.requestId, result)
+            actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "expired", System.currentTimeMillis()))
+        }
+    }
+
     @Synchronized
     fun refreshBridge() {
         val enabled = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
@@ -154,6 +168,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
+        recordExpiredApprovals()
         require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
         require(BridgeSecurityRules.validActionPayload(action, payload)) {
             "Invalid payload for the requested Android action."
@@ -210,14 +225,19 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
     }
 
-    fun pendingActionApprovals(): List<PendingDeviceAction> =
-        actionApprovals.list(SystemClock.elapsedRealtime())
+    fun pendingActionApprovals(): List<PendingDeviceAction> {
+        recordExpiredApprovals()
+        return actionApprovals.list(SystemClock.elapsedRealtime())
+    }
 
-    fun isActionPending(requestId: String): Boolean =
-        actionApprovals.list(SystemClock.elapsedRealtime()).any { it.requestId == requestId }
+    fun isActionPending(requestId: String): Boolean {
+        recordExpiredApprovals()
+        return actionApprovals.list(SystemClock.elapsedRealtime()).any { it.requestId == requestId }
+    }
 
     @Synchronized
     fun approveAction(requestId: String): JSONObject {
+        recordExpiredApprovals()
         val ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
             ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
         val executing = JSONObject()
@@ -255,6 +275,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     @Synchronized
     fun denyAction(requestId: String): JSONObject {
+        recordExpiredApprovals()
         val ticket = actionApprovals.deny(requestId, SystemClock.elapsedRealtime())
         val denied = ticket != null
         val result = JSONObject()
@@ -272,6 +293,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     @Synchronized
     fun actionResult(requestId: String): JSONObject? {
+        recordExpiredApprovals()
         actionResults[requestId]?.let { return JSONObject(it.toString()) }
         val pending = actionApprovals.list(SystemClock.elapsedRealtime())
             .firstOrNull { it.requestId == requestId }
