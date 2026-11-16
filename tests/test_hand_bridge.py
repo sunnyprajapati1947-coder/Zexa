@@ -142,6 +142,26 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             bridge.task_grants()
 
+    def test_task_grant_can_be_revoked_through_authenticated_bridge(self):
+        bridge = self.make_bridge()
+        calls = []
+        bridge._request = lambda method, path, payload=None: (
+            calls.append((method, path, payload)) or {
+                "ok": True, "status": "revoked", "grant_id": "grant-123"
+            }
+        )
+        self.assertTrue(bridge.revoke_task_grant("grant-123"))
+        self.assertEqual(calls[0], ("POST", "/v1/grants/revoke", {"grant_id": "grant-123"}))
+
+    def test_task_grant_revoke_reports_missing_and_rejects_invalid_ids(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: {
+            "ok": False, "status": "not_found", "grant_id": "grant-123"
+        }
+        self.assertFalse(bridge.revoke_task_grant("grant-123"))
+        with self.assertRaises(ValueError):
+            bridge.revoke_task_grant("../bad")
+
     def test_perform_granted_accepts_only_success_for_same_grant(self):
         bridge = self.make_bridge()
         calls = []
