@@ -125,7 +125,7 @@ class LaptopClientTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             client.write_text("notes.md", "content")
         with self.assertRaises(ValueError):
-            client.write_text("notes.md", "bad\\x00text", user_confirmed=True)
+            client.write_text("notes.md", "bad\x00text", user_confirmed=True)
         result = client.write_text("notes.md", "content", user_confirmed=True)
         self.assertTrue(result["written"])
 
