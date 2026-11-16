@@ -32,6 +32,7 @@ from .laptop_client import LaptopAgentClient
 from .laptop_apps import LaptopAppRegistry
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_server import LaptopAgentServer, certificate_fingerprint, generate_laptop_certificate
+from .laptop_pairing import LaptopPairingAuthority
 from .jobs import JobQueue, JobWorker
 from .hand import AccessibilityBridge
 from .memory import MemoryStore
@@ -165,6 +166,17 @@ def main() -> None:
     laptop_launch.add_argument("--port", type=int, default=9443)
     laptop_launch.add_argument("--client-id", default="zexa-phone")
     laptop_launch.add_argument("app_id")
+    laptop_clients = laptop_sub.add_parser("clients", help="List paired phones on this laptop")
+    laptop_clients.add_argument(
+        "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
+    )
+    laptop_revoke_client = laptop_sub.add_parser(
+        "revoke-client", help="Revoke one paired phone immediately from the laptop owner side",
+    )
+    laptop_revoke_client.add_argument("client_id")
+    laptop_revoke_client.add_argument(
+        "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
+    )
 
     skill_parser = subparsers.add_parser("skill", help="Run one registered skill through the execution gateway")
     skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
@@ -303,6 +315,22 @@ def main() -> None:
                 print("\nLaptop Human Hand server stopped.")
             finally:
                 server.close()
+            return
+        if args.laptop_command in {"clients", "revoke-client"}:
+            authority = LaptopPairingAuthority(storage_path=args.pairings)
+            if args.laptop_command == "clients":
+                print(json.dumps(authority.list_clients(), ensure_ascii=False, indent=2))
+                return
+            revoked = authority.revoke_client(args.client_id)
+            if revoked:
+                AuditLog(Path.home() / ".zexa" / "laptop_audit.sqlite3").record(
+                    "laptop_pairing_revoke", actor="laptop_owner",
+                    action="pairing.revoke", decision="revoked",
+                    details={"client_id": args.client_id, "source": "local_owner_cli"},
+                )
+                print(f"Pairing revoked for {args.client_id}; the running laptop server will reject it on the next request.")
+            else:
+                print(f"No pairing found for {args.client_id}.")
             return
         if args.laptop_command == "pair":
             code = getpass.getpass("Enter the 12-digit pairing code shown locally on the laptop: ")
