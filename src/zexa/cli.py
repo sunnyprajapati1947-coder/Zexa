@@ -710,7 +710,7 @@ Sources:")
             voice = TermuxVoice()
             transcript = voice.listen()
             print(f"You: {transcript}")
-            answer = brain.chat(
+            answer = conversation_brain.chat(
                 [
                     {"role": "system", "content": SYSTEM_PROMPT + " For voice replies, answer naturally and concisely in the user's language."},
                     {"role": "user", "content": transcript},
