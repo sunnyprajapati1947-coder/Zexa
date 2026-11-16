@@ -30,7 +30,8 @@ internal object ScreenRedactionRules {
     ): Boolean {
         if (isPassword) return true
         val metadata = listOf(className, viewId, hint, text, description).joinToString(" ")
-        if (sensitiveLabel.containsMatchIn(metadata)) return true
+        val normalizedMetadata = metadata.replace(Regex("[^A-Za-z0-9]+"), " ")
+        if (sensitiveLabel.containsMatchIn(normalizedMetadata)) return true
 
         val values = listOf(text, description, hint)
         if (values.any { paymentNumber.containsMatchIn(it) || emailAddress.containsMatchIn(it) ||
