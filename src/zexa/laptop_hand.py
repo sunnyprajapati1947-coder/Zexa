@@ -7,6 +7,7 @@ pair devices. Remote pairing is a separate protocol and is not yet implemented.
 from __future__ import annotations
 
 import os
+import hashlib
 from pathlib import Path, PurePosixPath
 import tempfile
 from typing import Any
@@ -141,7 +142,7 @@ class LaptopWorkspace:
         return {
             "relative_path": relative_path,
             "content": text,
-            "sha256": __import__("hashlib").sha256(raw).hexdigest(),
+            "sha256": hashlib.sha256(raw).hexdigest(),
             "size_bytes": len(raw),
         }
 
