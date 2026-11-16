@@ -108,6 +108,63 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             bridge.perform("back", {}, approve=None)
 
+    def test_task_grants_are_listed_only_from_valid_native_response(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda method, path, payload=None: {
+            "ok": True, "grants": [{"grant_id": "grant-1", "task_id": "research-1"}]
+        }
+        self.assertEqual(bridge.task_grants()[0]["grant_id"], "grant-1")
+
+    def test_invalid_task_grant_list_is_rejected(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: {"ok": False, "grants": []}
+        with self.assertRaises(RuntimeError):
+            bridge.task_grants()
+
+    def test_perform_granted_accepts_only_success_for_same_grant(self):
+        bridge = self.make_bridge()
+        calls = []
+        bridge._request = lambda method, path, payload=None: (
+            calls.append((method, path, payload)) or {
+                "ok": True, "status": "completed", "grant_id": "grant-123", "remaining_actions": 4
+            }
+        )
+        result = bridge.perform_granted("scroll", {"x": 10, "y": 20, "direction": "down", "duration_ms": 500},
+                                        "research-1", "grant-123")
+        self.assertTrue(result["ok"])
+        self.assertEqual(calls[0][1], "/v1/action")
+        self.assertEqual(calls[0][2]["task_id"], "research-1")
+        self.assertEqual(calls[0][2]["grant_id"], "grant-123")
+
+    def test_task_grant_cannot_run_taps_or_text_entry(self):
+        bridge = self.make_bridge()
+        for action, payload in [("tap", {"x": 1, "y": 1}), ("input_text", {"text": "hello"})]:
+            with self.subTest(action=action), self.assertRaises(ValueError):
+                bridge.perform_granted(action, payload, "research-1", "grant-123")
+
+    def test_task_grant_rejects_invalid_ids(self):
+        bridge = self.make_bridge()
+        with self.assertRaises(ValueError):
+            bridge.perform_granted("back", {}, "../bad", "grant-123")
+        with self.assertRaises(ValueError):
+            bridge.perform_granted("back", {}, "research-1", "../bad")
+
+    def test_task_grant_scope_mismatch_is_permission_error(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: {
+            "ok": False, "status": "grant_scope_mismatch_or_expired"
+        }
+        with self.assertRaises(PermissionError):
+            bridge.perform_granted("back", {}, "research-1", "grant-123")
+
+    def test_task_grant_does_not_accept_unverified_completion(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: {
+            "ok": True, "status": "completed", "grant_id": "different-grant"
+        }
+        with self.assertRaisesRegex(RuntimeError, "different task grant"):
+            bridge.perform_granted("back", {}, "research-1", "grant-123")
+
 
 if __name__ == "__main__":
     unittest.main()
