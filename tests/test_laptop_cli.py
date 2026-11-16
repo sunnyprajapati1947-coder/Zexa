@@ -13,7 +13,11 @@ class FakeStore:
         self.permissions = permissions
 
     def get(self, host, port, client_id):
-        return {"permissions": self.permissions}
+        return {
+            "fingerprint": "a" * 64,
+            "permissions": self.permissions,
+            "session_key_b64": "must-not-be-displayed",
+        }
 
 
 class FakeLaptopClient:
@@ -102,6 +106,25 @@ class LaptopCliTests(unittest.TestCase):
             cli.main()
         authority.revoke_client.assert_called_once_with("phone-main")
         audit.return_value.record.assert_called_once()
+
+    def test_laptop_status_shows_pairing_metadata_without_session_secret(self):
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "status", "--host", "192.168.1.20"
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", FakeLaptopClient),
+            patch("builtins.print") as output,
+        ):
+            cli.main()
+        import json
+        status = json.loads(output.call_args.args[0])
+        self.assertTrue(status["paired"])
+        self.assertEqual(status["host"], "192.168.1.20")
+        self.assertEqual(status["client_id"], "zexa-phone")
+        self.assertIn("laptop.workspace.read", status["permissions"])
+        self.assertNotIn("session_key_b64", status)
+        self.assertNotIn("must-not-be-displayed", output.call_args.args[0])
 
     def test_server_refuses_app_launch_without_owner_manifest(self):
         with (
