@@ -159,6 +159,7 @@ class LearningStoreTests(unittest.TestCase):
 
     def test_deleting_note_cascades_to_skill_drafts(self):
         note_id = self.save_note()
+        self.store.review_note(note_id, "approved")
         skill = Skill("note_skill", "A skill.", "Explain only.", enabled=False)
         self.store.save_skill_draft(note_id, skill)
         self.assertTrue(self.store.delete_note(note_id))
