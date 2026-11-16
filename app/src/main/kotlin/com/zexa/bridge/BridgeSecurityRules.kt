@@ -7,16 +7,28 @@ import java.security.MessageDigest
  * This class does not perform Android actions or access device state.
  */
 internal object BridgeSecurityRules {
+    fun validBridgeToken(value: String): Boolean =
+        value.matches(Regex("^[0-9a-f]{64}$"))
+
     fun tokenMatches(expected: String, provided: String): Boolean =
         MessageDigest.isEqual(
             expected.toByteArray(Charsets.UTF_8),
             provided.toByteArray(Charsets.UTF_8),
         )
 
+    fun bearerToken(header: String?): String? {
+        val value = header ?: return null
+        if (!value.startsWith("Bearer ")) return null
+        val token = value.removePrefix("Bearer ")
+        return token.takeIf { validBridgeToken(it) }
+    }
+
     fun contentLength(raw: String?): Int? {
         val length = raw?.toIntOrNull() ?: return null
         return length.takeIf { it in 1..16_000 }
     }
+
+    fun screenAccessEnabled(value: Any?): Boolean = value == true
 
     fun coordinate(value: Double): Boolean =
         value.isFinite() && value in 0.0..10_000.0

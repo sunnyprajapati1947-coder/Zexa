@@ -3,6 +3,15 @@ package com.zexa.bridge
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.SystemClock
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Bundle
@@ -10,13 +19,24 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
+    private val actionApprovals = ActionApprovalRegistry()
+    private val actionResults = ConcurrentHashMap<String, JSONObject>()
+    private val actionAudit by lazy {
+        val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
+        ActionAuditStore(
+            read = { prefs.getString("device_action_audit", null) },
+            write = { value -> prefs.edit().putString("device_action_audit", value).apply() },
+        )
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        markPendingApprovalsInterrupted()
         refreshBridge()
     }
 
@@ -24,7 +44,14 @@ class ZexaAccessibilityService : AccessibilityService() {
         // Intentionally do not collect, store, or transmit events.
     }
 
-    override fun onInterrupt() = Unit
+    override fun onInterrupt() {
+        markPendingApprovalsInterrupted()
+        actionApprovals.clear()
+    }
+
+    private fun markPendingApprovalsInterrupted() {
+        actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
+    }
 
     @Synchronized
     fun refreshBridge() {
@@ -38,10 +65,126 @@ class ZexaAccessibilityService : AccessibilityService() {
                 bridgeServer = BridgeServer(token, this).also { it.start() }
             }
         } else {
+            markPendingApprovalsInterrupted()
             bridgeServer?.stop()
             bridgeServer = null
+            actionApprovals.clear()
         }
     }
+
+    fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
+        require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
+        val ticket = actionApprovals.create(action, payload.toString(), SystemClock.elapsedRealtime(), System.currentTimeMillis())
+        actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "pending_approval", ticket.createdAtEpochMs))
+        notifyApprovalNeeded(ticket)
+        return JSONObject()
+            .put("ok", true)
+            .put("status", "pending_approval")
+            .put("request_id", ticket.requestId)
+            .put("expires_at_epoch_ms", ticket.expiresAtEpochMs)
+    }
+
+    private fun notifyApprovalNeeded(ticket: PendingDeviceAction) {
+        try {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) return
+            val manager = NotificationManagerCompat.from(this)
+            if (!manager.areNotificationsEnabled()) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val system = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                system.createNotificationChannel(
+                    NotificationChannel(
+                        APPROVAL_CHANNEL_ID,
+                        "Device action approvals",
+                        NotificationManager.IMPORTANCE_HIGH,
+                    ).apply {
+                        description = "Alerts that a device action is waiting for your review"
+                    }
+                )
+            }
+            val openApp = PendingIntent.getActivity(
+                this,
+                ticket.requestId.hashCode(),
+                Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra(MainActivity.EXTRA_ACTION_APPROVAL_REQUEST_ID, ticket.requestId)
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val notification = NotificationCompat.Builder(this, APPROVAL_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Zexa needs your approval")
+                .setContentText("Review the " + ticket.action + " request in Device. Nothing runs until you approve.")
+                .setContentIntent(openApp)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .build()
+            manager.notify(ticket.requestId.hashCode(), notification)
+        } catch (_: Exception) {
+            // Notification failures must never cancel or execute the queued action.
+        }
+    }
+
+    fun pendingActionApprovals(): List<PendingDeviceAction> =
+        actionApprovals.list(SystemClock.elapsedRealtime())
+
+    fun isActionPending(requestId: String): Boolean =
+        actionApprovals.list(SystemClock.elapsedRealtime()).any { it.requestId == requestId }
+
+    @Synchronized
+    fun approveAction(requestId: String): JSONObject {
+        val ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
+            ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
+        val result = try {
+            val execution = perform(ticket.action, JSONObject(ticket.payloadJson))
+            execution
+                .put("status", if (execution.optBoolean("ok", false)) "completed" else "failed")
+                .put("request_id", ticket.requestId)
+        } catch (error: Exception) {
+            JSONObject()
+                .put("ok", false)
+                .put("status", "failed")
+                .put("request_id", ticket.requestId)
+                .put("error", error.message ?: "Action failed")
+        }
+        rememberActionResult(ticket.requestId, result)
+        actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, result.optString("status", "failed"), System.currentTimeMillis()))
+        return result
+    }
+
+    fun denyAction(requestId: String): JSONObject {
+        val ticket = actionApprovals.deny(requestId, SystemClock.elapsedRealtime())
+        val denied = ticket != null
+        val result = JSONObject()
+            .put("ok", false)
+            .put("status", if (denied) "denied" else "expired_or_not_pending")
+            .put("request_id", requestId)
+        if (ticket != null) {
+            rememberActionResult(requestId, result)
+            actionAudit.append(ActionAuditEntry(requestId, ticket.action, "denied", System.currentTimeMillis()))
+        }
+        return result
+    }
+
+    fun actionAuditHistory(): List<ActionAuditEntry> = actionAudit.list()
+
+    fun actionResult(requestId: String): JSONObject? =
+        actionResults[requestId]?.let { JSONObject(it.toString()) }
+
+    @Synchronized
+    private fun rememberActionResult(requestId: String, result: JSONObject) {
+        actionResults[requestId] = JSONObject(result.toString())
+        while (actionResults.size > MAX_ACTION_RESULTS) {
+            val oldest = actionResults.keys().nextElement()
+            actionResults.remove(oldest)
+        }
+    }
+
+    fun isScreenAccessEnabled(): Boolean =
+        BridgeSecurityRules.screenAccessEnabled(
+            getSharedPreferences("zexa_bridge", MODE_PRIVATE).all["screen_access_enabled"]
+        )
 
     fun statusJson(): JSONObject = JSONObject()
         .put("ok", true)
@@ -144,6 +287,8 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        markPendingApprovalsInterrupted()
+        actionApprovals.clear()
         bridgeServer?.stop()
         bridgeServer = null
         instance = null
@@ -151,6 +296,8 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        private const val MAX_ACTION_RESULTS = 64
+        private const val APPROVAL_CHANNEL_ID = "zexa_action_approvals"
         @Volatile var instance: ZexaAccessibilityService? = null
             private set
     }

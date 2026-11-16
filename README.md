@@ -1,16 +1,28 @@
 # Zexa
 
-**Zexa** is a phone-first modular assistant with a configurable multi-provider AI brain: xAI Grok, Groq, and an optional on-device GGUF model through llama.cpp.
+**Zexa is a Termux-first, phone-based personal assistant.** Termux is the primary runtime for the Python CLI, local Qwen/llama.cpp brain, SQLite memory and jobs, Termux:API integrations, Termux:Widget shortcuts, and the optional Termux:Boot startup hook. GitHub is the canonical source, review, and CI environment; the intended deployment flow is to clone or update the repository in Termux, install the project in its virtual environment, configure the local model, and run device-side acceptance tests.
 
-## Current architecture
+The optional Android companion in `app/` is not required for normal Zexa operation. Its Accessibility Bridge is a separately opt-in integration and must not be treated as a replacement for Termux:API, Termux:Widget, or the Termux background worker. Features that depend on Android add-ons must report missing permissions or packages clearly and must never pretend they succeeded.
 
-- **Cloud brain providers:** xAI Grok through the Responses API and Groq through its chat-completions API.
-- **Local brain:** optional GGUF model through llama.cpp; the model's embedded chat template is used in conversation mode.
-- **Brain router:** auto, online, Grok-only, Groq-only, and Qwen/local-only modes. Auto follows the configured provider order and falls back only on connectivity failures; authentication, quota, model, and API errors remain visible.
-- **Human Hand foundation:** authenticated loopback client for an opt-in Android Accessibility Bridge (src/zexa/hand.py).
-- **Existing modules:** skills, explicit local memory, task history, planner, safe tool router, Termux notifications, voice I/O, and explicit flashlight control.
+## Optional Android companion status
 
-The native Android companion app and its user-enabled AccessibilityService are now included in `app/`, with an Android debug-build workflow. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token; screen snapshots are read-only and each action requires explicit CLI approval. Real-device installation, permission, lifecycle, and gesture verification are still required before describing the Human Hand as fully validated. No arbitrary shell command is exposed.
+The optional Android companion in `app/` has a native workspace with Home, Chat, Brain, Tasks, Memory and Device sections. It is supplementary; the Termux CLI remains the primary Zexa interface and runtime.
+
+- **Local AI:** A pinned llama.cpp JNI CPU runtime loads a user-imported GGUF model. The importer enforces a 10 GiB limit, validates the GGUF header, calculates SHA-256 and verifies the stored digest before model load. The current native configuration uses arm64-v8a, a 2,048-token context and four CPU threads; each response is capped at 256 tokens. Compatible GGUF chat templates are required.
+- **Chat:** Multi-turn local Qwen chat with bounded history. Completed turns are saved in an app-private SQLite database; interrupted generations are not saved as completed conversations.
+- **Personal memory:** User-managed facts in a separate app-private SQLite database. Users can add, edit, search, delete individual facts, export JSON through the document picker, or restore/merge a selected Zexa JSON backup. Restore validates the schema and fact limits, skips case-insensitive duplicates, never overwrites existing facts, and applies additions atomically. Nothing is extracted automatically from conversations. Up to 10 facts / 3,000 characters are supplied as reference context to local chat.
+- **Voice:** User-started Android on-device speech recognition. Recognized text is inserted for review and is not sent until the user taps Send. Optional read-aloud uses the installed Android TextToSpeech engine. Hindi/Hinglish offline recognition and TTS still need target-device validation.
+- **Reminders:** WorkManager-backed local reminders, bounded from 1 minute to 7 days, with pending-list display, individual cancellation and cancel-all. Notifications require permission and delivery is best-effort. Tapping a reminder notification opens the Tasks section. Reboot, Doze and battery-policy behavior still need target-device validation.
+- **Device actions:** The optional Accessibility Bridge is OFF by default. Requests are authenticated on loopback, queued with HTTP 202, and require exact-action native approval in Zexa; a bearer token alone never executes an action. Approval tickets are one-use, expire after 60 seconds and are limited to eight pending requests. Approval notifications deep-link to the matching request. Pending approval tickets/results remain in memory and cannot be resumed after interruption or process death; the metadata-only audit marks pending entries `interrupted`, and the service clears all pending tickets on Android service interruption, disable, or destruction. No interrupted request is replayed.
+- **Not complete yet:** Semantic memory/RAG, full task management, Android settings/health dashboard, durable pending-approval recovery, secure online-provider credential setup, browser and productivity connectors, and several lifecycle/security improvements. The `/v1/screen` endpoint is separately disabled by default and returns HTTP 403 until the user explicitly enables screen data access in Device settings; this is distinct from enabling the bridge. When enabled, visible non-password text and accessibility metadata may be exposed to the local bridge. The action audit is metadata-only and persisted separately; it records interrupted requests but does not restore pending approval tickets.
+
+## Build verification
+
+Android CI run [`43680303215`](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215) passed for commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`. The workflow completed `:app:testDebugUnitTest` and `:app:assembleDebug`, then uploaded the `zexa-bridge-debug-apk` artifact (artifact ID `14147249453`, approximately 6.8 MB). The artifact is available from the [workflow run's Artifacts section](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215). Its SHA-256 digest is `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`. This proves CI tests and APK assembly only; the APK has not been installed or exercised on the target OPPO Android 16 device.
+
+The earlier Kotlin compilation failure at `MainActivity.kt:1322` and the local-JVM `org.json` test issue have been corrected. The latest Android CI run is green. Physical-device tests remain outstanding for Qwen inference, memory persistence/export, voice, reminders, accessibility approval, process recovery, RAM and thermals.
+
+For the current local-model flow, open **Brain** → **Import Qwen GGUF model** → **Load model into memory**, then open **Chat**. Large model loading can fail when Android has insufficient free RAM. Zexa does not automatically download model files. Unfinished modules are labelled as pending rather than showing fake AI output.
 
 ## Brain configuration
 
@@ -61,13 +73,13 @@ Supported modes:
 
 Auto mode falls back only when a provider cannot be reached. Authentication, quota, invalid-model, and server errors are surfaced instead of silently switching providers. Set `ZEXA_PROVIDER_ORDER=qwen,grok,groq` to prefer local inference. Provider order affects latency, privacy, and possible cloud usage; it does not guarantee that one provider is always faster.
 
-The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use the same router.
+The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use the same router. The Android app does not yet expose these commands through a native interface.
 
 ## Android Accessibility Bridge app
 
-The optional companion app is in `app/`. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. Install it manually on the device, open it, enable **Zexa Accessibility Bridge** in Android Accessibility Settings, then return to the app and explicitly start the local bridge. It is OFF by default.
+The optional Android companion is in `app/` and opens a native Zexa workspace dashboard. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. The optional Accessibility Bridge remains OFF by default. It is not required for the Termux-first daily runtime. Voice requires microphone permission and an available Android on-device recognition service; speech output depends on the installed TTS engine.
 
-The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is displayed in the app and must be copied into the local `.env` file as `ZEXA_BRIDGE_TOKEN`. Keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots. Accessibility events are not collected or transmitted; screen data is read only when `zexa bridge screen` is explicitly run.
+The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is available only through an explicit copy action in the Device section; keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots, but other private on-screen information may still appear. Accessibility events are not collected or transmitted. Screen snapshots should be requested only when needed.
 
 Commands:
 
@@ -77,7 +89,7 @@ Commands:
     zexa bridge action back '{}'
     zexa bridge action input_text '{"text":"Hello"}'
 
-Every action requires typing the exact word `APPROVE` in the CLI. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
+The Python client requires its CLI approval callback before sending a request. POST `/v1/action` then returns HTTP 202 with a request ID; GET `/v1/action/{request_id}` reports `pending_approval`, `completed`, `failed`, `denied`, or `expired_or_unknown`. The user must open Zexa → Device → Refresh pending approvals and inspect the exact action and payload before choosing **Approve & execute**. Pending requests expire after 60 seconds. No request executes merely because it has a valid bearer token. The native approval flow is implemented but still needs Android CI and physical-device validation. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
 
 ## Human Hand bridge protocol
 
@@ -161,7 +173,28 @@ Optional device-reboot startup (after installing/opening the Termux:Boot Android
 
     bash scripts/install-termux-boot.sh
 
+Optional Termux:Widget shortcuts (after installing/opening the Termux:Widget Android add-on):
+
+    bash scripts/install-termux-widget.sh
+
+The installer adds tap-to-run shortcuts for voice, continuous voice, queued jobs and capability status under `~/.shortcuts`. Existing shortcuts with the same Zexa names are preserved in uniquely named `.zexa-backup.*.bak` files before replacement. Refresh the Termux:Widget widget after installation. These shortcuts do not enable an always-on microphone; voice starts only after a tap.
+
 The installer creates a service entrypoint tied to this checkout, loads its `.env`, and uses the stable queue database at `~/.zexa/jobs.sqlite3` so scheduled jobs and the service see the same queue regardless of working directory. The worker handles local notifications and low-risk skill drafts through the guarded execution gateway; imported skills and arbitrary commands are never executed. Android notifications require Termux:API permission. Check the service with `sv status zexa-worker`; stop/start with `sv down zexa-worker` / `sv up zexa-worker`; disable service startup with `sv-disable zexa-worker`. Android may still restrict background work; device-reboot startup requires the optional Termux:Boot add-on and device validation.
+
+## Authenticated local Termux control API
+
+The optional local API exposes only a small allowlisted surface: authenticated health and job-list reads, plus queuing a local notification. It cannot execute shell commands, run arbitrary skills, access the network, or approve Android actions. It binds exclusively to IPv4 loopback (`127.0.0.1`); other bind addresses are rejected.
+
+Generate a private token locally and keep it in `.env` (never commit it):
+
+    python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+Set `ZEXA_API_TOKEN` to the generated value, then start the server in a Termux session:
+
+    zexa api
+    zexa api --port 8765
+
+Requests require `Authorization: Bearer <token>`. Supported routes are `GET /v1/health`, `GET /v1/jobs`, and `POST /v1/notifications` with JSON fields `title`, `message`, and optional `after_seconds` (0–604800). The notification route only enqueues a notification job; the existing worker delivers it. The API is opt-in and is not installed as a boot service. Stop it with Ctrl+C. Do not expose this API through a tunnel, reverse proxy, or LAN listener.
 
 ## Existing Termux commands
 
@@ -187,7 +220,7 @@ Never commit .env, API keys, bridge tokens, or personal data.
 
 ## Automated checks
 
-GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and the unit-test suite on Python 3.11, 3.12, and 3.13. The Android workflow runs bridge JVM unit tests and assembles a debug APK. A separate scheduled CodeQL workflow scans Python security queries. Dependabot checks Python and GitHub Actions updates. These CI checks do not replace Android device testing or repository-level secret-scanning settings.
+GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and the unit-test suite on Python 3.11, 3.12, 3.13, and 3.14. The Android workflow runs bridge JVM unit tests and assembles a debug APK. A separate scheduled CodeQL workflow scans Python security queries. Dependabot checks Python and GitHub Actions updates. These CI checks do not replace Android device testing or repository-level secret-scanning settings.
 
 ## Development checks
 
@@ -196,3 +229,8 @@ GitHub Actions runs byte-compilation, Termux installer shell-syntax checks, and 
 ## Project provenance
 
 This is an independent implementation. Reference repositories and attribution are documented in THIRD_PARTY_NOTICES.md. Upstream source code is not copied into this repository by default.
+
+The memory backup restore implementation is committed on the current review branch. Zexa CI passed for commit `4e791dea1b4c03ff557542de07753bca2b3a2686`; Android Bridge Build is still pending for that same commit. Do not treat the Android build as passed until the workflow completes. Restore and memory persistence still require physical-device testing.
+
+
+Latest lifecycle hardening on the review branch also clears the in-memory approval registry when Android calls `onInterrupt()`, and includes a regression test proving cleared tickets cannot subsequently be approved. The latest CI runs for the newest commit must complete before this change is considered build-verified; target-device testing remains required.

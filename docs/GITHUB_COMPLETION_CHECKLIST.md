@@ -1,5 +1,34 @@
 # GitHub-side completion checklist
 
+## Optional Android companion status (2026-11-15)
+
+The Android project includes a native workspace shell, GGUF import/integrity handling, a pinned llama.cpp JNI CPU runtime and a multi-turn local chat UI. Latest Android CI run [43680303215](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215) passed on commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`: JVM unit tests, native CMake compilation, debug APK assembly and artifact upload all succeeded. Artifact `zexa-bridge-debug-apk` (about 6.8 MB ZIP; SHA-256 `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`) is available from the workflow run and contains the debug APK. CI verifies compilation/tests only; installation and runtime behavior on the target OPPO Android 16 device remain unverified. Voice/reminder target-device verification remains outstanding. Native Android per-action approval includes exact-payload review, one-use 60-second tickets, notification deep-linking and a Python polling client; this is CI-build verified but not physically device-tested. It is not yet the full Zexa assistant: semantic memory/RAG, full task management and several security/lifecycle features remain incomplete. Do not mark Termux-free daily use complete until all of the following are implemented and device-tested:
+
+- [x] Native Android workspace shell with Home, Chat, Brain, Tasks, Memory and Device sections; unfinished modules are explicitly marked pending.
+- [x] Android bridge action requests are queued with HTTP 202 and require exact-payload native confirmation; a bearer token alone never executes an action.
+- [x] Native multi-turn chat UI wired to the local llama.cpp/Qwen adapter; recent history is bounded.
+- [x] App-private SQLite persistence for completed chat turns and a confirmed clear-history action (Android CI run `43671941890` passed; physical-device persistence check remains outstanding).
+- [x] arm64 llama.cpp JNI runtime integration, GGUF import into app-private storage, 10 GiB size cap, header validation, SHA-256 verification before load, CPU inference configuration and RAM warning.
+- [x] Verify the voice/reminder integration build in CI (run `43672962839`); JVM tests, native CMake compilation and debug APK assembly passed.
+- [ ] Install the APK and run actual Qwen inference on the target Android 16 device; assess memory, thermals, voice language-pack availability and supported GGUF templates.
+- [ ] Online provider setup with secure Android Keystore-backed credential storage; no API keys in source, logs, or clipboard.
+- [x] Explicit Android on-device speech recognition wired into Chat, with runtime microphone permission, visible status, cancellation on navigation, Hindi locale preference and review-before-send.
+- [ ] Verify voice input with Hindi/Hinglish offline language packs on the target Android 16 device; confirm installed TTS voice behavior and lifecycle.
+- [ ] Verify WorkManager reminder delivery, cancellation, reboot recovery, notification permission denial and Doze/battery behavior on the target Android 16 device.
+- [x] Explicit personal-memory facts with local SQLite save, edit, case-insensitive search, individual delete and confirmed clear-all; up to 100 facts of 500 characters each. Up to 10 facts/3,000 characters are supplied as reference context to local chat.
+- [ ] Semantic search/RAG and physical-device memory persistence verification.
+- [x] User-initiated personal memory JSON export through Android's document picker (latest Android CI run `43680303215` passed; physical-device export/restore verification remains outstanding).
+- [x] Basic local reminder scheduling via WorkManager, pending-reminder list, individual confirmed cancellation and cancel-all, with Android 13+ notification permission and a bounded 1-minute to 7-day delay (latest Android CI passed; physical-device delivery verification outstanding).
+- [x] Reminder notification deep link opens the Tasks section, including when the activity is already running (latest Android CI passed; physical-device verification outstanding).
+- [ ] Full task management, reminder editing/history, and target-device Doze/reboot validation.
+- [ ] Native settings and health dashboard for brain, model, permissions, worker and bridge state.
+- [ ] Android execution gateway, durable approval/audit state, and physical-device confirmation-flow validation.
+- [x] Native Device-section approval UI, exact action/payload display, 60-second expiry, eight-request queue limit, one-use approve/deny, HTTP 202 queue protocol, result polling, Python client wait flow, and notification deep-linking to the matching approval dialog (latest Android CI passed; physical-device validation outstanding; Device refresh remains available as fallback).
+- [ ] Accessibility bridge lifecycle recovery, token rotation/revocation, durable request/result state and sensitive-screen redaction; one-use in-memory request IDs and replay rejection are implemented.
+- [ ] Android unit/instrumentation tests, release signing, install/upgrade tests and target-device acceptance on Android 16.
+
+Termux is the primary runtime for Zexa. This checklist tracks the optional Android companion only; its incomplete features do not block Termux-based daily use. Do not advertise the current APK as a full assistant.
+
 This file separates work that is implemented and CI-verified on the feature branch from work that requires a real Android device, external credentials, or a deliberate product decision.
 
 ## Implemented on this branch
@@ -15,22 +44,27 @@ This file separates work that is implemented and CI-verified on the feature bran
 - [x] Low-risk background skill jobs routed through the same skill engine and gateway.
 - [x] Stable job database path, early environment-file loading, pending-job cancellation, failed-job retry, and safe error identifiers.
 - [x] Termux:Services installer and optional Termux:Boot startup hook.
+- [x] Optional Termux:Widget installer creates tap-to-run voice, continuous voice, jobs, and capability shortcuts; existing same-name shortcuts are backed up with unique names. Boot hooks and worker entrypoints are also backed up before replacement.
+- [x] Dedicated authenticated loopback-only Termux control API: bearer-token authentication, IPv4 loopback-only bind, bounded JSON bodies, allowlisted health/jobs/notification routes, and no arbitrary command or skill execution. CI tests cover auth, validation, safe queueing, and restricted response fields.
 - [x] 320 pinned community skill references imported with provenance and SHA-256 metadata; all are disabled, and one requires manual review.
 - [x] Read-only `zexa skillpacks status/list` commands; imported references are not executable capabilities.
 - [x] Android bridge limits concurrent clients, reports actual readiness, and can recover after a bind failure.
 - [x] Android bridge JVM unit tests cover token comparison, body-size limits, coordinates, gesture duration, and package-name validation.
-- [x] Python CI covers 3.11, 3.12, and 3.13; Termux shell scripts are syntax-checked.
+- [x] Python CI covers 3.11, 3.12, 3.13, and 3.14; Termux shell scripts are syntax-checked.
 - [x] Python CodeQL security analysis workflow.
-- [x] Android CI runs JVM unit tests and builds the debug APK.
+- [x] Android CI runs JVM unit tests and builds the debug APK; run `43671195011` passed for commit `ee4ec705eddf04d0fb7c2085ef3aefbca9f931d9`.
+- [x] Android CI run `43671941890` passed for the app-private SQLite chat-history integration.
 - [x] Pending Dependabot action-version updates are consolidated in this branch to avoid overlapping workflow changes.
 
-## Still requires real-device / account verification
+## Optional Android companion: still requires real-device / account verification
 
 - [ ] Install the current branch on the OPPO Android 16 device and validate Termux commands. (Not performed by GitHub CI.)
 - [ ] Enable Accessibility manually and test the local bridge, approval prompts, and every supported action. (Not performed by GitHub CI.)
-- [ ] Validate Termux:Services and optional Termux:Boot across app restart and device reboot. (Not performed by GitHub CI.)
+- [ ] Validate Termux:Services, Termux:Widget and optional Termux:Boot across app restart and device reboot. (Not performed by GitHub CI.)
+- [ ] Start `zexa api` on-device with a private `ZEXA_API_TOKEN`; verify authenticated health/jobs/notification requests from local clients and confirm LAN access is unavailable. (Not performed by GitHub CI.)
 - [ ] Verify notifications, Doze/battery restrictions, process recovery, and queue persistence on-device. (Not performed by GitHub CI.)
 - [ ] Confirm the installed APK on the physical device; CI assembly is not a device test.
+- [ ] Test microphone permission, on-device speech recognition, Hindi/Hinglish language pack behavior and installed TTS voice on the OPPO Android 16 device.
 
 ## Product integrations not yet implemented
 
@@ -45,14 +79,23 @@ This file separates work that is implemented and CI-verified on the feature bran
 
 ## Latest GitHub Actions verification
 
+- [x] Current branch head `27865ee955bdf9306a928d3a64816531b9aab731`: Zexa CI run `43827892854` passed all four Python matrix jobs (3.11–3.14), source compilation, all three Termux installer shell syntax checks, and the unit-test suite. [Open Zexa CI](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43827892854).
+- [x] Current branch head `27865ee955bdf9306a928d3a64816531b9aab731`: Android Bridge Build run `43827902909` passed its assemble job. [Open Android CI](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43827902909).
+- [ ] Physical Termux and OPPO Android 16 acceptance tests remain outstanding; GitHub CI cannot validate installed add-ons, background execution, notifications, Doze behavior, model inference, or device permissions.
+
+- [x] Android Bridge Build run `43680303215` passed on commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`; JVM tests, native CMake build, debug APK assembly and artifact upload succeeded. Artifact ID `14147249453`; SHA-256 `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`. [Open the workflow run](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215).
+- [x] The previous Kotlin syntax failure and local-JVM Android `org.json` test-stub issue were corrected and the latest Android CI is green.
+
+- [x] Android Bridge Build #317 passed on commit `6f258774744496a06378b61699413066d50c8bde`; run `43675903149` uploaded `zexa-bridge-debug-apk` (contains `app-debug.apk` and `lib/arm64-v8a/libzexa_llama.so`).
+
 - [x] Zexa CI #284 passed on commit `43f5882` (Python 3.11/3.12/3.13; tests, byte-compilation, and Termux shell syntax).
 - [x] CodeQL #113 passed on commit `43f5882`.
 - [x] Android Bridge Build #70 passed on commit `43f5882` (Android SDK 36, JVM unit tests, and debug APK assembly).
 - [x] Community skill import #13 passed; manifest records 320 references, 0 enabled, 1 flagged for manual review.
-- [ ] Physical OPPO Android 16 validation remains outstanding.
+- [ ] Physical OPPO Android 16 validation remains outstanding, including GGUF import, SHA-256 verification, native model load, Hindi/Hinglish multi-turn chat, chat-history persistence/clear, RAM and thermal behavior.
 
 ## Pull request state
 
-- PR #16 is a draft against `main`; no merge has been performed.
+- PR #17 (`fix/reviewed-security-and-integrity`) is a draft against `feature/qwen-xai-multi-brain`; no merge has been performed.
 - The separate Dependabot PRs remain open. Their action-version changes are included in this branch; they can be closed as superseded after PR #16 is merged.
 - Imported skill references remain disabled. A skill becomes executable only after an individual review, trusted native handler, permission definition, tests, and explicit enablement path.

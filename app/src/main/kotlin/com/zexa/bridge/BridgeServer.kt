@@ -15,6 +15,12 @@ class BridgeServer(
     private val token: String,
     private val service: ZexaAccessibilityService,
 ) {
+    init {
+        require(BridgeSecurityRules.validBridgeToken(token)) {
+            "Bridge token must be a 32-byte lowercase hexadecimal value."
+        }
+    }
+
     @Volatile private var running = false
     @Volatile private var ready = false
     @Volatile private var server: ServerSocket? = null
@@ -116,14 +122,20 @@ class BridgeServer(
             if (headers.containsKey("transfer-encoding")) {
                 return respond(client, 400, JSONObject().put("error", "Transfer-Encoding is not supported"))
             }
-            val provided = headers["authorization"]?.removePrefix("Bearer ") ?: ""
+            val provided = BridgeSecurityRules.bearerToken(headers["authorization"]) ?: ""
             if (!BridgeSecurityRules.tokenMatches(token, provided)) {
                 return respond(client, 401, JSONObject().put("error", "Unauthorized"))
             }
+            var responseStatus = 200
             val response = try {
                 when {
                     method == "GET" && path == "/v1/status" -> service.statusJson()
-                    method == "GET" && path == "/v1/screen" -> service.screenJson()
+                    method == "GET" && path == "/v1/screen" -> {
+                        if (!service.isScreenAccessEnabled()) {
+                            responseStatus = 403
+                            JSONObject().put("ok", false).put("error", "Screen access is disabled in Zexa settings.")
+                        } else service.screenJson()
+                    }
                     method == "POST" && path == "/v1/action" -> {
                         val length = BridgeSecurityRules.contentLength(headers["content-length"])
                             ?: error("Invalid request body length.")
@@ -136,15 +148,26 @@ class BridgeServer(
                         }
                         val json = JSONObject(String(body, StandardCharsets.UTF_8))
                         val action = json.optString("action", "")
-                        val payload = json.optJSONObject("payload") ?: JSONObject()
-                        service.perform(action, payload)
+                        val payload = json.optJSONObject("payload")
+                            ?: error("Action payload must be a JSON object.")
+                        responseStatus = 202
+                        service.queueActionForApproval(action, payload)
+                    }
+                    method == "GET" && path.startsWith("/v1/action/") -> {
+                        val requestId = path.removePrefix("/v1/action/")
+                        require(requestId.matches(Regex("^[A-Za-z0-9-]{1,64}$"))) { "Invalid action request ID." }
+                        service.actionResult(requestId)
+                            ?: JSONObject()
+                                .put("ok", true)
+                                .put("status", if (service.isActionPending(requestId)) "pending_approval" else "expired_or_unknown")
+                                .put("request_id", requestId)
                     }
                     else -> return respond(client, 404, JSONObject().put("error", "Not found"))
                 }
             } catch (error: Exception) {
                 return respond(client, 400, JSONObject().put("error", error.message ?: "Invalid request"))
             }
-            respond(client, 200, response)
+            respond(client, responseStatus, response)
         }
     }
 
@@ -169,8 +192,10 @@ class BridgeServer(
         val bytes = body.toString().toByteArray(StandardCharsets.UTF_8)
         val reason = when (status) {
             200 -> "OK"
+            202 -> "Accepted"
             400 -> "Bad Request"
             401 -> "Unauthorized"
+            403 -> "Forbidden"
             503 -> "Service Unavailable"
             else -> "Not Found"
         }

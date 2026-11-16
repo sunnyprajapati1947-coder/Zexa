@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -16,8 +17,9 @@ class ImportedManifestTests(unittest.TestCase):
             "source_repo": "example/skills",
             "source_commit": "a" * 40,
             "source_path": "skills/meeting-notes/SKILL.md",
+            "imported_path": "example__skills/meeting-notes",
             "license": "MIT",
-            "sha256": "b" * 64,
+            "sha256": "",
             "review_required": False,
             "warnings": [],
             "enabled": False,
@@ -27,7 +29,12 @@ class ImportedManifestTests(unittest.TestCase):
         self.temp.cleanup()
 
     def write_manifest(self, entry=None):
-        item = entry or self.entry
+        content_dir = self.path.parent / "example__skills" / "meeting-notes"
+        content_dir.mkdir(parents=True, exist_ok=True)
+        content = b"---\nname: meeting_notes\ndescription: Organize user-provided meeting notes.\n---\n\nSummarize supplied notes.\n"
+        (content_dir / "SKILL.md").write_bytes(content)
+        item = dict(entry or self.entry)
+        item["sha256"] = hashlib.sha256(content).hexdigest()
         self.path.write_text(json.dumps({
             "schema_version": 1,
             "imported_count": 1,
@@ -50,6 +57,19 @@ class ImportedManifestTests(unittest.TestCase):
         traversal = dict(self.entry, source_path="../outside/SKILL.md")
         self.write_manifest(traversal)
         with self.assertRaisesRegex(ValueError, "path traversal"):
+            load_imported_manifest(self.path)
+
+    def test_rejects_content_hash_mismatch(self):
+        self.write_manifest()
+        content_file = self.path.parent / "example__skills" / "meeting-notes" / "SKILL.md"
+        content_file.write_text("tampered", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "hash does not match"):
+            load_imported_manifest(self.path)
+
+    def test_rejects_flagged_skill_without_manual_review(self):
+        flagged = dict(self.entry, warnings=["Potentially unsafe pattern"], review_required=False)
+        self.write_manifest(flagged)
+        with self.assertRaisesRegex(ValueError, "must require manual review"):
             load_imported_manifest(self.path)
 
     def test_rejects_count_mismatch_and_duplicate_names(self):

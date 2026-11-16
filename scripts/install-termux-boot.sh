@@ -19,7 +19,13 @@ fi
 BOOT_DIR="$HOME/.termux/boot"
 mkdir -p "$BOOT_DIR"
 chmod 700 "$BOOT_DIR"
-cat > "$BOOT_DIR/00-start-zexa-worker" <<'EOF'
+BOOT_HOOK="$BOOT_DIR/00-start-zexa-worker"
+if [ -e "$BOOT_HOOK" ]; then
+  backup="$BOOT_HOOK.zexa-backup.$(date +%s).$$.bak"
+  cp -p "$BOOT_HOOK" "$backup"
+  echo "Backed up existing boot hook: $backup"
+fi
+cat > "$BOOT_HOOK" <<'EOF'
 #!/data/data/com.termux/files/usr/bin/sh
 export PREFIX=/data/data/com.termux/files/usr
 export SVDIR="$PREFIX/var/service"

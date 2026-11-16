@@ -38,7 +38,7 @@ def _fingerprint(action: str, payload: dict) -> str:
         raise ValueError("Approval action must contain 1–120 characters.")
     if not isinstance(payload, dict):
         raise ValueError("Approval payload must be an object.")
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
     if len(encoded) > 32_000:
         raise ValueError("Approval payload exceeds the 32 KiB limit.")
     return hashlib.sha256((action + "\\0" + encoded).encode("utf-8")).hexdigest()

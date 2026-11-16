@@ -7,6 +7,8 @@ handlers must be trusted callables; models may only request registered names.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from copy import deepcopy
+import json
 from typing import Any
 
 from .approvals import ApprovalManager
@@ -81,6 +83,14 @@ class ExecutionGateway:
             raise TypeError("A trusted callable handler is required.")
         if not isinstance(payload, dict):
             raise ValueError("Execution payload must be an object.")
+        try:
+            # Freeze the caller's nested JSON data before approval verification;
+            # a shallow dict copy would leave nested objects shared and mutable.
+            frozen_payload = json.loads(
+                json.dumps(payload, ensure_ascii=False, allow_nan=False)
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Execution payload must contain finite JSON data.") from exc
 
         try:
             registered_permission, registered_risk = self._capability(action)
@@ -100,7 +110,7 @@ class ExecutionGateway:
                 raise ExecutionDenied(decision.reason)
 
             if decision.approval_required:
-                if not approval_token or not self.approvals.consume(approval_token, action, payload):
+                if not approval_token or not self.approvals.consume(approval_token, action, frozen_payload):
                     raise ExecutionDenied("A valid, unexpired, action-bound approval is required.")
         except ExecutionDenied as exc:
             self.audit.record(
@@ -114,7 +124,7 @@ class ExecutionGateway:
             details={"permission": registered_permission, "risk_level": registered_risk},
         )
         try:
-            result = handler(dict(payload))
+            result = handler(deepcopy(frozen_payload))
         except Exception as exc:
             # Do not persist exception text: it may contain customer data or secrets.
             self.audit.record(

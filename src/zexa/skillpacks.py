@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import hmac
 import json
 import re
 from pathlib import Path
@@ -205,11 +206,12 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             not isinstance(source_path, str)
             or not source_path
             or source_path.startswith("/")
-            or "\\\\" in source_path
-            or "\\x00" in source_path
+            or "\\" in source_path
+            or "\x00" in source_path
         ):
             raise ValueError("Imported skill manifest contains an invalid source path.")
-        if ".." in source_path.split("/") or ".." in Path(source_path).parts:
+        source_parts = source_path.split("/")
+        if any(part in {"", ".", ".."} for part in source_parts):
             raise ValueError("Imported skill manifest contains a path traversal.")
         if not isinstance(license_id, str) or license_id not in ALLOWED_LICENSES:
             raise ValueError("Imported skill manifest contains an unapproved license.")
@@ -219,10 +221,37 @@ def load_imported_manifest(path: Path | None = None) -> dict:
             raise ValueError("Imported skill references cannot be enabled by this loader.")
         if not isinstance(item.get("review_required"), bool):
             raise ValueError("Imported skill manifest has invalid review metadata.")
-        if not isinstance(item.get("warnings"), list) or not all(
-            isinstance(warning, str) for warning in item["warnings"]
+        warnings = item.get("warnings")
+        if not isinstance(warnings, list) or not all(
+            isinstance(warning, str) for warning in warnings
         ):
             raise ValueError("Imported skill manifest has invalid warning metadata.")
+        if warnings and item.get("review_required") is not True:
+            raise ValueError("Flagged imported skills must require manual review.")
+
+        imported_path = item.get("imported_path")
+        if (
+            not isinstance(imported_path, str)
+            or not imported_path
+            or imported_path.startswith("/")
+            or "\\" in imported_path
+            or "\x00" in imported_path
+        ):
+            raise ValueError("Imported skill manifest contains an invalid imported path.")
+        imported_parts = imported_path.split("/")
+        if any(part in {"", ".", ".."} for part in imported_parts):
+            raise ValueError("Imported skill manifest contains an imported path traversal.")
+        pack_root = manifest_path.parent.resolve()
+        skill_file = (pack_root / imported_path / "SKILL.md").resolve()
+        if pack_root not in skill_file.parents or not skill_file.is_file():
+            raise ValueError("Imported skill content is missing or escapes the pack directory.")
+        raw = skill_file.read_bytes()
+        if not raw or len(raw) > MAX_SKILL_BYTES:
+            raise ValueError("Imported skill content is empty or exceeds the 64 KiB limit.")
+        actual_hash = hashlib.sha256(raw).hexdigest()
+        if not hmac.compare_digest(actual_hash, sha256):
+            raise ValueError("Imported skill content hash does not match its manifest.")
+
         seen.add(name)
 
     return data

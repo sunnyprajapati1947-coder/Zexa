@@ -2,7 +2,7 @@
   "schema_version": 1,
   "description": "Pinned source manifest for the optional community skill pack. The import script copies skill folders as untrusted reference material; it never executes them.",
   "target_minimum_unique_skills": 300,
-  "expected_candidates": 453,
+  "expected_candidates": 512,
   "sources": [
     {
       "repository": "anthropics/knowledge-work-plugins",
@@ -17,6 +17,13 @@
       "license": "CC-BY-4.0",
       "skill_files": 201,
       "license_url": "https://github.com/MicrosoftDocs/Agent-Skills/blob/9b16b5c7c7716949c83fc4bbdc448e0ada7f93a3/LICENSE"
+    },
+    {
+      "repository": "Nikoxkx/Agent-Skills",
+      "commit": "d4fd9165fa786d12c3d836273ac8346f5f3275ab",
+      "license": "Apache-2.0",
+      "skill_files": 59,
+      "license_url": "https://github.com/Nikoxkx/Agent-Skills/blob/d4fd9165fa786d12c3d836273ac8346f5f3275ab/LICENSE"
     }
   ],
   "policy": {

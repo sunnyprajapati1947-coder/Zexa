@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: zexa-skill-import-${{ github.ref }}
@@ -55,18 +55,11 @@ jobs:
           python -m compileall -q src tests
           python -m unittest discover -s tests -v
           bash -n scripts/install-termux-worker.sh scripts/install-termux-boot.sh
-      - name: Commit imported reference pack to this branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add skillpacks/imported/
-          if git diff --cached --quiet; then
-            echo "No imported skill changes to commit."
-            exit 0
-          fi
-          git commit -m "Import pinned community skill references (disabled by default)"
-          git fetch origin "$GITHUB_REF_NAME"
-          git rebase "origin/$GITHUB_REF_NAME"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Upload validated disabled reference pack
+        if: success() && hashFiles('skillpacks/imported/index.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: zexa-disabled-community-skill-pack
+          path: skillpacks/imported/
+          if-no-files-found: error
+          retention-days: 14

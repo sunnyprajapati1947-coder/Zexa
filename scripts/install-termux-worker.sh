@@ -30,6 +30,12 @@ SERVICE_DIR="$SVDIR/zexa-worker"
 mkdir -p "$SERVICE_DIR" "$HOME/.zexa"
 chmod 700 "$HOME/.zexa"
 
+if [ -e "$SERVICE_DIR/run" ]; then
+  backup="$SERVICE_DIR/run.zexa-backup.$(date +%s).$$.bak"
+  cp -p "$SERVICE_DIR/run" "$backup"
+  echo "Backed up existing worker entrypoint: $backup"
+fi
+
 cat > "$SERVICE_DIR/run" <<EOF
 #!/data/data/com.termux/files/usr/bin/sh
 umask 077

@@ -111,7 +111,7 @@ class LocalLlamaBrain:
             raise RuntimeError("Local model needs at least one non-system message.")
         command = [
             executable, "-m", str(self.config.model_path),
-            "-cnv", "-st", "-p", transcript,
+            "-st", "--simple-io", "-p", transcript,
             "-n", str(self.config.max_tokens),
             "-c", str(self.config.context), "-t", str(self.config.threads),
             "--no-display-prompt",

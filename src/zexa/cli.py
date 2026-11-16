@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .agents import AgentOrchestrator
-from .config import get_groq_config, get_xai_config, load_env_file
+from .config import get_config, get_groq_config, get_xai_config, load_env_file
 from .approvals import ApprovalManager
 from .audit import AuditLog
 from .gateway import ExecutionGateway
@@ -130,6 +130,10 @@ def main() -> None:
     schedule.add_argument("title")
     schedule.add_argument("message", nargs="+")
 
+    api_parser = subparsers.add_parser("api", help="Run the authenticated loopback-only local control API")
+    api_parser.add_argument("--host", default="127.0.0.1")
+    api_parser.add_argument("--port", type=int, default=8765)
+
     worker_parser = subparsers.add_parser("worker", help="Run the durable background job worker")
     worker_parser.add_argument("--poll-seconds", type=int, default=5)
     worker_parser.add_argument("--once", action="store_true")
@@ -187,6 +191,16 @@ def main() -> None:
     if args.command == "jobs":
         print(json.dumps(JobQueue().list_jobs(args.limit), ensure_ascii=False, indent=2))
         return
+    if args.command == "api":
+        from .api import serve
+        token = os.getenv("ZEXA_API_TOKEN", "").strip()
+        if not token:
+            raise SystemExit("zexa: set ZEXA_API_TOKEN to a private random value of at least 32 characters.")
+        try:
+            serve(args.host, args.port, token, JobQueue())
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"zexa: {exc}") from exc
+        return
     if args.command == "job":
         queue = JobQueue()
         changed = queue.cancel(args.job_id) if args.job_command == "cancel" else queue.retry(args.job_id)
@@ -199,8 +213,8 @@ def main() -> None:
         queue = JobQueue()
         queue.recover_stale()
         mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
-        config = get_config() if mode == "online" or (
-            mode != "offline" and os.getenv("GROQ_API_KEY", "").strip()
+        config = get_config() if mode in {"online", "groq"} or (
+            mode == "auto" and os.getenv("GROQ_API_KEY", "").strip()
         ) else None
         brain = build_brain_router(config, mode)
         explicit_permissions = {
@@ -528,11 +542,13 @@ Sources:")
                         break
                     torch_state = _explicit_torch_request(transcript)
                     if torch_state:
-                        try:
-                            TermuxAndroidHand().set_torch(torch_state)
-                            answer = "Flashlight on kar di." if torch_state == "on" else "Flashlight band kar di."
-                        except (RuntimeError, OSError, ValueError) as exc:
-                            answer = f"Flashlight control available nahi hai: {exc}"
+                        # Voice recognition is not an approval channel. Keep device
+                        # actions disabled here until they are routed through the
+                        # trusted ExecutionGateway and a separate confirmation flow.
+                        answer = (
+                            "Flashlight request samajh gaya. Voice mode se phone action "
+                            "abhi execute nahi hoga; approved bridge action flow use karein."
+                        )
                         print(f"Zexa: {answer}")
                         voice.speak(answer)
                         continue

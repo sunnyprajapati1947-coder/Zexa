@@ -7,9 +7,29 @@ import org.junit.Test
 
 class BridgeSecurityRulesTest {
     @Test
+    fun bridgeTokenMustBeAFullRandomHexToken() {
+        assertTrue(BridgeSecurityRules.validBridgeToken("a".repeat(64)))
+        assertFalse(BridgeSecurityRules.validBridgeToken(""))
+        assertFalse(BridgeSecurityRules.validBridgeToken("short"))
+        assertFalse(BridgeSecurityRules.validBridgeToken("g".repeat(64)))
+        assertFalse(BridgeSecurityRules.validBridgeToken("A".repeat(64)))
+    }
+
+    @Test
     fun tokenComparisonRequiresExactMatch() {
         assertTrue(BridgeSecurityRules.tokenMatches("expected-token", "expected-token"))
         assertFalse(BridgeSecurityRules.tokenMatches("expected-token", "other-token"))
+    }
+
+    @Test
+    fun authorizationRequiresAnExactBearerSchemeAndValidToken() {
+        val token = "a".repeat(64)
+        assertEquals(token, BridgeSecurityRules.bearerToken("Bearer $token"))
+        assertEquals(null, BridgeSecurityRules.bearerToken(token))
+        assertEquals(null, BridgeSecurityRules.bearerToken("Basic $token"))
+        assertEquals(null, BridgeSecurityRules.bearerToken("bearer $token"))
+        assertEquals(null, BridgeSecurityRules.bearerToken("Bearer $token extra"))
+        assertEquals(null, BridgeSecurityRules.bearerToken(null))
     }
 
     @Test
@@ -20,6 +40,15 @@ class BridgeSecurityRulesTest {
         assertEquals(null, BridgeSecurityRules.contentLength("0"))
         assertEquals(null, BridgeSecurityRules.contentLength("16001"))
         assertEquals(null, BridgeSecurityRules.contentLength("not-a-number"))
+    }
+
+    @Test
+    fun screenAccessRequiresExplicitBooleanOptIn() {
+        assertFalse(BridgeSecurityRules.screenAccessEnabled(null))
+        assertFalse(BridgeSecurityRules.screenAccessEnabled(false))
+        assertTrue(BridgeSecurityRules.screenAccessEnabled(true))
+        assertFalse(BridgeSecurityRules.screenAccessEnabled("true"))
+        assertFalse(BridgeSecurityRules.screenAccessEnabled(1))
     }
 
     @Test
