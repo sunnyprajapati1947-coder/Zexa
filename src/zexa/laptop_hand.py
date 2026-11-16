@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import hashlib
+import stat
 from pathlib import Path, PurePosixPath
 import tempfile
 from typing import Any
@@ -122,9 +123,15 @@ class LaptopWorkspace:
         path = self._resolve_file(relative_path, must_exist=True)
         if self._sensitive_name(path) or path.suffix.casefold() not in _TEXT_SUFFIXES:
             raise PermissionError("This file type or filename is excluded from workspace reading.")
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+        )
         descriptor = os.open(path, flags)
         try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise PermissionError("Only regular workspace files can be read.")
             with os.fdopen(descriptor, "rb") as source:
                 raw = source.read(MAX_READ_BYTES + 1)
         except Exception:
@@ -163,11 +170,15 @@ class LaptopWorkspace:
                 target.write(raw)
                 target.flush()
                 os.fsync(target.fileno())
-            if path.is_symlink():
-                raise PermissionError("Workspace symlinks are not supported.")
-            if path.exists() and not overwrite:
-                raise FileExistsError("Workspace file appeared during write; refusing to overwrite.")
-            os.replace(temporary_name, path)
+            if overwrite:
+                # Replacing a symlink replaces the link itself; it never follows
+                # the link to modify a target outside the workspace.
+                os.replace(temporary_name, path)
+            else:
+                # Hard-link creation is atomic and fails if any directory entry
+                # already occupies the destination; this closes the no-clobber race.
+                os.link(temporary_name, path, follow_symlinks=False)
+                os.unlink(temporary_name)
         finally:
             try:
                 os.unlink(temporary_name)
