@@ -26,6 +26,7 @@ class ActionApprovalRegistry(
     )
 
     private val pending = LinkedHashMap<String, Entry>()
+    private val expired = LinkedHashMap<String, PendingDeviceAction>()
     private var lastObservedElapsedMs = 0L
 
     init {
@@ -92,8 +93,15 @@ class ActionApprovalRegistry(
         return pending.remove(requestId)?.ticket
     }
 
+    /** Returns each expired ticket once, including tickets expired by list/create/approve/deny. */
     @Synchronized
-    fun clear() = pending.clear()
+    fun drainExpired(): List<PendingDeviceAction> = expired.values.toList().also { expired.clear() }
+
+    @Synchronized
+    fun clear() {
+        pending.clear()
+        expired.clear()
+    }
 
     private fun observeTime(nowElapsedMs: Long): Long {
         require(nowElapsedMs >= 0L) {
@@ -108,7 +116,11 @@ class ActionApprovalRegistry(
     private fun expire(nowElapsedMs: Long) {
         val iterator = pending.values.iterator()
         while (iterator.hasNext()) {
-            if (iterator.next().deadlineElapsedMs <= nowElapsedMs) iterator.remove()
+            val entry = iterator.next()
+            if (entry.deadlineElapsedMs <= nowElapsedMs) {
+                expired[entry.ticket.requestId] = entry.ticket
+                iterator.remove()
+            }
         }
     }
 
