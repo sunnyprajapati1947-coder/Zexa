@@ -9,6 +9,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import android.graphics.Path
@@ -73,7 +74,7 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
         require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
-        val ticket = actionApprovals.create(action, payload.toString(), System.currentTimeMillis())
+        val ticket = actionApprovals.create(action, payload.toString(), SystemClock.elapsedRealtime(), System.currentTimeMillis())
         actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "pending_approval", ticket.createdAtEpochMs))
         notifyApprovalNeeded(ticket)
         return JSONObject()
@@ -126,14 +127,14 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     fun pendingActionApprovals(): List<PendingDeviceAction> =
-        actionApprovals.list(System.currentTimeMillis())
+        actionApprovals.list(SystemClock.elapsedRealtime())
 
     fun isActionPending(requestId: String): Boolean =
-        actionApprovals.list(System.currentTimeMillis()).any { it.requestId == requestId }
+        actionApprovals.list(SystemClock.elapsedRealtime()).any { it.requestId == requestId }
 
     @Synchronized
     fun approveAction(requestId: String): JSONObject {
-        val ticket = actionApprovals.approve(requestId, System.currentTimeMillis())
+        val ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
             ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
         val result = try {
             val execution = perform(ticket.action, JSONObject(ticket.payloadJson))
@@ -153,15 +154,15 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     fun denyAction(requestId: String): JSONObject {
-        val ticket = actionApprovals.list(System.currentTimeMillis()).firstOrNull { it.requestId == requestId }
-        val denied = actionApprovals.deny(requestId)
+        val ticket = actionApprovals.deny(requestId, SystemClock.elapsedRealtime())
+        val denied = ticket != null
         val result = JSONObject()
             .put("ok", false)
             .put("status", if (denied) "denied" else "expired_or_not_pending")
             .put("request_id", requestId)
-        if (denied) {
+        if (ticket != null) {
             rememberActionResult(requestId, result)
-            ticket?.let { actionAudit.append(ActionAuditEntry(requestId, it.action, "denied", System.currentTimeMillis())) }
+            actionAudit.append(ActionAuditEntry(requestId, ticket.action, "denied", System.currentTimeMillis()))
         }
         return result
     }

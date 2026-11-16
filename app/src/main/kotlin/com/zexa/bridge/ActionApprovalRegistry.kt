@@ -4,8 +4,7 @@ import java.util.UUID
 
 /**
  * In-memory, one-use approval tickets for exact device-action requests.
- * Tickets are consumed once by the native confirmation UI. The registry is
- * process-local; callers must not treat a bearer token as user approval.
+ * Expiry uses monotonic elapsed time; epoch timestamps remain for display/audit.
  */
 data class PendingDeviceAction(
     val requestId: String,
@@ -13,6 +12,7 @@ data class PendingDeviceAction(
     val payloadJson: String,
     val createdAtEpochMs: Long,
     val expiresAtEpochMs: Long,
+    val expiresAtElapsedRealtimeMs: Long,
 )
 
 class ActionApprovalRegistry(
@@ -20,7 +20,13 @@ class ActionApprovalRegistry(
     private val maxPending: Int = MAX_PENDING,
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
 ) {
-    private val pending = LinkedHashMap<String, PendingDeviceAction>()
+    private data class Entry(
+        val ticket: PendingDeviceAction,
+        val deadlineElapsedMs: Long,
+    )
+
+    private val pending = LinkedHashMap<String, Entry>()
+    private var lastObservedElapsedMs = 0L
 
     init {
         require(ttlMs in 1_000L..MAX_TTL_MS)
@@ -28,47 +34,81 @@ class ActionApprovalRegistry(
     }
 
     @Synchronized
-    fun create(action: String, payloadJson: String, nowMs: Long): PendingDeviceAction {
+    fun create(
+        action: String,
+        payloadJson: String,
+        nowElapsedMs: Long,
+        nowEpochMs: Long,
+    ): PendingDeviceAction {
         require(action in ALLOWED_ACTIONS) { "Device action is not allowlisted." }
         require(payloadJson.isNotBlank() && payloadJson.length <= MAX_PAYLOAD_CHARS) {
             "Device action payload is empty or too large."
         }
-        require(nowMs >= 0L && nowMs <= Long.MAX_VALUE - ttlMs) { "Invalid approval timestamp." }
-        expire(nowMs)
+        require(nowElapsedMs >= 0L && nowElapsedMs <= Long.MAX_VALUE - ttlMs) {
+            "Invalid monotonic approval timestamp."
+        }
+        require(nowEpochMs >= 0L && nowEpochMs <= Long.MAX_VALUE - ttlMs) {
+            "Invalid approval timestamp."
+        }
+        val effectiveNowMs = observeTime(nowElapsedMs)
+        expire(effectiveNowMs)
         require(pending.size < maxPending) { "Too many pending device-action approvals." }
+
         val id = idFactory()
         require(id.isNotBlank() && id.length <= 64 && !pending.containsKey(id)) {
             "Could not create a unique approval request."
         }
-        val request = PendingDeviceAction(id, action, payloadJson, nowMs, nowMs + ttlMs)
-        pending[id] = request
-        return request
+
+        val deadline = effectiveNowMs + ttlMs
+        val ticket = PendingDeviceAction(
+            id, action, payloadJson, nowEpochMs, nowEpochMs + ttlMs, deadline,
+        )
+        pending[id] = Entry(ticket, deadline)
+        return ticket
     }
 
     @Synchronized
-    fun list(nowMs: Long): List<PendingDeviceAction> {
-        expire(nowMs)
-        return pending.values.toList()
+    fun list(nowElapsedMs: Long): List<PendingDeviceAction> {
+        val effectiveNowMs = observeTime(nowElapsedMs)
+        expire(effectiveNowMs)
+        return pending.values.map { it.ticket }
     }
 
     /** Consumes exactly one unexpired ticket. A second approval returns null. */
     @Synchronized
-    fun approve(requestId: String, nowMs: Long): PendingDeviceAction? {
-        expire(nowMs)
+    fun approve(requestId: String, nowElapsedMs: Long): PendingDeviceAction? {
+        val effectiveNowMs = observeTime(nowElapsedMs)
+        expire(effectiveNowMs)
         if (requestId.isBlank()) return null
-        return pending.remove(requestId)
+        return pending.remove(requestId)?.ticket
     }
 
+    /** Atomically expires and removes a denied ticket, returning its audit details. */
     @Synchronized
-    fun deny(requestId: String): Boolean = pending.remove(requestId) != null
+    fun deny(requestId: String, nowElapsedMs: Long): PendingDeviceAction? {
+        val effectiveNowMs = observeTime(nowElapsedMs)
+        expire(effectiveNowMs)
+        if (requestId.isBlank()) return null
+        return pending.remove(requestId)?.ticket
+    }
 
     @Synchronized
     fun clear() = pending.clear()
 
-    private fun expire(nowMs: Long) {
+    private fun observeTime(nowElapsedMs: Long): Long {
+        require(nowElapsedMs >= 0L) {
+            "Invalid monotonic approval timestamp."
+        }
+        if (nowElapsedMs > lastObservedElapsedMs) {
+            lastObservedElapsedMs = nowElapsedMs
+        }
+        return lastObservedElapsedMs
+    }
+
+    private fun expire(nowElapsedMs: Long) {
         val iterator = pending.values.iterator()
         while (iterator.hasNext()) {
-            if (iterator.next().expiresAtEpochMs <= nowMs) iterator.remove()
+            if (iterator.next().deadlineElapsedMs <= nowElapsedMs) iterator.remove()
         }
     }
 

@@ -1233,7 +1233,7 @@ class MainActivity : Activity() {
         } catch (_: Exception) {
             request.payloadJson
         }
-        val remainingSeconds = ((request.expiresAtEpochMs - System.currentTimeMillis()).coerceAtLeast(0L) + 999L) / 1000L
+        val remainingSeconds = ((request.expiresAtElapsedRealtimeMs - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0L) + 999L) / 1000L
         AlertDialog.Builder(this)
             .setTitle("Review device action")
             .setMessage(
