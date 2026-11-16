@@ -33,7 +33,7 @@ class BridgeServer(
         generation += 1
         val myGeneration = generation
         running = true
-        thread = Thread({
+        val serverThread = Thread({
             var socketServer: ServerSocket? = null
             try {
                 val ownedServer = ServerSocket(8765, 8, InetAddress.getByName("127.0.0.1"))
@@ -95,7 +95,18 @@ class BridgeServer(
                 }
                 try { socketServer?.close() } catch (_: Exception) {}
             }
-        }, "zexa-bridge-server").apply { isDaemon = true; start() }
+        }, "zexa-bridge-server").apply { isDaemon = true }
+        thread = serverThread
+        try {
+            serverThread.start()
+        } catch (_: Exception) {
+            // A failed server-thread launch must not leave the bridge reporting itself running.
+            running = false
+            ready = false
+            server = null
+            thread = null
+            generation += 1L
+        }
     }
 
     @Synchronized
