@@ -203,7 +203,7 @@ class AccessibilityBridge:
                 raise TimeoutError("Android action may have started, but its result is unknown. Do not retry automatically; inspect the device first.")
             if status == "failed":
                 raise RuntimeError("Android device action failed; no success was reported.")
-            if status != "pending_approval" or result.get("ok") is not True:
+            if status not in {"pending_approval", "executing"} or result.get("ok") is not True:
                 raise RuntimeError("Android bridge returned an invalid approval status.")
             time.sleep(0.5)
         raise TimeoutError("Timed out waiting for native Android action approval.")
