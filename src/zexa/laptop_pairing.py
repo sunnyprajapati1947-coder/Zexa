@@ -546,6 +546,24 @@ class LaptopPairingAuthority:
             self._replays.pop(client_id, None)
             return self._clients.pop(client_id, None) is not None
 
+    def revoke_all_clients(self) -> int:
+        """Revoke every paired phone and its persisted replay state."""
+        with self._lock:
+            if self.storage_path is not None:
+                try:
+                    with closing(self._connect_storage()) as db, db:
+                        count = db.execute("SELECT COUNT(*) FROM paired_clients").fetchone()[0]
+                        db.execute("DELETE FROM paired_clients")
+                except sqlite3.Error:
+                    return 0
+                self._clients.clear()
+                self._replays.clear()
+                return int(count)
+            count = len(self._clients)
+            self._clients.clear()
+            self._replays.clear()
+            return count
+
     def list_clients(self) -> list[dict[str, int | str]]:
         with self._lock:
             if self.storage_path is not None:
