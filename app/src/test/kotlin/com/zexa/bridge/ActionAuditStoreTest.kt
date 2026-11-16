@@ -37,6 +37,15 @@ class ActionAuditStoreTest {
     }
 
     @Test
+    fun dispatchedGestureStatusIsAudited() {
+        store.append(ActionAuditEntry("req-gesture", "swipe", "dispatched", 150L))
+        assertEquals(
+            listOf(ActionAuditEntry("req-gesture", "swipe", "dispatched", 150L)),
+            store.list(),
+        )
+    }
+
+    @Test
     fun taskGrantCreationAndRevocationAreAudited() {
         store.append(ActionAuditEntry("grant-123", "task_grant", "created", 100L))
         store.append(ActionAuditEntry("grant-123", "task_grant", "revoked", 200L))
