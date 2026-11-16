@@ -9,6 +9,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -21,6 +23,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
@@ -256,7 +261,9 @@ class ZexaAccessibilityService : AccessibilityService() {
         .put("accessibility_enabled", true)
         .put("bridge_enabled", bridgeServer?.isRunning == true)
 
-    fun screenJson(): JSONObject {
+    fun screenJson(): JSONObject = onServiceThread { buildScreenSnapshot() }
+
+    private fun buildScreenSnapshot(): JSONObject {
         val root = rootInActiveWindow ?: return JSONObject()
             .put("ok", true).put("package", "").put("nodes", JSONArray())
         val nodes = JSONArray()
@@ -309,7 +316,10 @@ class ZexaAccessibilityService : AccessibilityService() {
         return result
     }
 
-    fun perform(action: String, payload: JSONObject): JSONObject {
+    fun perform(action: String, payload: JSONObject): JSONObject =
+        onServiceThread { performOnServiceThread(action, payload) }
+
+    private fun performOnServiceThread(action: String, payload: JSONObject): JSONObject {
         require(BridgeSecurityRules.validActionPayload(action, payload)) {
             "Invalid payload for the requested Android action."
         }
@@ -368,6 +378,35 @@ class ZexaAccessibilityService : AccessibilityService() {
             }
             else -> error("Action is not allowlisted.")
         }
+    }
+
+    /**
+     * AccessibilityService APIs and AccessibilityNodeInfo traversal are executed
+     * on the Android main/service looper even when an HTTP client calls the
+     * bridge from a worker thread.
+     */
+    private fun <T> onServiceThread(block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) return block()
+        val completed = CountDownLatch(1)
+        val outcome = AtomicReference<Result<T>?>(null)
+        val handler = Handler(Looper.getMainLooper())
+        if (!handler.post {
+                outcome.set(runCatching(block))
+                completed.countDown()
+            }
+        ) {
+            error("Could not schedule work on the Android service thread.")
+        }
+        try {
+            if (!completed.await(10, TimeUnit.SECONDS)) {
+                error("Android service thread did not complete the requested operation in time.")
+            }
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw IllegalStateException("Interrupted while waiting for the Android service thread.", interrupted)
+        }
+        return outcome.get()?.getOrThrow()
+            ?: error("Android service thread returned no operation result.")
     }
 
     private fun dispatch(path: Path, duration: Long): JSONObject {
