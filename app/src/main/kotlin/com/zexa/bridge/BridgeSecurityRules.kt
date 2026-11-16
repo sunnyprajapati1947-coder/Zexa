@@ -29,7 +29,8 @@ internal object BridgeSecurityRules {
     }
 
     fun contentLength(raw: String?): Int? {
-        val length = raw?.toIntOrNull() ?: return null
+        if (raw == null || !raw.matches(Regex("^[0-9]{1,5}$"))) return null
+        val length = raw.toIntOrNull() ?: return null
         return length.takeIf { it in 1..16_000 }
     }
 
