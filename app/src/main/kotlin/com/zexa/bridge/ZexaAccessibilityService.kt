@@ -269,8 +269,17 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     fun actionAuditHistory(): List<ActionAuditEntry> = actionAudit.list()
 
-    fun actionResult(requestId: String): JSONObject? =
-        actionResults[requestId]?.let { JSONObject(it.toString()) }
+    @Synchronized
+    fun actionResult(requestId: String): JSONObject? {
+        actionResults[requestId]?.let { return JSONObject(it.toString()) }
+        val pending = actionApprovals.list(SystemClock.elapsedRealtime())
+            .firstOrNull { it.requestId == requestId }
+            ?: return null
+        return JSONObject()
+            .put("ok", true)
+            .put("status", "pending_approval")
+            .put("request_id", pending.requestId)
+    }
 
     @Synchronized
     private fun rememberActionResult(requestId: String, result: JSONObject) {
