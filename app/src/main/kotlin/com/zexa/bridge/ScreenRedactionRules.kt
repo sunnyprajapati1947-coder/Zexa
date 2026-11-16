@@ -30,7 +30,7 @@ internal object ScreenRedactionRules {
         hint: String,
         text: String,
         description: String,
-        sensitiveOtpContext: Boolean = false,
+        sensitiveContext: Boolean = false,
     ): Boolean {
         if (isPassword) return true
         val metadata = listOf(className, viewId, hint, text, description).joinToString(" ")
@@ -42,7 +42,19 @@ internal object ScreenRedactionRules {
                 indianMobile.containsMatchIn(it) || panIdentifier.containsMatchIn(it) }) return true
 
         return (isEditable && oneTimeCode.matches(text)) ||
-            (sensitiveOtpContext && values.any { oneTimeCode.matches(it) })
+            (sensitiveContext && values.any { it.isNotBlank() })
+    }
+
+    fun isSensitiveLabel(
+        className: String,
+        viewId: String,
+        hint: String,
+        text: String,
+        description: String,
+    ): Boolean {
+        val metadata = listOf(className, viewId, hint, text, description).joinToString(" ")
+            .replace(Regex("[^A-Za-z0-9]+"), " ")
+        return sensitiveLabel.containsMatchIn(metadata)
     }
 
     fun isOtpLabel(
