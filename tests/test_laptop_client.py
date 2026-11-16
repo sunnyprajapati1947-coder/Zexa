@@ -159,7 +159,7 @@ class LaptopClientTests(unittest.TestCase):
 
         def fake_request(method, path, body=b"", headers=None):
             calls.append((method, path, json.loads(body.decode("utf-8"))))
-            self.assertRegex(headers["X-Zexa-Timestamp"], r"^\\d{10}$")
+            self.assertRegex(headers["X-Zexa-Timestamp"], r"^[0-9]{10}$")
             self.assertRegex(headers["X-Zexa-Nonce"], r"^[A-Za-z0-9_-]{32}$")
             self.assertRegex(headers["X-Zexa-MAC"], r"^[A-Za-z0-9_-]{43}$")
             self.assertEqual(headers["X-Zexa-Client-ID"], "phone-main")
