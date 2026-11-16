@@ -256,13 +256,11 @@ class LaptopServerTests(unittest.TestCase):
             "Content-Type": "application/json",
             "Content-Length": str(len(body)),
         })
-        with patch("zexa.laptop_server.open_browser_url", return_value={
-            "opened": True, "host": "example.com"
-        }) as open_browser:
+        with patch("zexa.laptop_browser.webbrowser.open", return_value=True) as open_browser:
             status, result = self.request("POST", path, body, headers)
         self.assertEqual(status, 200)
         self.assertEqual(result["result"], {"opened": True, "host": "example.com"})
-        open_browser.assert_called_once_with(url)
+        open_browser.assert_called_once_with(url, new=2, autoraise=True)
         events = self.server.audit.recent(10)
         event = next(item for item in events if item["event_type"] == "laptop_browser_navigation")
         self.assertEqual(event["details"], {"host": "example.com"})
@@ -278,7 +276,7 @@ class LaptopServerTests(unittest.TestCase):
             "Content-Type": "application/json",
             "Content-Length": str(len(body)),
         })
-        with patch("zexa.laptop_server.open_browser_url") as open_browser:
+        with patch("zexa.laptop_browser.webbrowser.open") as open_browser:
             status, _ = self.request("POST", path, body, headers)
         self.assertEqual(status, 401)
         open_browser.assert_not_called()
