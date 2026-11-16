@@ -197,7 +197,7 @@ class AccessibilityBridge:
                 return result
             if status == "denied":
                 raise PermissionError("Android user denied the device action.")
-            if status == "expired_or_unknown":
+            if status in {"expired", "expired_or_unknown"}:
                 raise TimeoutError("Android action approval expired or is no longer available.")
             if status == "execution_unknown":
                 raise TimeoutError("Android action may have started, but its result is unknown. Do not retry automatically; inspect the device first.")
