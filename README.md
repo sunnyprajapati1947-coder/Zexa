@@ -181,6 +181,21 @@ The installer adds tap-to-run shortcuts for voice, continuous voice, queued jobs
 
 The installer creates a service entrypoint tied to this checkout, loads its `.env`, and uses the stable queue database at `~/.zexa/jobs.sqlite3` so scheduled jobs and the service see the same queue regardless of working directory. The worker handles local notifications and low-risk skill drafts through the guarded execution gateway; imported skills and arbitrary commands are never executed. Android notifications require Termux:API permission. Check the service with `sv status zexa-worker`; stop/start with `sv down zexa-worker` / `sv up zexa-worker`; disable service startup with `sv-disable zexa-worker`. Android may still restrict background work; device-reboot startup requires the optional Termux:Boot add-on and device validation.
 
+## Authenticated local Termux control API
+
+The optional local API exposes only a small allowlisted surface: authenticated health and job-list reads, plus queuing a local notification. It cannot execute shell commands, run arbitrary skills, access the network, or approve Android actions. It binds exclusively to IPv4 loopback (`127.0.0.1`); other bind addresses are rejected.
+
+Generate a private token locally and keep it in `.env` (never commit it):
+
+    python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+Set `ZEXA_API_TOKEN` to the generated value, then start the server in a Termux session:
+
+    zexa api
+    zexa api --port 8765
+
+Requests require `Authorization: Bearer <token>`. Supported routes are `GET /v1/health`, `GET /v1/jobs`, and `POST /v1/notifications` with JSON fields `title`, `message`, and optional `after_seconds` (0–604800). The notification route only enqueues a notification job; the existing worker delivers it. The API is opt-in and is not installed as a boot service. Stop it with Ctrl+C. Do not expose this API through a tunnel, reverse proxy, or LAN listener.
+
 ## Existing Termux commands
 
     zexa ask Explain what you can do
