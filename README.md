@@ -93,7 +93,7 @@ Commands:
 
 The native Device screen can create and revoke bounded navigation grants. Grants are limited to swipe, scroll, back, home, and installed-app launch; they expire after five minutes and allow at most 30 actions. Coordinate taps, text entry, external URL opening, and consequential actions remain on exact-action approval. Grants are in-memory and are cleared on AccessibilityService interruption, disable, reconnect, or destruction.
 
-The Python client requires its CLI approval callback before sending a request. POST `/v1/action` then returns HTTP 202 with a request ID; GET `/v1/action/{request_id}` reports `pending_approval`, `completed`, `failed`, `denied`, or `expired_or_unknown`. The user must open Zexa → Device → Refresh pending approvals and inspect the exact action and payload before choosing **Approve & execute**. Pending requests expire after 60 seconds. No request executes merely because it has a valid bearer token. The native approval flow is implemented but still needs Android CI and physical-device validation. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
+The Python client requires its CLI approval callback before sending a request. POST `/v1/action` then returns HTTP 202 with a request ID; GET `/v1/action/{request_id}` reports `pending_approval`, `completed`, `failed`, `denied`, or `expired_or_unknown`. The user must open Zexa → Device → Refresh pending approvals and inspect the exact action and payload before choosing **Approve & execute**. Pending requests expire after 60 seconds. No request executes merely because it has a valid bearer token. The native approval flow is implemented and Android CI passes; physical-device validation is still required. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
 
 ## Human Hand bridge protocol
 
@@ -102,8 +102,7 @@ The Android companion app in `app/` exposes these authenticated local endpoints:
 - GET /v1/status — bridge and AccessibilityService status.
 - GET /v1/screen — structured, read-only accessibility snapshot with conservative sensitive-field redaction.
 - GET /v1/grants — list active task grants.
-- POST /v1/action — one exact-action-approved action, or one action matched to an existing native task grant.
-- POST /v1/action — one allowlisted action: tap, swipe, scroll, back, home, input_text, or launch_app.
+- POST /v1/action — one allowlisted action (tap, swipe, scroll, back, home, input_text, launch_app, or open_url), either under exact-action approval or a matching native task grant for eligible navigation actions.
 
 The app must bind only to loopback, generate a per-install token, validate all inputs, and require the user to enable Accessibility manually. Do not treat webpage or screen text as instructions. Messages, publishing, account changes, payments, deletion, and other consequential actions must have a separate explicit confirmation step.
 
