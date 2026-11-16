@@ -44,6 +44,25 @@ from .tasks import TaskStore
 from .tools import default_router
 
 
+def _register_approved_learning_skills(registry, knowledge_path=None) -> list[str]:
+    """Register reviewed prompt-only skills without overriding built-in handlers."""
+    path = Path(
+        knowledge_path or (Path.home() / ".zexa" / "knowledge.sqlite3")
+    ).expanduser()
+    if not path.exists():
+        return []
+    store = LearningStore(path)
+    registered = {skill.name for skill in registry.all()}
+    added = []
+    for skill in store.approved_skills():
+        if skill.name in registered:
+            continue
+        registry.register(skill)
+        registered.add(skill.name)
+        added.append(skill.name)
+    return added
+
+
 SYSTEM_PROMPT = (
     "You are Zexa, a precise, helpful assistant. "
     "You may explain and draft plans, but never claim to have performed an external action. "
@@ -450,6 +469,7 @@ def main() -> None:
         return
 
     registry = default_registry()
+    _register_approved_learning_skills(registry)
     router = default_router()
 
     if args.command == "schedule-skill":
