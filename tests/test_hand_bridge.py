@@ -264,9 +264,6 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
             bridge.perform_granted("back", {}, "research-1", "grant-123")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 class AccessibilityBridgeConfigurationTests(unittest.TestCase):
     def test_token_matches_android_64_character_lowercase_hex_contract(self):
         bridge = AccessibilityBridge("a" * 64)
@@ -289,3 +286,5 @@ class AccessibilityBridgeConfigurationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     AccessibilityBridge("b" * 64, base_url=url)
 
+if __name__ == "__main__":
+    unittest.main()
