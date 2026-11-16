@@ -153,7 +153,7 @@ def main() -> None:
     bridge_sub.add_parser("status", help="Read bridge status")
     bridge_sub.add_parser("screen", help="Read the current accessibility snapshot")
     bridge_action = bridge_sub.add_parser("action", help="Perform one approved Android action")
-    bridge_action.add_argument("action", choices=["tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"])
+    bridge_action.add_argument("action", choices=["tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url"])
     bridge_action.add_argument("payload", help="Action payload as a JSON object")
 
     args = parser.parse_args()
