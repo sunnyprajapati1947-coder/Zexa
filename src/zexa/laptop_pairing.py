@@ -325,6 +325,7 @@ class LaptopPairingAuthority:
                 paired_at_epoch=int(self._wall_clock()),
                 permissions=selected_permissions,
             )
+            self._persist_client(record)
             self._clients[client_id] = record
             self._replays[client_id] = {}
             self._offer = None
@@ -381,12 +382,34 @@ class LaptopPairingAuthority:
             expected = hmac.new(record.session_key, message, hashlib.sha256).digest()
             if not hmac.compare_digest(expected, supplied_mac):
                 return False
+            canonical_nonce = _b64encode(nonce)
+            if self.storage_path is not None:
+                try:
+                    with self._connect_storage() as db:
+                        db.execute(
+                            "DELETE FROM replay_nonces WHERE seen_at_epoch < ?",
+                            (now - 60,),
+                        )
+                        count = db.execute(
+                            "SELECT COUNT(*) FROM replay_nonces WHERE client_id=?",
+                            (client_id,),
+                        ).fetchone()[0]
+                        if count >= _MAX_REPLAY_ENTRIES:
+                            return False
+                        db.execute(
+                            "INSERT INTO replay_nonces(client_id, nonce, seen_at_epoch) VALUES (?, ?, ?)",
+                            (client_id, canonical_nonce, now),
+                        )
+                    return True
+                except sqlite3.IntegrityError:
+                    return False
+                except sqlite3.Error:
+                    return False
             replay = self._replays.setdefault(client_id, {})
             current = self._monotonic()
             expired = [item for item, seen_at in replay.items() if current - seen_at > 60]
             for item in expired:
                 replay.pop(item, None)
-            canonical_nonce = _b64encode(nonce)
             if canonical_nonce in replay or len(replay) >= _MAX_REPLAY_ENTRIES:
                 return False
             replay[canonical_nonce] = current
@@ -433,6 +456,18 @@ class LaptopPairingAuthority:
 
     def revoke_client(self, client_id: str) -> bool:
         with self._lock:
+            if self.storage_path is not None:
+                try:
+                    with self._connect_storage() as db:
+                        cursor = db.execute(
+                            "DELETE FROM paired_clients WHERE client_id=?", (client_id,)
+                        )
+                    removed = cursor.rowcount > 0
+                except sqlite3.Error:
+                    return False
+                self._replays.pop(client_id, None)
+                self._clients.pop(client_id, None)
+                return removed
             self._replays.pop(client_id, None)
             return self._clients.pop(client_id, None) is not None
 
