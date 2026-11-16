@@ -213,8 +213,8 @@ def main() -> None:
         queue = JobQueue()
         queue.recover_stale()
         mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
-        config = get_config() if mode == "online" or (
-            mode != "offline" and os.getenv("GROQ_API_KEY", "").strip()
+        config = get_config() if mode in {"online", "groq"} or (
+            mode == "auto" and os.getenv("GROQ_API_KEY", "").strip()
         ) else None
         brain = build_brain_router(config, mode)
         explicit_permissions = {
