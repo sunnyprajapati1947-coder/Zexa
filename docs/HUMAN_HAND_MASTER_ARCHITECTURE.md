@@ -83,11 +83,11 @@ Learning means building retrievable knowledge and reviewed workflows. It does **
 
 ### Implemented learning foundation (current branch)
 - `LearningStore` persists local knowledge notes and skill contracts in SQLite with source labels, HTTP(S) source references, content SHA-256 digests, timestamps, and explicit review states.
-- `LearningService.research()` summarizes public search-result snippets and saves the result as a draft with numbered source provenance; it does not claim to have opened full pages.
+- `LearningService.research()` summarizes public search-result snippets with source provenance. `LearningService.fetch_page()` can fetch one public HTTPS page using verified public DNS targets, revalidated redirects, a 1 MB response limit, HTML script/style exclusion, and no page-script execution.
 - `LearningService.import_text_file()` studies UTF-8 local text files up to 1 MB and saves a draft summary; imported text is treated as untrusted data and never executed.
 - `LearningService.draft_skill()` requires an approved note, validates a typed skill contract, and stores it disabled with `review_required` status.
-- Termux CLI commands are available as `zexa learn research`, `import`, `list`, `show`, `search`, `review`, `draft-skill`, `skill-drafts`, and `review-skill`.
-- `LearningAwareBrain` retrieves relevant approved notes into ordinary chat, voice, planning, and agent requests as bounded untrusted reference context; draft/rejected notes are excluded. Reviewing a skill contract does not enable execution. Skill activation, version history, document formats beyond UTF-8 text, full-page crawling, and model-weight training are not implemented by this foundation.
+- Termux CLI commands are available as `zexa learn research`, `fetch`, `import`, `list`, `show`, `search`, `review`, `draft-skill`, `skill-drafts`, and `review-skill`.
+- `LearningAwareBrain` retrieves relevant approved notes into ordinary chat, voice, planning, and agent requests as bounded untrusted reference context; draft/rejected notes are excluded. Reviewing a skill contract does not enable execution. Skill activation, version history, document formats beyond UTF-8 text, multi-page crawling, and model-weight training are not implemented by this foundation.
 
 ## 5. Permission and approval model
 
@@ -172,7 +172,7 @@ A feature is not "done" because it appears in a catalogue or UI. It must have:
 
 ## 10. Current implementation boundary
 
-At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. A TLS-pinned, private-IPv4 laptop workspace channel now supports explicit pairing, scoped listing/reading, and optional exact-confirmed text writes. General browser automation, full-page research, production app connectors, remote laptop app/process control, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
+At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. A TLS-pinned, private-IPv4 laptop workspace channel now supports explicit pairing, scoped listing/reading, and optional exact-confirmed text writes. General browser automation, multi-page crawling, production app connectors, remote laptop app/process control, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
 
 ### Laptop workspace and remote pairing foundation
 - LaptopWorkspace constrains file listing, UTF-8 reads, and writes to one existing user-selected root directory.
