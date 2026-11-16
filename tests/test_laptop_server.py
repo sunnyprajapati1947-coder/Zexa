@@ -149,8 +149,9 @@ class LaptopServerTests(unittest.TestCase):
             Path(command[command.index("-keyout") + 1]).write_text("private-key", encoding="ascii")
             Path(command[command.index("-out") + 1]).write_text(pem, encoding="ascii")
 
-        with patch("zexa.laptop_server.shutil.which", return_value="/usr/bin/openssl"), \\
-             patch("zexa.laptop_server.subprocess.run", side_effect=fake_run):
+        with patch("zexa.laptop_server.shutil.which", return_value="/usr/bin/openssl"):
+            with patch("zexa.laptop_server.subprocess.run", side_effect=fake_run):
+                fingerprint = generate_laptop_certificate("192.168.1.20", cert, key)
             fingerprint = generate_laptop_certificate("192.168.1.20", cert, key)
 
         self.assertEqual(len(fingerprint), 64)
