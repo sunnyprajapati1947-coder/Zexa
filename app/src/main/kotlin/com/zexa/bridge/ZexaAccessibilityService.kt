@@ -230,6 +230,9 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     fun perform(action: String, payload: JSONObject): JSONObject {
+        require(BridgeSecurityRules.validActionPayload(action, payload)) {
+            "Invalid payload for the requested Android action."
+        }
         return when (action) {
             "tap" -> {
                 val x = payload.optDouble("x", Double.NaN)
