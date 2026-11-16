@@ -9,6 +9,9 @@ import java.net.URI
  * This class does not perform Android actions or access device state.
  */
 internal object BridgeSecurityRules {
+    fun validTaskId(taskId: String): Boolean =
+        taskId.matches(Regex("^[A-Za-z0-9._:-]{1,64}$"))
+
     fun validBridgeToken(value: String): Boolean =
         value.matches(Regex("^[0-9a-f]{64}$"))
 
