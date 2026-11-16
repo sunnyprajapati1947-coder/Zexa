@@ -167,6 +167,29 @@ A feature is not "done" because it appears in a catalogue or UI. It must have:
 At the architecture baseline, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. Laptop pairing, general browser automation, full-page research, production app connectors, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
 
 
+## 12. Security without blocking useful work
+
+Security is a set of proportionate controls, not a blanket lock on every action. Zexa must remain useful and responsive while protecting private data and consequential changes.
+
+### User-facing autonomy tiers
+
+- **Observe:** status, help, public research, and user-requested reads from already granted folders can proceed without repeated prompts. Sensitive screen fields remain redacted.
+- **Assist:** opening an app, navigating, scrolling, and other reversible UI actions can run under a clearly visible, user-started task grant. The grant is scoped to one device, one task, an explicit action set, and a short expiry; the user can pause or revoke it at any time. Do not ask for a fresh confirmation for every tap in that approved task.
+- **Change:** writing or editing local files requires a scoped folder and a preview. A task grant may cover a batch of reversible edits within that folder, but must not expand to other folders or destructive operations.
+- **Commit externally:** sending, publishing, submitting, sharing, purchases, account/security changes, and deletion require a fresh confirmation showing the exact destination and content/effect. A task grant cannot silently approve these.
+- **Restricted:** credentials, hidden recording, permission bypass, stealth control, and arbitrary remote execution are not available capabilities.
+
+### Engineering rules
+
+- Prefer one clear approval at the start of a bounded low-risk task over repeated approval dialogs for each navigation step.
+- Approval must be revocable and scoped; expiry, device change, capability change, or material task change invalidates it.
+- Keep a visible activity indicator and concise audit history, but do not log private screen contents or text payloads by default.
+- When a capability is unavailable, explain the exact missing permission, adapter, or platform limitation and offer a supported alternative. Do not fail the whole task if an independent safe step can still complete.
+- Never claim a task completed until the adapter returns verifiable success. Report partial completion and skipped steps separately.
+- Security controls must be tested for both sides: unauthorized actions are blocked, while authorized routine tasks complete without unnecessary prompts.
+
+**Current implementation note:** the native Android bridge currently asks for approval per queued action. This is intentionally conservative during the initial validation phase, but it is not the desired final interaction model for routine navigation. A bounded, revocable task grant for low-risk actions is a planned usability improvement and must be implemented with tests before it is enabled. Consequential actions keep exact-action approval.
+
 ## 11. Current Human Hand implementation progress
 
 The shared capability controller is now present in `src/zexa/capabilities.py`. It owns trusted capability definitions, platform labels, permission names, risk levels, typed JSON input/output contracts, bounded payload sizes, and dispatch to application-registered handlers. It delegates authorization, one-use approvals, and audit events to the existing `ExecutionGateway`.
