@@ -70,26 +70,26 @@ class BrainRouterTests(unittest.TestCase):
 class AccessibilityBridgeTests(unittest.TestCase):
     def test_rejects_non_loopback_urls(self):
         with self.assertRaisesRegex(ValueError, "loopback"):
-            AccessibilityBridge("a" * 32, "http://example.com:8765")
+            AccessibilityBridge("a" * 64, "http://example.com:8765")
 
     def test_requires_token(self):
         with self.assertRaises(ValueError):
             AccessibilityBridge("short")
 
     def test_action_requires_explicit_approval(self):
-        bridge = AccessibilityBridge("t" * 32)
+        bridge = AccessibilityBridge("a" * 64)
         with patch.object(bridge, "_request") as request:
             with self.assertRaises(PermissionError):
                 bridge.perform("tap", {"x": 10, "y": 20})
             request.assert_not_called()
 
     def test_rejects_unknown_actions(self):
-        bridge = AccessibilityBridge("t" * 32)
+        bridge = AccessibilityBridge("a" * 64)
         with self.assertRaisesRegex(ValueError, "allowlisted"):
             bridge.perform("run_shell", {"command": "whoami"}, lambda *_: True)
 
     def test_approved_action_uses_fixed_endpoint_and_waits_for_native_approval(self):
-        bridge = AccessibilityBridge("t" * 32)
+        bridge = AccessibilityBridge("a" * 64)
         responses = iter([
             {"ok": True, "status": "pending_approval", "request_id": "native-request"},
             {"ok": True, "status": "completed", "request_id": "native-request"},
