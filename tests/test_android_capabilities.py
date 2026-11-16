@@ -21,7 +21,7 @@ class AndroidCapabilityTests(unittest.TestCase):
 
     def test_grantable_actions_are_a_subset_of_supported_actions(self):
         self.assertTrue(ANDROID_GRANTABLE_ACTIONS <= ANDROID_ACTIONS)
-        self.assertIn("open_url", ANDROID_GRANTABLE_ACTIONS)
+        self.assertNotIn("open_url", ANDROID_GRANTABLE_ACTIONS)
         self.assertNotIn("tap", ANDROID_GRANTABLE_ACTIONS)
         self.assertNotIn("input_text", ANDROID_GRANTABLE_ACTIONS)
 
