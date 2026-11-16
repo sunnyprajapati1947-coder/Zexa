@@ -138,7 +138,11 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
 
     def test_task_grant_cannot_run_taps_or_text_entry(self):
         bridge = self.make_bridge()
-        for action, payload in [("tap", {"x": 1, "y": 1}), ("input_text", {"text": "hello"})]:
+        for action, payload in [
+            ("tap", {"x": 1, "y": 1}),
+            ("input_text", {"text": "hello"}),
+            ("open_url", {"url": "https://example.com"}),
+        ]:
             with self.subTest(action=action), self.assertRaises(ValueError):
                 bridge.perform_granted(action, payload, "research-1", "grant-123")
 
