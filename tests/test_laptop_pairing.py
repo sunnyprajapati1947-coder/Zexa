@@ -201,12 +201,27 @@ class LaptopPairingTests(unittest.TestCase):
                 "phone-persist", "GET", "/v1/workspace/list", b"", headers
             ))
             self.assertTrue(third.revoke_client("phone-persist"))
+            self.assertEqual(third.list_clients(), [])
+            expanded_offer = third.begin_pairing(permissions=(
+                "laptop.workspace.list", "laptop.workspace.read", "laptop.apps.launch"
+            ))
+            expanded_nonce = encoded(b"r" * 32)
+            expanded_proof, _ = third.make_client_proof(
+                expanded_offer.pairing_code, expanded_offer.salt_b64,
+                expanded_offer.server_nonce_b64, "phone-persist", expanded_nonce,
+                iterations=expanded_offer.iterations, permissions=expanded_offer.permissions,
+            )
+            expanded_record = third.complete_pairing(
+                "phone-persist", expanded_nonce, expanded_proof
+            )
+            self.assertIn("laptop.apps.launch", expanded_record.permissions)
             fourth = LaptopPairingAuthority(
                 iterations=100_000,
                 wall_clock=lambda: self.wall_now,
                 storage_path=database,
             )
-            self.assertEqual(fourth.list_clients(), [])
+            self.assertEqual(fourth.list_clients()[0]["client_id"], "phone-persist")
+            self.assertIn("laptop.apps.launch", fourth.list_clients()[0]["permissions"])
             if os.name != "nt":
                 self.assertEqual(database.stat().st_mode & 0o777, 0o600)
 
