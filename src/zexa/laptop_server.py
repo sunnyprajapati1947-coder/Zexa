@@ -8,6 +8,10 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import ssl
@@ -26,6 +30,51 @@ def certificate_fingerprint(cert_file: str | Path) -> str:
     pem = path.read_text(encoding="ascii")
     der = ssl.PEM_cert_to_DER_cert(pem)
     return hashlib.sha256(der).hexdigest()
+
+
+def generate_laptop_certificate(
+    host: str,
+    certificate_file: str | Path,
+    private_key_file: str | Path,
+) -> str:
+    """Generate a self-signed TLS certificate pinned by fingerprint on the phone."""
+    host = _private_ipv4(host)
+    cert = Path(certificate_file).expanduser()
+    key = Path(private_key_file).expanduser()
+    if cert.resolve() == key.resolve() or cert.parent.resolve() != key.parent.resolve():
+        raise ValueError("TLS certificate and private key must be different files in the same directory.")
+    if cert.exists() or key.exists():
+        raise FileExistsError("TLS certificate or private key already exists; refusing to overwrite.")
+    openssl = shutil.which("openssl")
+    if not openssl:
+        raise RuntimeError("OpenSSL is required to generate the laptop TLS certificate.")
+    cert.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        os.chmod(cert.parent, 0o700)
+    except OSError:
+        pass
+    with tempfile.TemporaryDirectory(prefix=".zexa-tls-", dir=cert.parent) as temp_dir:
+        temp_cert = Path(temp_dir) / "laptop.crt"
+        temp_key = Path(temp_dir) / "laptop.key"
+        command = [
+            openssl, "req", "-x509", "-newkey", "rsa:2048", "-sha256", "-nodes",
+            "-keyout", str(temp_key), "-out", str(temp_cert), "-days", "365",
+            "-subj", "/CN=Zexa-Laptop-Hand",
+            "-addext", f"subjectAltName=IP:{host}",
+        ]
+        try:
+            subprocess.run(
+                command, check=True, capture_output=True, text=True, timeout=45,
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or "OpenSSL certificate generation failed.")[-500:]
+            raise RuntimeError(detail) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("OpenSSL certificate generation timed out.") from exc
+        os.chmod(temp_key, 0o600)
+        os.replace(temp_key, key)
+        os.replace(temp_cert, cert)
+    return certificate_fingerprint(cert)
 
 
 def _private_ipv4(host: str) -> str:
