@@ -159,9 +159,12 @@ class LaptopClientTests(unittest.TestCase):
 
         def fake_request(method, path, body=b"", headers=None):
             calls.append((method, path, json.loads(body.decode("utf-8"))))
-            self.assertTrue(self.authority.verify_scoped_request(
-                "phone-main", "laptop.browser.open", method, path, body, headers
-            ))
+            expected_headers = LaptopPairingAuthority.sign_request(
+                "A" * 43, method, path, body
+            )
+            for key in ("X-Zexa-Timestamp", "X-Zexa-Nonce", "X-Zexa-MAC"):
+                self.assertEqual(headers[key], expected_headers[key])
+            self.assertEqual(headers["X-Zexa-Client-ID"], "phone-main")
             return 200, {"ok": True, "result": {"opened": True, "host": "example.com"}}
 
         client._request = fake_request
