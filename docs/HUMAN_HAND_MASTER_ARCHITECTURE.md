@@ -174,7 +174,7 @@ Security is a set of proportionate controls, not a blanket lock on every action.
 ### User-facing autonomy tiers
 
 - **Observe:** status, help, public research, and user-requested reads from already granted folders can proceed without repeated prompts. Sensitive screen fields remain redacted.
-- **Assist:** app launch, swipe, scroll, back, and home may run under a clearly visible, user-started task grant. The grant is scoped to one device, one task, an explicit allowlisted action set, a short expiry, and a bounded operation count; the user can pause or revoke it at any time. Coordinate-based taps and text entry are excluded because their target/effect cannot be reliably classified from coordinates alone.
+- **Assist:** app launch, swipe, scroll, back, and home may run under a clearly visible, user-started task grant. The grant is scoped to one device, one task, an explicit allowlisted action set, a short expiry, and a bounded operation count; the user can revoke it at any time. Coordinate-based taps and text entry are excluded because their target/effect cannot be reliably classified from coordinates alone.
 - **Change:** writing or editing local files requires a scoped folder and a preview. A task grant may cover a batch of reversible edits within that folder, but must not expand to other folders or destructive operations.
 - **Commit externally:** sending, publishing, submitting, sharing, purchases, account/security changes, and deletion require a fresh confirmation showing the exact destination and content/effect. A task grant cannot silently approve these.
 - **Restricted:** credentials, hidden recording, permission bypass, stealth control, and arbitrary remote execution are not available capabilities.
