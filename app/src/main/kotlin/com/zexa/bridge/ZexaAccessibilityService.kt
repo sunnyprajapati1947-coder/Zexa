@@ -21,7 +21,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -33,7 +33,8 @@ class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
     private val actionApprovals = ActionApprovalRegistry()
     private val taskActionGrants = TaskActionGrantRegistry()
-    private val actionResults = ConcurrentHashMap<String, JSONObject>()
+    // All reads and writes are guarded by the service monitor; insertion order gives FIFO eviction.
+    private val actionResults = LinkedHashMap<String, JSONObject>()
     private val actionAudit by lazy {
         val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
         ActionAuditStore(
@@ -307,7 +308,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     private fun rememberActionResult(requestId: String, result: JSONObject) {
         actionResults[requestId] = JSONObject(result.toString())
         while (actionResults.size > MAX_ACTION_RESULTS) {
-            val oldest = actionResults.keys().nextElement()
+            val oldest = actionResults.entries.iterator().next().key
             actionResults.remove(oldest)
         }
     }
