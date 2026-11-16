@@ -51,6 +51,16 @@ class ScreenRedactionRulesTest {
     }
 
     @Test
+    fun additionalFinancialAndIdentityLabelsAreRedacted() {
+        assertTrue(check(hint = "Enter IFSC code", isEditable = true, text = "ABCD0123456"))
+        assertTrue(check(viewId = "bank:iban_field", text = "GB82WEST12345698765432"))
+        assertTrue(check(description = "Date of birth"))
+        assertTrue(check(text = "UPI ID"))
+        assertTrue(check(hint = "Card expiry date"))
+        assertTrue(check(text = "GSTIN"))
+    }
+
+    @Test
     fun otpValuesInSiblingNodesAreRedactedWhenLabelIsPresent() {
         assertTrue(ScreenRedactionRules.isOtpLabel(
             className = "android.widget.TextView",
