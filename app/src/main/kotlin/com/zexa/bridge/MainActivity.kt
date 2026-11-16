@@ -1214,7 +1214,6 @@ class MainActivity : Activity() {
             "back" to "Back",
             "home" to "Home",
             "launch_app" to "Open installed app",
-            "open_url" to "Open validated web URL",
         ).forEach { (action, label) ->
             val check = CheckBox(this).apply {
                 text = label
