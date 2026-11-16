@@ -295,6 +295,22 @@ class LaptopPairingAuthority:
             replay[canonical_nonce] = current
             return True
 
+    def verify_scoped_request(
+        self,
+        client_id: str,
+        permission: str,
+        method: str,
+        path: str,
+        body: bytes,
+        headers: dict[str, str],
+    ) -> bool:
+        """Authenticate a request and enforce the capability scope selected at pairing."""
+        with self._lock:
+            record = self._clients.get(client_id)
+            if record is None or not record.allows(permission):
+                return False
+            return self.verify_request(client_id, method, path, body, headers)
+
     @staticmethod
     def _validate_request_fields(method: str, path: str, body: bytes, timestamp: int) -> None:
         if (
