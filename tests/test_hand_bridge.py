@@ -266,3 +266,26 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class AccessibilityBridgeConfigurationTests(unittest.TestCase):
+    def test_token_matches_android_64_character_lowercase_hex_contract(self):
+        bridge = AccessibilityBridge("a" * 64)
+        self.assertEqual(len(bridge.token), 64)
+        for invalid in ("a" * 63, "A" * 64, "g" * 64, "a" * 128):
+            with self.subTest(token=invalid):
+                with self.assertRaises(ValueError):
+                    AccessibilityBridge(invalid)
+
+    def test_base_url_matches_android_ipv4_loopback_listener(self):
+        bridge = AccessibilityBridge("b" * 64, base_url="http://127.0.0.1:8765")
+        self.assertEqual(bridge.base_url, "http://127.0.0.1:8765")
+        for url in (
+            "http://localhost:8765",
+            "http://[::1]:8765",
+            "http://192.168.1.5:8765",
+            "https://127.0.0.1:8765",
+        ):
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    AccessibilityBridge("b" * 64, base_url=url)
+
