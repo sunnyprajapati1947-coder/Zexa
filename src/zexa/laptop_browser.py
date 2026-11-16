@@ -39,7 +39,16 @@ def validate_browser_url(value: str) -> str:
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
-        pass
+        labels = host.split(".")
+        if (
+            len(host) > 253 or any(
+                not label or len(label) > 63 or label.startswith("-")
+                or label.endswith("-")
+                or any(char not in "abcdefghijklmnopqrstuvwxyz0123456789-" for char in label)
+                for label in labels
+            )
+        ):
+            raise ValueError("Browser URL hostname is invalid.")
     else:
         if not address.is_global:
             raise ValueError("Private, local, and reserved browser destinations are not supported.")
