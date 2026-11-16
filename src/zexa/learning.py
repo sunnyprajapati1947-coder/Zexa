@@ -48,6 +48,10 @@ class SkillDraft:
     input_schema: dict[str, str]
     output_schema: dict[str, str]
     risk_level: str
+    required_permissions: tuple[str, ...]
+    dependencies: tuple[str, ...]
+    timeout_seconds: int
+    resource_budget: dict[str, int]
     status: str
     created_at: str
     updated_at: str
@@ -93,12 +97,28 @@ class LearningStore:
                     input_schema_json TEXT NOT NULL,
                     output_schema_json TEXT NOT NULL,
                     risk_level TEXT NOT NULL,
+                    required_permissions_json TEXT NOT NULL DEFAULT '[]',
+                    dependencies_json TEXT NOT NULL DEFAULT '[]',
+                    timeout_seconds INTEGER NOT NULL DEFAULT 30,
+                    resource_budget_json TEXT NOT NULL DEFAULT '{}',
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     UNIQUE(note_id, name)
                 )
             """)
+            draft_columns = {
+                row["name"] for row in db.execute("PRAGMA table_info(skill_drafts)").fetchall()
+            }
+            migrations = {
+                "required_permissions_json": "TEXT NOT NULL DEFAULT '[]'",
+                "dependencies_json": "TEXT NOT NULL DEFAULT '[]'",
+                "timeout_seconds": "INTEGER NOT NULL DEFAULT 30",
+                "resource_budget_json": "TEXT NOT NULL DEFAULT '{}'",
+            }
+            for column, definition in migrations.items():
+                if column not in draft_columns:
+                    db.execute(f"ALTER TABLE skill_drafts ADD COLUMN {column} {definition}")
             db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_knowledge_status_updated "
                 "ON knowledge_notes(status, updated_at)"
@@ -266,13 +286,20 @@ class LearningStore:
             cursor = db.execute(
                 """INSERT INTO skill_drafts
                    (note_id, name, description, system_instruction, input_schema_json,
-                    output_schema_json, risk_level, status, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, 'review_required', ?, ?)""",
+                    output_schema_json, risk_level, required_permissions_json,
+                    dependencies_json, timeout_seconds, resource_budget_json,
+                    status, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'review_required', ?, ?)""",
                 (
                     note_id, skill.name, skill.description, skill.system_instruction,
                     json.dumps(skill.input_schema, ensure_ascii=False),
                     json.dumps(skill.output_schema, ensure_ascii=False),
-                    skill.risk_level, now, now,
+                    skill.risk_level,
+                    json.dumps(list(skill.required_permissions), ensure_ascii=False),
+                    json.dumps(list(skill.dependencies), ensure_ascii=False),
+                    skill.timeout_seconds,
+                    json.dumps(skill.resource_budget, ensure_ascii=False),
+                    now, now,
                 ),
             )
             return int(cursor.lastrowid)
@@ -294,6 +321,10 @@ class LearningStore:
                 input_schema=json.loads(row["input_schema_json"]),
                 output_schema=json.loads(row["output_schema_json"]),
                 risk_level=row["risk_level"],
+                required_permissions=tuple(json.loads(row["required_permissions_json"])),
+                dependencies=tuple(json.loads(row["dependencies_json"])),
+                timeout_seconds=int(row["timeout_seconds"]),
+                resource_budget=json.loads(row["resource_budget_json"]),
                 status=row["status"],
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
