@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import Mock
 
 from zexa.android_capabilities import ANDROID_ACTIONS, build_android_capabilities
@@ -10,6 +12,13 @@ from zexa.policy import PermissionPolicy
 
 
 class AndroidCapabilityTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.audit = AuditLog(Path(self.temp.name) / "audit.sqlite3")
+
+    def tearDown(self):
+        self.temp.cleanup()
+
     def test_only_explicitly_allowlisted_actions_are_registered(self):
         bridge = Mock(spec=AccessibilityBridge)
         capabilities = build_android_capabilities(bridge, ["back", "tap"])
@@ -30,7 +39,7 @@ class AndroidCapabilityTests(unittest.TestCase):
         specs = build_android_capabilities(bridge, ["back"])
         policy = PermissionPolicy({"android.back"})
         controller = CapabilityController(
-            policy, ApprovalManager(), AuditLog(":memory:"), specs,
+            policy, ApprovalManager(), self.audit, specs,
         )
         with self.assertRaises(PermissionError):
             controller.execute("android.back", {"payload": {}})
