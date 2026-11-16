@@ -1152,7 +1152,7 @@ class MainActivity : Activity() {
         fun refreshScreenAccessUi() {
             val allowed = preferences().getBoolean("screen_access_enabled", false)
             screenAccessStatus.text = if (allowed) {
-                "Screen data access is ON. The local bridge can read visible, non-password screen text."
+                "Screen data access is ON. The local bridge may read visible screen text and accessibility metadata. Common sensitive patterns are heuristically redacted, but detection is not guaranteed; review snapshots before sharing."
             } else {
                 "Screen data access is OFF. Visible screen text is not exposed to the local bridge."
             }
