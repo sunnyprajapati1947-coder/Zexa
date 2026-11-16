@@ -295,6 +295,11 @@ def main() -> None:
         elif args.laptop_command == "read":
             print(json.dumps(client.read_text(args.path), ensure_ascii=False, indent=2))
         elif args.laptop_command == "write":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None or "laptop.workspace.write" not in pairing["permissions"]:
+                raise PermissionError(
+                    "This laptop pairing is read-only. Restart the laptop server with --allow-write and pair again."
+                )
             source_path = Path(args.source).expanduser()
             if not source_path.is_file():
                 raise FileNotFoundError("Local source text file does not exist.")
