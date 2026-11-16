@@ -353,6 +353,7 @@ class LaptopAgentServer:
         workspace: LaptopWorkspace,
         authority: LaptopPairingAuthority | None = None,
         audit_path: str | Path | None = None,
+        pairing_path: str | Path | None = None,
     ) -> None:
         host = _private_ipv4(host)
         if type(port) is not int or not 1024 <= port <= 65535:
@@ -369,7 +370,7 @@ class LaptopAgentServer:
             raise FileNotFoundError("TLS certificate and private key must be bounded regular files, not symlinks.")
         if os.name != "nt" and stat.S_IMODE(key.stat().st_mode) & 0o077:
             raise PermissionError("Laptop TLS private key permissions must be owner-only (0600).")
-        self.authority = authority or LaptopPairingAuthority()
+        self.authority = authority or LaptopPairingAuthority(storage_path=pairing_path)
         audit_file = Path(audit_path or (Path.home() / ".zexa" / "laptop_audit.sqlite3")).expanduser()
         audit_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
