@@ -151,8 +151,38 @@ class ResearchTests(unittest.TestCase):
         self.assertIn("Safe learning content.", page.text)
         self.assertEqual(len(page.content_sha256), 64)
         self.assertIn(b"GET /guide HTTP/1.1", connection.request)
+        self.assertIn(b"\\r\\nHost: example.com\\r\\n", connection.request)
+        self.assertIn(b"\\r\\n\\r\\n", connection.request)
         self.assertTrue(connection.closed)
         self.assertTrue(response.closed)
+
+    def test_fetch_public_page_brackets_ipv6_host_header(self):
+        class FakeSocket:
+            def __init__(self):
+                self.request = b""
+            def sendall(self, data):
+                self.request = data
+            def close(self):
+                return None
+        class Response:
+            status = 200
+            def begin(self):
+                return None
+            def getheader(self, name, default=""):
+                return "text/plain" if name == "Content-Type" else default
+            def read(self, limit):
+                return b"IPv6 page text"
+            def close(self):
+                return None
+        connection = FakeSocket()
+        with (
+            patch("zexa.research._connect_public_https", return_value=connection),
+            patch("zexa.research.http.client.HTTPResponse", return_value=Response()),
+        ):
+            page = fetch_public_page("https://[2606:4700:4700::1111]/guide")
+        self.assertIn("IPv6 page text", page.text)
+        self.assertIn(b"Host: [2606:4700:4700::1111]
+", connection.request)
 
     def test_fetch_public_page_revalidates_redirect_target(self):
         class FakeSocket:
