@@ -58,7 +58,21 @@ class BridgeServer(
                         try { socket.close() } catch (_: Exception) {}
                         continue
                     }
-                    activeClients.add(socket)
+                    // Register atomically with stop(): an accept racing shutdown must not
+                    // escape active-client tracking and process a request after stop().
+                    val registered = synchronized(this) {
+                        if (!running || generation != myGeneration || server !== ownedServer) {
+                            false
+                        } else {
+                            activeClients.add(socket)
+                            true
+                        }
+                    }
+                    if (!registered) {
+                        clientSlots.release()
+                        try { socket.close() } catch (_: Exception) {}
+                        break
+                    }
                     Thread({
                         try { handle(socket) } finally {
                             activeClients.remove(socket)
