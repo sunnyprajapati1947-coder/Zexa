@@ -107,6 +107,39 @@ class LaptopCliTests(unittest.TestCase):
         authority.revoke_client.assert_called_once_with("phone-main")
         audit.return_value.record.assert_called_once()
 
+    def test_laptop_revoke_all_requires_exact_confirmation(self):
+        authority = Mock()
+        authority.revoke_all_clients.return_value = 2
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "revoke-all", "--pairings", "/tmp/pairings.sqlite3"
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopPairingAuthority", return_value=authority),
+            patch.object(cli, "AuditLog") as audit,
+            patch.object(cli, "secure_owner_only"),
+            patch("builtins.input", return_value="REVOKE ALL LAPTOP CLIENTS"),
+            patch("builtins.print"),
+        ):
+            cli.main()
+        authority.revoke_all_clients.assert_called_once_with()
+        audit.return_value.record.assert_called_once()
+
+    def test_laptop_revoke_all_cancel_changes_no_pairings(self):
+        authority = Mock()
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "revoke-all", "--pairings", "/tmp/pairings.sqlite3"
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopPairingAuthority", return_value=authority),
+            patch("builtins.input", return_value="no"),
+            patch("builtins.print"),
+        ):
+            cli.main()
+        authority.revoke_all_clients.assert_not_called()
+        authority.revoke_client.assert_not_called()
+
     def test_laptop_status_shows_pairing_metadata_without_session_secret(self):
         with (
             patch("sys.argv", [
