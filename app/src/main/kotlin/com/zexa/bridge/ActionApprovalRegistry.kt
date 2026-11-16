@@ -117,6 +117,6 @@ class ActionApprovalRegistry(
         const val MAX_TTL_MS = 120_000L
         const val MAX_PENDING = 8
         const val MAX_PAYLOAD_CHARS = 16_000
-        val ALLOWED_ACTIONS = setOf("tap", "swipe", "scroll", "back", "home", "input_text", "launch_app")
+        val ALLOWED_ACTIONS = setOf("tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url")
     }
 }
