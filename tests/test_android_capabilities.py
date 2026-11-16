@@ -81,6 +81,7 @@ class AndroidCapabilityTests(unittest.TestCase):
             "input_text": {"text": "Hello"},
             "launch_app": {"package_name": "com.example.app"},
             "open_url": {"url": "https://example.com/path?q=1"},
+            "open_url_valid_port": {"url": "https://example.com:443/path"},
         }
         for action, payload in valid.items():
             with self.subTest(action=action):
@@ -105,6 +106,8 @@ class AndroidCapabilityTests(unittest.TestCase):
             ("open_url", {"url": "https://exa mple.com"}),
             ("open_url", {"url": "file:///etc/passwd"}),
             ("open_url", {"url": "https://example.com", "extra": True}),
+            ("open_url", {"url": "https://example.com:0/path"}),
+            ("open_url", {"url": "https://example.com:65536/path"}),
         ]
         for action, payload in invalid:
             with self.subTest(action=action, payload=payload):
