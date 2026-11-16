@@ -348,8 +348,12 @@ class LaptopAgentClient:
         record = self.store.get(self.host, self.port, self.client_id)
         if record is None or "laptop.workspace.write" not in record["permissions"]:
             raise PermissionError("This phone was not paired with remote workspace write permission.")
-        if not isinstance(content, str) or not content.strip() or len(content) > MAX_WRITE_CHARS:
-            raise ValueError("Remote workspace content must contain 1–128000 characters.")
+        if (
+            not isinstance(content, str) or not content.strip()
+            or len(content) > MAX_WRITE_CHARS
+            or any((ord(char) < 32 and char not in "\\r\\n\\t") or ord(char) == 127 for char in content)
+        ):
+            raise ValueError("Remote workspace content must contain 1–128000 characters without unsupported control codes.")
         if type(overwrite) is not bool:
             raise ValueError("overwrite must be a boolean.")
         path = "/v1/workspace/write"
