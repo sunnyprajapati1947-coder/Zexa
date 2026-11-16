@@ -39,6 +39,18 @@ class ActionApprovalRegistryTest {
         assertTrue(registry.list(10_999L).isNotEmpty())
         assertTrue(registry.list(11_000L).isEmpty())
         assertNull(registry.approve("expires", 11_000L))
+        assertEquals("expires", registry.drainExpired().single().requestId)
+        assertTrue(registry.drainExpired().isEmpty())
+    }
+
+    @Test
+    fun expiredTicketsAreRetainedForAuditWhenListTriggersExpiry() {
+        val registry = ActionApprovalRegistry(ttlMs = 1_000L, idFactory = { "audit-expiry" })
+        registry.create("tap", "{}", 5_000L, 100_000L)
+
+        assertTrue(registry.list(6_000L).isEmpty())
+        assertEquals("audit-expiry", registry.drainExpired().single().requestId)
+        assertTrue(registry.drainExpired().isEmpty())
     }
 
     @Test
