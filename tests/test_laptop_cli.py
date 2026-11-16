@@ -27,7 +27,12 @@ class FakeLaptopClient:
             "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write"
         ))
         self.writes = []
+        self.launches = []
         FakeLaptopClient.instance = self
+
+    def launch_app(self, app_id, *, user_confirmed=False):
+        self.launches.append((app_id, user_confirmed))
+        return {"app_id": app_id, "spawned": True}
 
     def write_text(self, path, content, *, overwrite=False, user_confirmed=False):
         self.writes.append((path, content, overwrite, user_confirmed))
@@ -48,6 +53,32 @@ class LaptopCliTests(unittest.TestCase):
         ):
             cli.main()
         return FakeLaptopClient.instance
+
+    def test_laptop_app_launch_requires_exact_confirmation(self):
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "launch", "--host", "192.168.1.20", "editor"
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", FakeLaptopClient),
+            patch("builtins.input", return_value="LAUNCH editor"),
+            patch("builtins.print"),
+        ):
+            cli.main()
+        self.assertEqual(FakeLaptopClient.instance.launches, [("editor", True)])
+
+    def test_laptop_app_launch_cancel_sends_no_request(self):
+        with (
+            patch("sys.argv", [
+                "zexa", "laptop", "launch", "--host", "192.168.1.20", "editor"
+            ]),
+            patch.object(cli, "load_env_file"),
+            patch.object(cli, "LaptopAgentClient", FakeLaptopClient),
+            patch("builtins.input", return_value="no"),
+            patch("builtins.print"),
+        ):
+            cli.main()
+        self.assertEqual(FakeLaptopClient.instance.launches, [])
 
     def test_remote_write_cancel_sends_no_data(self):
         with tempfile.TemporaryDirectory() as temp:
