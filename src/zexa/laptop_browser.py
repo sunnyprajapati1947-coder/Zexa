@@ -34,7 +34,7 @@ def validate_browser_url(value: str) -> str:
         host = host.encode("idna").decode("ascii")
     except UnicodeError as exc:
         raise ValueError("Browser URL hostname is invalid.") from exc
-    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local") or "." not in host:
+    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local") or ("." not in host and ":" not in host):
         raise ValueError("Local and single-label browser destinations are not supported.")
     try:
         address = ipaddress.ip_address(host)
