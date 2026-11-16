@@ -20,10 +20,10 @@ def build_android_capabilities(
     if not isinstance(bridge, AccessibilityBridge):
         raise TypeError("A configured AccessibilityBridge is required.")
     actions = tuple(allowed_actions)
-    if len(actions) != len(set(actions)):
-        raise ValueError("Android capability actions must not contain duplicates.")
     if any(not isinstance(action, str) or action not in ANDROID_ACTIONS for action in actions):
         raise ValueError("Android capability list contains an unknown action.")
+    if len(actions) != len(set(actions)):
+        raise ValueError("Android capability actions must not contain duplicates.")
 
     capabilities: dict[str, CapabilitySpec] = {}
     for action in actions:
