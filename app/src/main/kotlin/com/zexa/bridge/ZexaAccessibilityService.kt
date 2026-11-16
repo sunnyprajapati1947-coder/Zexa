@@ -74,6 +74,9 @@ class ZexaAccessibilityService : AccessibilityService() {
 
     fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
         require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
+        require(BridgeSecurityRules.validActionPayload(action, payload)) {
+            "Invalid payload for the requested Android action."
+        }
         val ticket = actionApprovals.create(action, payload.toString(), SystemClock.elapsedRealtime(), System.currentTimeMillis())
         actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "pending_approval", ticket.createdAtEpochMs))
         notifyApprovalNeeded(ticket)
