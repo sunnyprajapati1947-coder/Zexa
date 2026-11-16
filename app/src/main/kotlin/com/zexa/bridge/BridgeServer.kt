@@ -1,8 +1,6 @@
 package com.zexa.bridge
 
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
 import java.io.BufferedInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -257,22 +255,8 @@ class BridgeServer(
         }
     }
 
-    private fun readHttpLine(input: InputStream): String? {
-        val output = ByteArrayOutputStream()
-        while (true) {
-            val value = input.read()
-            if (value < 0) {
-                if (output.size() == 0) return null
-                break
-            }
-            if (value == 10) break
-            output.write(value)
-            require(output.size() <= 8192) { "HTTP header line is too long." }
-        }
-        val bytes = output.toByteArray()
-        val length = if (bytes.isNotEmpty() && bytes.last() == 13.toByte()) bytes.size - 1 else bytes.size
-        return String(bytes, 0, length, StandardCharsets.US_ASCII)
-    }
+    private fun readHttpLine(input: java.io.InputStream): String? =
+        BridgeHttpLineReader.read(input)
 
     private fun respond(socket: Socket, status: Int, body: JSONObject) {
         val bytes = body.toString().toByteArray(StandardCharsets.UTF_8)
