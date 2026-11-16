@@ -3,7 +3,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from zexa.laptop_browser import open_browser_url, read_public_page, validate_browser_url\nfrom zexa.research import FetchedPage
+from zexa.laptop_browser import open_browser_url, read_public_page, validate_browser_url
+from zexa.research import FetchedPage
 
 
 class LaptopBrowserTests(unittest.TestCase):
