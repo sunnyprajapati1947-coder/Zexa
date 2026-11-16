@@ -79,8 +79,9 @@ This file separates work that is implemented and CI-verified on the feature bran
 
 ## Latest GitHub Actions verification
 
-- [x] Latest Termux-first API and installer hardening commit `15b14bf6f49b53fd7a72610fca0dce76bcfc61dd`: Zexa CI run `43827798924` passed on Python 3.11–3.14, including compileall, Termux installer syntax checks, and the full unit-test suite. [Open CI](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43827798924).
-- [ ] Android Bridge Build for the same commit is still running; verify its final result before marking it complete.
+- [x] Current branch head `27865ee955bdf9306a928d3a64816531b9aab731`: Zexa CI run `43827892854` passed all four Python matrix jobs (3.11–3.14), source compilation, all three Termux installer shell syntax checks, and the unit-test suite. [Open Zexa CI](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43827892854).
+- [x] Current branch head `27865ee955bdf9306a928d3a64816531b9aab731`: Android Bridge Build run `43827902909` passed its assemble job. [Open Android CI](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43827902909).
+- [ ] Physical Termux and OPPO Android 16 acceptance tests remain outstanding; GitHub CI cannot validate installed add-ons, background execution, notifications, Doze behavior, model inference, or device permissions.
 
 - [x] Android Bridge Build run `43680303215` passed on commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`; JVM tests, native CMake build, debug APK assembly and artifact upload succeeded. Artifact ID `14147249453`; SHA-256 `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`. [Open the workflow run](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215).
 - [x] The previous Kotlin syntax failure and local-JVM Android `org.json` test-stub issue were corrected and the latest Android CI is green.
