@@ -130,6 +130,10 @@ def main() -> None:
     schedule.add_argument("title")
     schedule.add_argument("message", nargs="+")
 
+    api_parser = subparsers.add_parser("api", help="Run the authenticated loopback-only local control API")
+    api_parser.add_argument("--host", default="127.0.0.1")
+    api_parser.add_argument("--port", type=int, default=8765)
+
     worker_parser = subparsers.add_parser("worker", help="Run the durable background job worker")
     worker_parser.add_argument("--poll-seconds", type=int, default=5)
     worker_parser.add_argument("--once", action="store_true")
@@ -186,6 +190,16 @@ def main() -> None:
         return
     if args.command == "jobs":
         print(json.dumps(JobQueue().list_jobs(args.limit), ensure_ascii=False, indent=2))
+        return
+    if args.command == "api":
+        from .api import serve
+        token = os.getenv("ZEXA_API_TOKEN", "").strip()
+        if not token:
+            raise SystemExit("zexa: set ZEXA_API_TOKEN to a private random value of at least 32 characters.")
+        try:
+            serve(args.host, args.port, token, JobQueue())
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"zexa: {exc}") from exc
         return
     if args.command == "job":
         queue = JobQueue()
