@@ -133,8 +133,11 @@ class BridgeServer(
             val headers = try {
                 val parsedHeaders = mutableMapOf<String, String>()
                 var headerCount = 0
+                var totalHeaderBytes = 0
                 while (true) {
                     val line = readHttpLine(input) ?: error("Incomplete request headers.")
+                    totalHeaderBytes += line.length + 2
+                    require(totalHeaderBytes <= 16_384) { "Request headers are too large." }
                     if (line.isEmpty()) break
                     headerCount++
                     require(headerCount <= 32) { "Too many request headers." }
