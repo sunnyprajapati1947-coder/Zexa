@@ -50,8 +50,9 @@ class TaskActionGrantRegistryTest {
         assertRejected {
             registry.create("task-1", "phone-1", setOf("input_text"), 1L, 100_000L)
         }
-        val urlGrant = registry.create("task-1", "phone-1", setOf("open_url"), 1L, 100_000L)
-        assertEquals(setOf("open_url"), urlGrant.allowedActions)
+        assertRejected {
+            registry.create("task-1", "phone-1", setOf("open_url"), 1L, 100_000L)
+        }
         assertRejected {
             registry.create("task-1", "phone-1", emptySet(), 1L, 100_000L)
         }
