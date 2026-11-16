@@ -16,15 +16,26 @@ _MAX_MANIFEST_BYTES = 64_000
 _MAX_APPS = 30
 
 
+def _contains_symlink_component(path: Path) -> bool:
+    """Reject symlinks anywhere in an absolute path, not only its final component."""
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
+
+
 class LaptopAppRegistry:
     """Launch only fixed executable/argument pairs selected by the laptop owner."""
 
     def __init__(self, manifest_path: str | Path) -> None:
         self.manifest_path = Path(manifest_path).expanduser()
         if (
-            self.manifest_path.parent.is_symlink()
+            _contains_symlink_component(self.manifest_path.parent)
             or not self.manifest_path.parent.is_dir()
-            or self.manifest_path.is_symlink()
+            or _contains_symlink_component(self.manifest_path)
             or not self.manifest_path.is_file()
             or self.manifest_path.stat().st_size > _MAX_MANIFEST_BYTES
         ):
@@ -56,7 +67,8 @@ class LaptopAppRegistry:
                 raise ValueError("Approved app executable path is invalid.")
             executable_path = Path(executable).expanduser()
             if (
-                not executable_path.is_absolute() or executable_path.is_symlink()
+                not executable_path.is_absolute()
+                or _contains_symlink_component(executable_path)
                 or not executable_path.is_file()
             ):
                 raise ValueError("Approved app executable must be an existing absolute regular file, not a symlink.")
