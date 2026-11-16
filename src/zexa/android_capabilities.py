@@ -17,8 +17,8 @@ def build_android_capabilities(
     allowed_actions: Iterable[str],
 ) -> dict[str, CapabilitySpec]:
     """Build only explicitly enabled Android actions; native approval stays mandatory."""
-    if not isinstance(bridge, AccessibilityBridge):
-        raise TypeError("A configured AccessibilityBridge is required.")
+    if not callable(getattr(bridge, "perform", None)):
+        raise TypeError("A configured Android bridge with a perform() method is required.")
     actions = tuple(allowed_actions)
     if any(not isinstance(action, str) or action not in ANDROID_ACTIONS for action in actions):
         raise ValueError("Android capability list contains an unknown action.")
