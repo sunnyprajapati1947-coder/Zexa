@@ -52,6 +52,26 @@ ROOT='$ROOT'
 cd \"\$ROOT\" || exit 1
 exec \"\$ROOT/.venv/bin/zexa\" android"
 
+
+install_url_shortcut() {
+  local name="$1"
+  local url="$2"
+  install_shortcut "$name" "#!/data/data/com.termux/files/usr/bin/sh
+URL='$url'
+if command -v termux-open-url >/dev/null 2>&1; then
+  exec termux-open-url \"\$URL\"
+fi
+exec am start -a android.intent.action.VIEW -d \"\$URL\""
+}
+
+# Android resolves these links to a compatible installed app when available;
+# otherwise it opens the browser or app chooser. These shortcuts do not
+# sign in, post, message, or change anything inside the target apps.
+install_url_shortcut "open-x" "https://x.com/"
+install_url_shortcut "open-linkedin" "https://www.linkedin.com/"
+install_url_shortcut "open-kimi" "https://www.kimi.com/"
+install_url_shortcut "open-maps" "https://www.google.com/maps/"
+
 echo
 echo "Zexa shortcuts installed in $SHORTCUT_DIR."
 echo "Install/open the Termux:Widget Android add-on, then refresh its widget."
