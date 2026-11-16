@@ -416,61 +416,61 @@ class ZexaAccessibilityService : AccessibilityService() {
             if (node == null || depth > 12 || count >= 150) return
             count++
             try {
-            val bounds = Rect()
-            node.getBoundsInScreen(bounds)
-            val className = node.className?.toString()?.take(160) ?: ""
-            val viewId = node.viewIdResourceName?.take(200) ?: ""
-            val text = node.text?.toString()?.take(500) ?: ""
-            val description = node.contentDescription?.toString()?.take(300) ?: ""
-            val hint = node.hintText?.toString()?.take(300) ?: ""
-            // A parent may itself carry a combined label/value string while a
-            // child exposes the sensitive field label. Redact the parent as well
-            // as descendants whenever a sensitive child label is detected.
-            val childSensitiveContext = sensitiveContext || hasSensitiveLabelChild(node)
-            val redacted = ScreenRedactionRules.shouldRedact(
-                isPassword = node.isPassword,
-                isEditable = node.isEditable,
-                className = className,
-                viewId = viewId,
-                hint = hint,
-                text = text,
-                description = description,
-                sensitiveContext = childSensitiveContext,
-            )
-            val item = JSONObject()
-                .put("index", count - 1)
-                .put("class", className)
-                .put("view_id", viewId)
-                .put("text", if (redacted) "" else text)
-                .put("description", if (redacted) "" else description)
-                .put("redacted", redacted)
-                .put("clickable", node.isClickable)
-                .put("editable", node.isEditable)
-                .put("password", node.isPassword)
-                .put("bounds", JSONObject()
-                    .put("left", bounds.left).put("top", bounds.top)
-                    .put("right", bounds.right).put("bottom", bounds.bottom))
-            nodes.put(item)
-            // Bound child retrieval as well as emitted nodes; hostile or malformed
-            // accessibility trees must not force unbounded traversal work.
-            val childCount = try {
-                node.childCount
-            } catch (_: RuntimeException) {
-                0
-            }
-            val childLimit = minOf(childCount, 150 - count)
-            for (i in 0 until childLimit) {
-                val child = try {
-                    node.getChild(i)
+                val bounds = Rect()
+                node.getBoundsInScreen(bounds)
+                val className = node.className?.toString()?.take(160) ?: ""
+                val viewId = node.viewIdResourceName?.take(200) ?: ""
+                val text = node.text?.toString()?.take(500) ?: ""
+                val description = node.contentDescription?.toString()?.take(300) ?: ""
+                val hint = node.hintText?.toString()?.take(300) ?: ""
+                // A parent may itself carry a combined label/value string while a
+                // child exposes the sensitive field label. Redact the parent as well
+                // as descendants whenever a sensitive child label is detected.
+                val childSensitiveContext = sensitiveContext || hasSensitiveLabelChild(node)
+                val redacted = ScreenRedactionRules.shouldRedact(
+                    isPassword = node.isPassword,
+                    isEditable = node.isEditable,
+                    className = className,
+                    viewId = viewId,
+                    hint = hint,
+                    text = text,
+                    description = description,
+                    sensitiveContext = childSensitiveContext,
+                )
+                val item = JSONObject()
+                    .put("index", count - 1)
+                    .put("class", className)
+                    .put("view_id", viewId)
+                    .put("text", if (redacted) "" else text)
+                    .put("description", if (redacted) "" else description)
+                    .put("redacted", redacted)
+                    .put("clickable", node.isClickable)
+                    .put("editable", node.isEditable)
+                    .put("password", node.isPassword)
+                    .put("bounds", JSONObject()
+                        .put("left", bounds.left).put("top", bounds.top)
+                        .put("right", bounds.right).put("bottom", bounds.bottom))
+                nodes.put(item)
+                // Bound child retrieval as well as emitted nodes; hostile or malformed
+                // accessibility trees must not force unbounded traversal work.
+                val childCount = try {
+                    node.childCount
                 } catch (_: RuntimeException) {
-                    null
+                    0
                 }
-                try {
-                    visit(child, depth + 1, childSensitiveContext)
-                } finally {
-                    child?.recycle()
+                val childLimit = minOf(childCount, 150 - count)
+                for (i in 0 until childLimit) {
+                    val child = try {
+                        node.getChild(i)
+                    } catch (_: RuntimeException) {
+                        null
+                    }
+                    try {
+                        visit(child, depth + 1, childSensitiveContext)
+                    } finally {
+                        child?.recycle()
+                    }
                 }
-            }
             } catch (_: RuntimeException) {
                 // Accessibility nodes can become stale while an app updates its
                 // window. Skip that node; its owner still recycles the reference.
