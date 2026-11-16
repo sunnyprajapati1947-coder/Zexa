@@ -74,6 +74,11 @@ class ResearchTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 _validate_public_https_url(url)
 
+    def test_public_page_url_accepts_global_ipv6_literal(self):
+        parsed, host = _validate_public_https_url("https://[2606:4700:4700::1111]/guide")
+        self.assertEqual(parsed.hostname, "2606:4700:4700::1111")
+        self.assertEqual(host, "2606:4700:4700::1111")
+
     def test_public_connection_rejects_private_dns_answers(self):
         import socket
         with (
