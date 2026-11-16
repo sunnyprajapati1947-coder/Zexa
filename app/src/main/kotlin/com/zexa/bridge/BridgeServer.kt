@@ -5,8 +5,6 @@ import java.io.BufferedInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.util.concurrent.Semaphore
-import java.util.concurrent.ConcurrentHashMap
 import java.nio.charset.StandardCharsets
 
 class BridgeServer(
@@ -22,8 +20,7 @@ class BridgeServer(
     @Volatile private var running = false
     @Volatile private var ready = false
     @Volatile private var server: ServerSocket? = null
-    private val clientSlots = Semaphore(4)
-    private val activeClients = ConcurrentHashMap.newKeySet<Socket>()
+    private val clientPool = BridgeClientPool(4)
 
     val isRunning: Boolean
         get() = running && ready && server?.isClosed == false
@@ -51,40 +48,37 @@ class BridgeServer(
                 }
                 while (running) {
                     val socket = ownedServer.accept()
-                    if (!clientSlots.tryAcquire()) {
-                        try { respond(socket, 503, JSONObject().put("error", "Bridge is busy")) } catch (_: Exception) {}
-                        try { socket.close() } catch (_: Exception) {}
-                        continue
-                    }
                     // Register atomically with stop(): an accept racing shutdown must not
                     // escape active-client tracking and process a request after stop().
-                    val registered = synchronized(this) {
-                        if (!running || generation != myGeneration || server !== ownedServer) {
-                            false
-                        } else {
-                            activeClients.add(socket)
-                            true
+                    var registered = false
+                    var capacityExceeded = false
+                    synchronized(this) {
+                        if (running && generation == myGeneration && server === ownedServer) {
+                            registered = clientPool.register(socket)
+                            capacityExceeded = !registered
                         }
                     }
                     if (!registered) {
-                        clientSlots.release()
+                        if (capacityExceeded) {
+                            try { respond(socket, 503, JSONObject().put("error", "Bridge is busy")) } catch (_: Exception) {}
+                            try { socket.close() } catch (_: Exception) {}
+                            continue
+                        }
                         try { socket.close() } catch (_: Exception) {}
                         break
                     }
                     try {
                         Thread({
                             try { handle(socket) } finally {
-                                activeClients.remove(socket)
-                                clientSlots.release()
+                                clientPool.release(socket)
                             }
                         }, "zexa-bridge-client").apply {
                             isDaemon = true
                             start()
                         }
                     } catch (_: Exception) {
-                        // A failed worker launch must not permanently consume a client slot.
-                        activeClients.remove(socket)
-                        clientSlots.release()
+                        // A failed worker launch must release the socket ownership slot.
+                        clientPool.release(socket)
                         try { socket.close() } catch (_: Exception) {}
                     }
                 }
@@ -111,8 +105,7 @@ class BridgeServer(
         running = false
         try { server?.close() } catch (_: Exception) {}
         server = null
-        activeClients.forEach { client -> try { client.close() } catch (_: Exception) {} }
-        activeClients.clear()
+        clientPool.closeAll()
         thread?.interrupt()
         thread = null
     }
