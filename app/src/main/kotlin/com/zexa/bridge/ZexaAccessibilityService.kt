@@ -37,6 +37,9 @@ class ZexaAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         markPendingApprovalsInterrupted()
+        // A service restart invalidates in-memory approval tickets. Never revive
+        // an approval that was waiting before the accessibility service reconnected.
+        actionApprovals.clear()
         refreshBridge()
     }
 
