@@ -284,6 +284,14 @@ class ZexaAccessibilityService : AccessibilityService() {
                 startActivity(launch)
                 JSONObject().put("ok", true)
             }
+            "open_url" -> {
+                val url = payload.optString("url", "")
+                require(BridgeSecurityRules.safeWebUrl(url))
+                val view = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(view)
+                JSONObject().put("ok", true)
+            }
             else -> error("Action is not allowlisted.")
         }
     }
