@@ -836,7 +836,8 @@ def main() -> None:
                 else:
                     print(
                         f"Skill draft #{args.draft_id} marked {args.decision}. "
-                        "Review approval records review only; execution remains disabled."
+                        "Approved skills with approved source notes are now available to zexa skill list/run. "
+                        "They use a prompt-only brain handler; no learned code, tools, or external actions are activated."
                     )
             return
 
