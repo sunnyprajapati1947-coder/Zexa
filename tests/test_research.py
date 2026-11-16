@@ -1,7 +1,10 @@
 import unittest
 from unittest.mock import patch
 
-from zexa.research import (\n    DuckDuckGoSearch, SearchResult, _PageTextParser, _canonical_result_url,\n    _validate_public_https_url, fetch_public_page, summarize_research,\n)
+from zexa.research import (
+    DuckDuckGoSearch, SearchResult, _PageTextParser, _canonical_result_url,
+    _validate_public_https_url, fetch_public_page, summarize_research,
+)
 
 
 SAMPLE_HTML = """
