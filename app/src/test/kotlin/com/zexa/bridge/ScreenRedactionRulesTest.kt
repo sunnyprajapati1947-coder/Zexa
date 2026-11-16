@@ -13,8 +13,9 @@ class ScreenRedactionRulesTest {
         hint: String = "",
         text: String = "",
         description: String = "",
+        sensitiveOtpContext: Boolean = false,
     ) = ScreenRedactionRules.shouldRedact(
-        isPassword, isEditable, className, viewId, hint, text, description
+        isPassword, isEditable, className, viewId, hint, text, description, sensitiveOtpContext
     )
 
     @Test
