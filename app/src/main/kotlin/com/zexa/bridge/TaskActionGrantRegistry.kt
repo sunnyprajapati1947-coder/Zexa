@@ -1,14 +1,17 @@
 package com.zexa.bridge
 
 import java.util.UUID
+import java.util.Collections
 
 /**
  * In-memory, bounded grants for non-committing navigation actions.
  *
  * Coordinate taps and text entry are deliberately excluded: a tap may submit,
  * delete, purchase, or otherwise commit an action depending on the current UI.
- * Grants are process-local and must be cleared whenever the service is
- * interrupted, disabled, reconnected, or destroyed.
+ * The device ID supplied to create() must be generated and owned by the
+ * Android service, never copied from an untrusted request. Grants are
+ * process-local and must be cleared whenever the service is interrupted,
+ * disabled, reconnected, or destroyed.
  */
 data class TaskActionGrant(
     val grantId: String,
@@ -79,7 +82,7 @@ class TaskActionGrantRegistry(
             grantId = id,
             taskId = taskId,
             deviceId = deviceId,
-            allowedActions = actions.toSet(),
+            allowedActions = Collections.unmodifiableSet(actions.toSet()),
             createdAtEpochMs = nowEpochMs,
             expiresAtEpochMs = nowEpochMs + ttlMs,
             expiresAtElapsedRealtimeMs = effectiveNow + ttlMs,
