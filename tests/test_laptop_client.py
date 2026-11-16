@@ -89,6 +89,44 @@ class LaptopClientTests(unittest.TestCase):
                 "127.0.0.1", 9443, None, "missing-client", store=self.store
             )
 
+    def test_client_requires_fresh_confirmation_for_opt_in_remote_write(self):
+        self.offer = self.authority.begin_pairing(permissions=(
+            "laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write"
+        ))
+        client = self.make_client()
+
+        def fake_request(method, path, body=b"", headers=None):
+            if method == "GET" and path == "/v1/pair/offer":
+                return 200, {"ok": True, "offer": self.authority.public_offer()}
+            if method == "POST" and path == "/v1/pair/complete":
+                payload = json.loads(body.decode("utf-8"))
+                record = self.authority.complete_pairing(
+                    payload["client_id"], payload["client_nonce_b64"], payload["client_proof_b64"]
+                )
+                return 200, {
+                    "ok": True, "client_id": record.client_id,
+                    "permissions": list(record.permissions),
+                    "paired_at_epoch": record.paired_at_epoch,
+                }
+            if method == "POST" and path == "/v1/workspace/write":
+                self.assertTrue(self.authority.verify_scoped_request(
+                    "phone-main", "laptop.workspace.write", method, path, body, headers
+                ))
+                payload = json.loads(body.decode("utf-8"))
+                return 200, {"ok": True, "result": {
+                    "relative_path": payload["relative_path"],
+                    "written": True, "size_bytes": len(payload["content"]),
+                    "sha256": "a" * 64,
+                }}
+            raise AssertionError(f"Unexpected request: {method} {path}")
+
+        client._request = fake_request
+        client.pair(self.offer.pairing_code)
+        with self.assertRaises(PermissionError):
+            client.write_text("notes.md", "content")
+        result = client.write_text("notes.md", "content", user_confirmed=True)
+        self.assertTrue(result["written"])
+
     def test_client_rejects_public_or_hostname_targets(self):
         for host in ("example.com", "8.8.8.8", "0.0.0.0"):
             with self.subTest(host=host), self.assertRaises(ValueError):
