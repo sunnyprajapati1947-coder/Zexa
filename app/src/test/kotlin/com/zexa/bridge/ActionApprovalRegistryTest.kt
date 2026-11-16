@@ -65,16 +65,17 @@ class ActionApprovalRegistryTest {
 
     @Test
     fun expiredRequestIdCannotBeReusedBeforeItsAuditRecordIsDrained() {
-        var nextId = 0
-        val registry = ActionApprovalRegistry(ttlMs = 1_000L, idFactory = { "reused-${++nextId}" })
+        var candidateId = "reused"
+        val registry = ActionApprovalRegistry(ttlMs = 1_000L, idFactory = { candidateId })
         registry.create("back", "{}", 1_000L, 100_000L)
 
         assertTrue(registry.list(2_000L).isEmpty())
         assertRejected { registry.create("home", "{}", 2_001L, 101_000L) }
-        assertEquals("reused-1", registry.drainExpired().single().requestId)
+        assertEquals("reused", registry.drainExpired().single().requestId)
 
+        candidateId = "replacement"
         val replacement = registry.create("home", "{}", 2_002L, 101_001L)
-        assertEquals("reused-2", replacement.requestId)
+        assertEquals("replacement", replacement.requestId)
     }
 
     @Test
