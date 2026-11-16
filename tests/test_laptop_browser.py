@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from zexa.laptop_browser import open_browser_url, validate_browser_url
+from zexa.laptop_browser import open_browser_url, read_public_page, validate_browser_url\nfrom zexa.research import FetchedPage
 
 
 class LaptopBrowserTests(unittest.TestCase):
@@ -35,6 +35,28 @@ class LaptopBrowserTests(unittest.TestCase):
         browser.assert_called_once_with(
             "https://example.com/docs", new=2, autoraise=True
         )
+
+    def test_reads_only_bounded_public_page_text_and_preserves_provenance(self):
+        page = FetchedPage(
+            "Example title", "https://example.com/article",
+            "Extracted public text.", "a" * 64,
+        )
+        with patch("zexa.laptop_browser.fetch_public_page", return_value=page) as fetch:
+            result = read_public_page("https://example.com/article")
+        self.assertEqual(result, {
+            "title": "Example title",
+            "url": "https://example.com/article",
+            "text": "Extracted public text.",
+            "content_sha256": "a" * 64,
+        })
+        fetch.assert_called_once_with("https://example.com/article")
+
+    def test_rejects_empty_or_oversized_page_text(self):
+        for text in (" ", "x" * 40_001):
+            page = FetchedPage("Example", "https://example.com", text, "b" * 64)
+            with patch("zexa.laptop_browser.fetch_public_page", return_value=page):
+                with self.assertRaisesRegex(RuntimeError, "readable text"):
+                    read_public_page("https://example.com")
 
     def test_reports_browser_open_failure(self):
         with patch("zexa.laptop_browser.webbrowser.open", return_value=False):
