@@ -11,7 +11,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
-from .android_capabilities import ANDROID_ACTIONS, build_android_capabilities
+from .android_capabilities import ANDROID_ACTIONS, ANDROID_GRANTABLE_ACTIONS, build_android_capabilities
 from .capabilities import CapabilityController
 from .agents import AgentOrchestrator
 from .config import get_config, get_groq_config, get_xai_config, load_env_file
@@ -152,6 +152,14 @@ def main() -> None:
     bridge_sub = bridge_parser.add_subparsers(dest="bridge_command", required=True)
     bridge_sub.add_parser("status", help="Read bridge status")
     bridge_sub.add_parser("screen", help="Read the current accessibility snapshot")
+    bridge_sub.add_parser("grants", help="List active user-approved navigation task grants")
+    bridge_granted_action = bridge_sub.add_parser(
+        "grant-action", help="Run one navigation action inside an existing native task grant"
+    )
+    bridge_granted_action.add_argument("action", choices=sorted(ANDROID_GRANTABLE_ACTIONS))
+    bridge_granted_action.add_argument("task_id")
+    bridge_granted_action.add_argument("grant_id")
+    bridge_granted_action.add_argument("payload", help="Action payload as a JSON object")
     bridge_action = bridge_sub.add_parser("action", help="Perform one approved Android action")
     bridge_action.add_argument("action", choices=sorted(ANDROID_ACTIONS))
     bridge_action.add_argument("payload", help="Action payload as a JSON object")
@@ -365,6 +373,30 @@ def main() -> None:
                 result = bridge.status()
             elif args.bridge_command == "screen":
                 result = bridge.screen()
+            elif args.bridge_command == "grants":
+                result = {"ok": True, "grants": bridge.task_grants()}
+            elif args.bridge_command == "grant-action":
+                try:
+                    payload = json.loads(args.payload)
+                except json.JSONDecodeError as exc:
+                    raise ValueError("Bridge action payload must be valid JSON.") from exc
+                if not isinstance(payload, dict):
+                    raise ValueError("Bridge action payload must be a JSON object.")
+                active_grant = next(
+                    (
+                        item for item in bridge.task_grants()
+                        if item["grant_id"] == args.grant_id and item["task_id"] == args.task_id
+                    ),
+                    None,
+                )
+                if active_grant is None:
+                    raise PermissionError("No active native task grant matches this task ID and grant ID.")
+                if args.action not in active_grant["allowed_actions"]:
+                    raise PermissionError("This action is outside the selected task grant's approved action set.")
+                print(f"Using existing native task grant: {args.task_id}")
+                print(f"Requested Android action: {args.action}")
+                print("Exact payload:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
+                result = bridge.perform_granted(args.action, payload, args.task_id, args.grant_id)
             else:
                 try:
                     payload = json.loads(args.payload)
