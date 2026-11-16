@@ -200,7 +200,7 @@ def _validate_public_https_url(value: str):
         host = host.encode("idna").decode("ascii")
     except UnicodeError as exc:
         raise ValueError("Page URL hostname is invalid.") from exc
-    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local") or "." not in host:
+    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local") or ("." not in host and ":" not in host):
         raise ValueError("Local and single-label hostnames are not supported.")
     try:
         address = ipaddress.ip_address(host)
@@ -257,9 +257,10 @@ def fetch_public_page(url: str, *, timeout: float = 10.0) -> FetchedPage:
         connection = _connect_public_https(host, max(2.0, min(float(timeout), 20.0)))
         response = None
         try:
+            host_header = f"[{host}]" if ":" in host else host
             request_text = (
                 f"GET {target} HTTP/1.1\r\n"
-                f"Host: {host}\r\n"
+                f"Host: {host_header}\r\n"
                 "User-Agent: Mozilla/5.0 (compatible; ZexaResearch/0.1)\r\n"
                 "Accept: text/html,text/plain;q=0.9\r\n"
                 "Accept-Encoding: identity\r\n"
