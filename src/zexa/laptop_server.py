@@ -230,6 +230,11 @@ class LaptopAgentServer:
     def serve_forever(self) -> None:
         self._server.serve_forever(poll_interval=0.5)
 
+    def close(self) -> None:
+        """Close the listener after serve_forever returns."""
+        self._server.server_close()
+
     def shutdown(self) -> None:
+        """Stop serve_forever from another thread and close the listener."""
         self._server.shutdown()
         self._server.server_close()
