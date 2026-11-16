@@ -500,13 +500,14 @@ class LaptopAgentClient:
         result = response.get("result")
         if (
             not isinstance(result, dict)
-            or set(result) != {"title", "url", "text", "content_sha256"}
+            or set(result) != {"title", "url", "text", "content_sha256", "content_trust"}
             or not isinstance(result["title"], str) or not result["title"]
             or len(result["title"]) > 300
             or not isinstance(result["text"], str) or not result["text"]
             or len(result["text"]) > 40_000
             or not isinstance(result["content_sha256"], str)
             or not re.fullmatch(r"[0-9a-f]{64}", result["content_sha256"])
+            or result["content_trust"] != "untrusted_reference"
         ):
             raise RuntimeError("Laptop returned an invalid public-page read result.")
         final_url = validate_browser_url(result["url"])
