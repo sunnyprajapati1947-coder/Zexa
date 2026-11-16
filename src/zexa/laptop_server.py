@@ -19,6 +19,7 @@ from pathlib import Path
 import ssl
 from urllib.parse import parse_qs, urlsplit
 
+from .audit import AuditLog
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_pairing import LaptopPairingAuthority
 
@@ -101,9 +102,10 @@ class _LaptopHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, handler, workspace, authority):
+    def __init__(self, address, handler, workspace, authority, audit):
         self.workspace = workspace
         self.authority = authority
+        self.audit = audit
         self._worker_slots = threading.BoundedSemaphore(8)
         super().__init__(address, handler)
 
@@ -174,6 +176,12 @@ def make_laptop_handler():
                 raise ValueError("Request body must be a JSON object.")
             return payload
 
+        def _audit(self, event_type: str, actor: str, action: str, decision: str, details=None):
+            self.server.audit.record(
+                event_type, actor=actor or "unknown", action=action,
+                decision=decision, details=details or {},
+            )
+
         def _authorized(self, permission: str, body: bytes = b"") -> bool:
             client_id = self.headers.get("X-Zexa-Client-ID", "")
             signed_headers = {
@@ -205,6 +213,12 @@ def make_laptop_handler():
                     if not self._authorized("laptop.workspace.list"):
                         return
                     result = self.server.workspace.list_directory(relative_dir)
+                    self._audit(
+                        "laptop_workspace_list",
+                        self.headers.get("X-Zexa-Client-ID", ""),
+                        "workspace.list", "allowed",
+                        {"relative_dir": relative_dir, "entry_count": len(result["entries"])},
+                    )
                     return self._send(200, {"ok": True, "result": result})
                 except PermissionError:
                     return self._send(403, {"error": "workspace_scope_denied"})
@@ -219,6 +233,17 @@ def make_laptop_handler():
                     if not self._authorized("laptop.workspace.read"):
                         return
                     result = self.server.workspace.read_text(query["path"][0])
+                    self._audit(
+                        "laptop_workspace_read",
+                        self.headers.get("X-Zexa-Client-ID", ""),
+                        "workspace.read", "allowed",
+                        {
+                            "relative_path": result["relative_path"],
+                            "size_bytes": result["size_bytes"],
+                            "sha256": result["sha256"],
+                            "redacted": result["redacted"],
+                        },
+                    )
                     return self._send(200, {"ok": True, "result": result})
                 except PermissionError:
                     return self._send(403, {"error": "workspace_scope_denied"})
@@ -235,8 +260,29 @@ def make_laptop_handler():
                         raise ValueError("Invalid workspace write fields.")
                     if not self._authorized("laptop.workspace.write", self._last_body):
                         return
+                    self._audit(
+                        "laptop_workspace_write",
+                        self.headers.get("X-Zexa-Client-ID", ""),
+                        "workspace.write", "requested",
+                        {
+                            "relative_path": payload["relative_path"],
+                            "size_chars": len(payload["content"]) if isinstance(payload["content"], str) else 0,
+                            "overwrite": payload["overwrite"],
+                        },
+                    )
                     result = self.server.workspace.write_text(
                         payload["relative_path"], payload["content"], payload["overwrite"]
+                    )
+                    self._audit(
+                        "laptop_workspace_write",
+                        self.headers.get("X-Zexa-Client-ID", ""),
+                        "workspace.write", "completed",
+                        {
+                            "relative_path": result["relative_path"],
+                            "size_bytes": result["size_bytes"],
+                            "sha256": result["sha256"],
+                            "overwrite": payload["overwrite"],
+                        },
                     )
                     return self._send(200, {"ok": True, "result": result})
                 except PermissionError:
@@ -250,6 +296,9 @@ def make_laptop_handler():
                 if not self._authorized("laptop.workspace.list"):
                     return
                 if self.server.authority.revoke_client(client_id):
+                    self._audit(
+                        "laptop_pairing_revoke", client_id, "pairing.revoke", "revoked", {}
+                    )
                     return self._send(200, {"ok": True, "revoked": True})
                 return self._send(404, {"error": "paired_client_not_found"})
             if self.path != "/v1/pair/complete":
@@ -263,6 +312,10 @@ def make_laptop_handler():
                     payload["client_nonce_b64"],
                     payload["client_proof_b64"],
                 )
+                self._audit(
+                    "laptop_pairing", record.client_id, "pairing.complete", "approved",
+                    {"permissions": list(record.permissions)},
+                )
                 return self._send(200, {
                     "ok": True,
                     "client_id": record.client_id,
@@ -270,6 +323,8 @@ def make_laptop_handler():
                     "paired_at_epoch": record.paired_at_epoch,
                 })
             except PermissionError:
+                actor = payload.get("client_id", "unknown") if "payload" in locals() and isinstance(payload, dict) else "unknown"
+                self._audit("laptop_pairing", actor, "pairing.complete", "denied", {})
                 return self._send(403, {"error": "pairing_rejected"})
             except TimeoutError:
                 return self._send(410, {"error": "pairing_offer_expired"})
@@ -296,6 +351,7 @@ class LaptopAgentServer:
         private_key_file: str | Path,
         workspace: LaptopWorkspace,
         authority: LaptopPairingAuthority | None = None,
+        audit_path: str | Path | None = None,
     ) -> None:
         host = _private_ipv4(host)
         if type(port) is not int or not 1024 <= port <= 65535:
@@ -313,6 +369,17 @@ class LaptopAgentServer:
         if os.name != "nt" and stat.S_IMODE(key.stat().st_mode) & 0o077:
             raise PermissionError("Laptop TLS private key permissions must be owner-only (0600).")
         self.authority = authority or LaptopPairingAuthority()
+        audit_file = Path(audit_path or (Path.home() / ".zexa" / "laptop_audit.sqlite3")).expanduser()
+        audit_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            os.chmod(audit_file.parent, 0o700)
+        except OSError:
+            pass
+        self.audit = AuditLog(audit_file)
+        try:
+            os.chmod(audit_file, 0o600)
+        except OSError:
+            pass
         self.workspace = workspace
         self.host = host
         self.port = port
@@ -321,7 +388,7 @@ class LaptopAgentServer:
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(str(cert), str(key))
         self._server = _LaptopHTTPServer(
-            (host, port), make_laptop_handler(), workspace, self.authority
+            (host, port), make_laptop_handler(), workspace, self.authority, self.audit
         )
         self._server.socket = context.wrap_socket(self._server.socket, server_side=True)
 
