@@ -32,7 +32,7 @@ from .laptop_client import LaptopAgentClient
 from .laptop_apps import LaptopAppRegistry
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_server import LaptopAgentServer, certificate_fingerprint, generate_laptop_certificate
-from .laptop_pairing import LaptopPairingAuthority
+from .laptop_pairing import LaptopPairingAuthority, secure_owner_only
 from .jobs import JobQueue, JobWorker
 from .hand import AccessibilityBridge
 from .memory import MemoryStore
@@ -323,7 +323,12 @@ def main() -> None:
                 return
             revoked = authority.revoke_client(args.client_id)
             if revoked:
-                AuditLog(Path.home() / ".zexa" / "laptop_audit.sqlite3").record(
+                audit_path = Path.home() / ".zexa" / "laptop_audit.sqlite3"
+                audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                secure_owner_only(audit_path.parent, directory=True)
+                audit = AuditLog(audit_path)
+                secure_owner_only(audit_path)
+                audit.record(
                     "laptop_pairing_revoke", actor="laptop_owner",
                     action="pairing.revoke", decision="revoked",
                     details={"client_id": args.client_id, "source": "local_owner_cli"},
