@@ -74,6 +74,15 @@ class LocalApiTests(unittest.TestCase):
                 self.assertEqual(caught.exception.code, 400)
         self.assertEqual(self.queue.list_jobs(), [])
 
+    def test_job_listing_does_not_expose_result_or_error_details(self):
+        self.queue.enqueue("notification", {"title": "private", "content": "private"})
+        response = self.request("/v1/jobs?limit=5", token=self.token)
+        item = json.loads(response.read())["jobs"][0]
+        self.assertEqual(item["kind"], "notification")
+        self.assertNotIn("result", item)
+        self.assertNotIn("last_error", item)
+        self.assertNotIn("payload", item)
+
     def test_rejects_non_loopback_host_and_weak_token(self):
         with self.assertRaisesRegex(ValueError, "32 characters"):
             make_handler("short", self.queue)
