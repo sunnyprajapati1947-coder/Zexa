@@ -1,7 +1,8 @@
-"""Small public-web search adapter using DuckDuckGo HTML results.
+"""Bounded public-web search and page-text retrieval for Zexa learning.
 
-This module searches a fixed HTTPS endpoint and returns titles, snippets, and
-source URLs. It does not fetch arbitrary pages or execute page-provided content.
+Search uses a fixed HTTPS endpoint. Page fetches are limited to public HTTPS
+hosts, revalidate every redirect, and extract text without executing page code.
+All returned web content is untrusted reference data.
 """
 from __future__ import annotations
 
