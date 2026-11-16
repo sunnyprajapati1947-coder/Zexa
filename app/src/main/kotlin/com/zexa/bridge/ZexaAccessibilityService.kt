@@ -374,6 +374,13 @@ class ZexaAccessibilityService : AccessibilityService() {
     private fun buildScreenSnapshot(): JSONObject {
         val root = rootInActiveWindow ?: return JSONObject()
             .put("ok", true).put("package", "").put("nodes", JSONArray())
+        // Capture package metadata before traversal; the root can become stale
+        // while the active app changes windows.
+        val packageName = try {
+            root.packageName?.toString() ?: ""
+        } catch (_: RuntimeException) {
+            ""
+        }
         val nodes = JSONArray()
         var count = 0
         fun hasSensitiveLabelChild(parent: AccessibilityNodeInfo): Boolean {
@@ -474,7 +481,7 @@ class ZexaAccessibilityService : AccessibilityService() {
             visit(root, 0)
             JSONObject()
                 .put("ok", true)
-                .put("package", root.packageName?.toString() ?: "")
+                .put("package", packageName)
                 .put("nodes", nodes)
         } finally {
             root.recycle()
