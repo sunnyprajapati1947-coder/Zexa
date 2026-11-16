@@ -98,7 +98,7 @@ class LaptopClientTests(unittest.TestCase):
             self.assertEqual(len(headers["X-Zexa-Timestamp"]), 10)
             self.assertTrue(headers["X-Zexa-Timestamp"].isdigit())
             self.assertRegex(headers["X-Zexa-Nonce"], r"^[A-Za-z0-9_-]{20,}$")
-            self.assertRegex(headers["X-Zexa-MAC"], r"^[0-9a-f]{64}$")
+            self.assertRegex(headers["X-Zexa-MAC"], r"^[A-Za-z0-9_-]{43}$")
             return 200, {"ok": True, "result": page}
 
         client._request = fake_request
