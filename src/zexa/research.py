@@ -250,13 +250,9 @@ def fetch_public_page(url: str, *, timeout: float = 10.0) -> FetchedPage:
     current = url
     for redirect_count in range(4):
         parsed, host = _validate_public_https_url(current)
-        target = quote(parsed.path or "/", safe="/%:@!        target = parsed.path or "/"
+        target = quote(parsed.path or "/", safe="/%:@!$&'()*+,;=-._~")
         if parsed.query:
-            target += "?" + parsed.query'()*+,;=-._~")
-        if parsed.query:
-            target += "?" + quote(parsed.query, safe="/?@!        target = parsed.path or "/"
-        if parsed.query:
-            target += "?" + parsed.query'()*+,;=:%-._~")
+            target += "?" + quote(parsed.query, safe="/?@!$&'()*+,;=:%-._~")
         connection = _connect_public_https(host, max(2.0, min(float(timeout), 20.0)))
         response = None
         try:
