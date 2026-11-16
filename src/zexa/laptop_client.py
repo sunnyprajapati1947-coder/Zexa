@@ -18,6 +18,7 @@ from .laptop_pairing import (
     LaptopPairingAuthority,
     _b64decode,
     _b64encode,
+    secure_owner_only,
     verify_tls_fingerprint,
 )
 
@@ -42,6 +43,8 @@ class PairingCredentialStore:
             raise PermissionError("Laptop pairing credential file is not a safe regular file.")
         if os.name != "nt" and stat.S_IMODE(self.path.stat().st_mode) & 0o077:
             raise PermissionError("Laptop pairing credential file permissions are too broad; restrict it to the current user.")
+        if os.name == "nt":
+            secure_owner_only(self.path)
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -110,10 +113,7 @@ class PairingCredentialStore:
         if len(pairs) > 20:
             raise ValueError("At most 20 laptop pairings can be stored.")
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        try:
-            os.chmod(self.path.parent, 0o700)
-        except OSError:
-            pass
+        secure_owner_only(self.path.parent, directory=True)
         descriptor, temporary = tempfile.mkstemp(prefix=".laptop-pairings-", dir=self.path.parent)
         try:
             try:
@@ -125,10 +125,7 @@ class PairingCredentialStore:
                 target.flush()
                 os.fsync(target.fileno())
             os.replace(temporary, self.path)
-            try:
-                os.chmod(self.path, 0o600)
-            except OSError:
-                pass
+            secure_owner_only(self.path)
         finally:
             try:
                 os.unlink(temporary)
@@ -151,6 +148,7 @@ class PairingCredentialStore:
                 pass
             return True
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        secure_owner_only(self.path.parent, directory=True)
         descriptor, temporary = tempfile.mkstemp(prefix=".laptop-pairings-", dir=self.path.parent)
         try:
             try:
