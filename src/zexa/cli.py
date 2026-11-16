@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import hashlib
 import json
 import os
 import re
@@ -28,7 +29,7 @@ from .brain import build_brain_router
 from .intent import route_utterance
 from .learning import LearningAwareBrain, LearningService, LearningStore
 from .laptop_client import LaptopAgentClient
-from .laptop_hand import LaptopWorkspace
+from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_server import LaptopAgentServer, certificate_fingerprint, generate_laptop_certificate
 from .jobs import JobQueue, JobWorker
 from .hand import AccessibilityBridge
@@ -115,6 +116,10 @@ def main() -> None:
     laptop_serve.add_argument("--workspace", required=True, help="Existing directory to expose")
     laptop_serve.add_argument("--cert", required=True, help="PEM TLS certificate file")
     laptop_serve.add_argument("--key", required=True, help="PEM TLS private key file")
+    laptop_serve.add_argument(
+        "--allow-write", action="store_true",
+        help="Allow paired phones to request workspace writes after exact phone-side confirmation",
+    )
     laptop_pair = laptop_sub.add_parser("pair", help="Pair this phone using the code shown by the laptop")
     laptop_pair.add_argument("--host", required=True)
     laptop_pair.add_argument("--port", type=int, default=9443)
@@ -130,6 +135,13 @@ def main() -> None:
     laptop_read.add_argument("--port", type=int, default=9443)
     laptop_read.add_argument("--client-id", default="zexa-phone")
     laptop_read.add_argument("path")
+    laptop_write = laptop_sub.add_parser("write", help="Write a local UTF-8 text file to the paired laptop after exact confirmation")
+    laptop_write.add_argument("--host", required=True)
+    laptop_write.add_argument("--port", type=int, default=9443)
+    laptop_write.add_argument("--client-id", default="zexa-phone")
+    laptop_write.add_argument("--overwrite", action="store_true")
+    laptop_write.add_argument("source")
+    laptop_write.add_argument("destination")
     laptop_revoke = laptop_sub.add_parser("revoke", help="Revoke remote pairing and delete the local credential")
     laptop_revoke.add_argument("--host", required=True)
     laptop_revoke.add_argument("--port", type=int, default=9443)
@@ -242,7 +254,12 @@ def main() -> None:
             server = LaptopAgentServer(
                 args.host, args.port, args.cert, args.key, workspace,
             )
-            offer = server.begin_pairing()
+            permissions = (
+                ("laptop.workspace.list", "laptop.workspace.read", "laptop.workspace.write")
+                if args.allow_write else
+                ("laptop.workspace.list", "laptop.workspace.read")
+            )
+            offer = server.begin_pairing(permissions=permissions)
             fingerprint = certificate_fingerprint(args.cert)
             print("Zexa laptop Human Hand server started (TLS 1.2+, private IPv4 only).")
             print(f"Address: https://{args.host}:{args.port}")
@@ -250,7 +267,10 @@ def main() -> None:
             print(f"One-time pairing code: {offer.pairing_code}")
             print(f"Pairing expires in: {offer.expires_in_seconds} seconds")
             print("Remote permissions: " + ", ".join(offer.permissions))
-            print("Remote access is read-only: workspace list/read only; no shell, app control, or file writes.")
+            if args.allow_write:
+                print("Remote workspace writes are enabled; every write must be confirmed on the phone.")
+            else:
+                print("Remote access is read-only: workspace list/read only; no shell or app control.")
             try:
                 server.serve_forever()
             except KeyboardInterrupt:
@@ -274,6 +294,35 @@ def main() -> None:
             print(json.dumps(client.list_directory(args.dir), ensure_ascii=False, indent=2))
         elif args.laptop_command == "read":
             print(json.dumps(client.read_text(args.path), ensure_ascii=False, indent=2))
+        elif args.laptop_command == "write":
+            source_path = Path(args.source).expanduser()
+            if not source_path.is_file():
+                raise FileNotFoundError("Local source text file does not exist.")
+            with source_path.open("rb") as source_file:
+                raw = source_file.read(MAX_WRITE_CHARS * 4 + 1)
+            if not raw or len(raw) > MAX_WRITE_CHARS * 4:
+                raise ValueError("Local source file must contain 1 byte to 512 KB.")
+            try:
+                content = raw.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError("Laptop Human Hand writes UTF-8 text files only.") from exc
+            if len(content) > MAX_WRITE_CHARS:
+                raise ValueError("Local source file exceeds the 128000-character write limit.")
+            phrase = ("OVERWRITE " if args.overwrite else "WRITE ") + args.destination
+            print(f"Source: {source_path}")
+            print(f"Laptop destination: {args.destination}")
+            print(f"Characters: {len(content)}")
+            print(f"SHA-256: {hashlib.sha256(raw).hexdigest()}")
+            if args.overwrite:
+                print("This will replace an existing workspace file.")
+            confirmation = input(f"Type exactly '{phrase}' to approve this remote write: ")
+            if confirmation != phrase:
+                print("Remote write cancelled; no data was sent.")
+                return
+            result = client.write_text(
+                args.destination, content, overwrite=args.overwrite, user_confirmed=True
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
         elif args.laptop_command == "revoke":
             if client.revoke_pairing():
                 print("Remote laptop pairing revoked and local credential deleted.")
