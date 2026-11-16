@@ -11,6 +11,8 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
+from .android_capabilities import build_android_capabilities
+from .capabilities import CapabilityController
 from .agents import AgentOrchestrator
 from .config import get_config, get_groq_config, get_xai_config, load_env_file
 from .approvals import ApprovalManager
@@ -378,20 +380,6 @@ def main() -> None:
                 known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
                 if not allowed_actions <= known_actions:
                     raise ValueError("ZEXA_ALLOWED_ANDROID_ACTIONS contains an unknown action.")
-                permission_names = {f"android.{name}" for name in allowed_actions}
-                capabilities = {
-                    f"android.{name}": (f"android.{name}", "high")
-                    for name in allowed_actions
-                }
-                audit_path = Path(
-                    os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
-                ).expanduser()
-                gateway = ExecutionGateway(
-                    PermissionPolicy(permission_names),
-                    ApprovalManager(ttl_seconds=60),
-                    AuditLog(audit_path),
-                    capabilities=capabilities,
-                )
                 action_name = f"android.{args.action}"
                 print(f"Requested Android action: {args.action}")
                 print("Exact payload:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
@@ -400,22 +388,29 @@ def main() -> None:
                         f"{args.action} is not enabled. Add it to ZEXA_ALLOWED_ANDROID_ACTIONS "
                         "only if you want to allow this capability."
                     )
+                permission_names = {f"android.{name}" for name in allowed_actions}
+                capability_specs = build_android_capabilities(bridge, allowed_actions)
+                audit_path = Path(
+                    os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+                ).expanduser()
+                controller = CapabilityController(
+                    PermissionPolicy(permission_names),
+                    ApprovalManager(ttl_seconds=60),
+                    AuditLog(audit_path),
+                    capability_specs,
+                )
                 confirmation = input("Review the exact action and payload above. Type APPROVE to continue: ")
                 if confirmation != "APPROVE":
                     print("Android action cancelled.")
                     return
-                approval = gateway.issue_approval(
-                    action=action_name, payload=payload, user_confirmed=True,
+                approval_payload = {"payload": payload}
+                approval = controller.issue_approval(
+                    action_name, approval_payload, user_confirmed=True,
                 )
-                result = gateway.execute(
-                    action=action_name,
-                    permission=action_name,
-                    risk_level="high",
-                    payload=payload,
+                result = controller.execute(
+                    action_name,
+                    approval_payload,
                     approval_token=approval.token,
-                    handler=lambda approved_payload: bridge.perform(
-                        args.action, approved_payload, approve=lambda *_: True,
-                    ),
                 )
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
