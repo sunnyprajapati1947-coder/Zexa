@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-from zexa.android_capabilities import ANDROID_ACTIONS, build_android_capabilities
+from zexa.android_capabilities import ANDROID_ACTIONS, ANDROID_GRANTABLE_ACTIONS, build_android_capabilities
 from zexa.approvals import ApprovalManager
 from zexa.audit import AuditLog
 from zexa.capabilities import CapabilityController
@@ -18,6 +18,12 @@ class AndroidCapabilityTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_grantable_actions_are_a_subset_of_supported_actions(self):
+        self.assertTrue(ANDROID_GRANTABLE_ACTIONS <= ANDROID_ACTIONS)
+        self.assertIn("open_url", ANDROID_GRANTABLE_ACTIONS)
+        self.assertNotIn("tap", ANDROID_GRANTABLE_ACTIONS)
+        self.assertNotIn("input_text", ANDROID_GRANTABLE_ACTIONS)
 
     def test_only_explicitly_allowlisted_actions_are_registered(self):
         bridge = Mock(spec=AccessibilityBridge)
