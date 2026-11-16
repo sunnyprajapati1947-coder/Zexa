@@ -28,7 +28,7 @@ The Human Hand is the execution layer. It must not be confused with the language
 
 ### A. Android phone hand
 
-**Existing foundation in the repository:** opt-in AccessibilityService, authenticated loopback bridge, read-only screen snapshots, allowlisted tap/swipe/scroll/back/home/text-entry/app-launch requests, and native exact-action approval. This is a foundation, not yet a fully device-validated automation system.
+**Existing foundation in the repository:** opt-in AccessibilityService, authenticated loopback bridge, read-only screen snapshots, allowlisted tap/swipe/scroll/back/home/text-entry/app-launch/validated-HTTP(S)-URL requests, and native exact-action approval. This is a foundation, not yet a fully device-validated automation system.
 
 Planned capability groups:
 
