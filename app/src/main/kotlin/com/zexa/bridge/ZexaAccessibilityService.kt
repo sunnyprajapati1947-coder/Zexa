@@ -31,7 +31,7 @@ class ActionExecutionUnknownException(message: String) : IllegalStateException(m
 
 class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
-    @Volatile private var interruptionGeneration = 0L
+    private val actionInterruptionGate = ActionInterruptionGate()
     private val actionApprovals = ActionApprovalRegistry()
     private val taskActionGrants = TaskActionGrantRegistry()
     // All reads and writes are guarded by the service monitor; insertion order gives FIFO eviction.
@@ -63,7 +63,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {
         // Invalidate work queued for the service looper before clearing one-use authority.
         // Approval/grant handlers never hold this monitor while waiting for that looper.
-        interruptionGeneration += 1L
+        actionInterruptionGate.invalidate()
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
         taskActionGrants.clear()
@@ -151,11 +151,11 @@ class ZexaAccessibilityService : AccessibilityService() {
             consumed = taskActionGrants.consume(
                 grantId, taskId, deviceId, action, SystemClock.elapsedRealtime()
             ) ?: return JSONObject().put("ok", false).put("status", "grant_scope_mismatch_or_expired")
-            generation = interruptionGeneration
+            generation = actionInterruptionGate.current()
         }
         val result = try {
             val execution = onServiceThread {
-                check(interruptionGeneration == generation) { "Android accessibility service was interrupted before action dispatch." }
+                actionInterruptionGate.requireCurrent(generation) { "Android accessibility service was interrupted before action dispatch." }
                 performOnServiceThread(action, payload)
             }
             execution.put("status", when {
