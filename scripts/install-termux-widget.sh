@@ -23,7 +23,7 @@ install_shortcut() {
   local body="$2"
   local target="$SHORTCUT_DIR/$name"
   if [ -e "$target" ]; then
-    backup="$target.zexa-backup.$(date +%s).$.bak"
+    backup="$target.zexa-backup.$(date +%s).$$.bak"
     cp -p "$target" "$backup"
     echo "Backed up existing shortcut: $backup"
   fi
