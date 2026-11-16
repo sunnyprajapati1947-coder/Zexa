@@ -227,8 +227,6 @@ def main() -> None:
 
     args = parser.parse_args()
     load_env_file(Path(os.getenv("ZEXA_ENV_FILE", str(Path.cwd() / ".env"))))
-    registry = default_registry()
-    router = default_router()
 
     if args.command == "laptop":
         if args.laptop_command == "certificate":
@@ -282,6 +280,9 @@ def main() -> None:
             else:
                 print("Laptop had no active pairing; local credential deleted.")
         return
+
+    registry = default_registry()
+    router = default_router()
 
     if args.command == "schedule-skill":
         try:
