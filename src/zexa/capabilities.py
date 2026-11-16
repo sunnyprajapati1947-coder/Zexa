@@ -53,10 +53,10 @@ class CapabilitySpec:
             raise ValueError("Capability platform must be core, android, laptop, browser, or cloud.")
         if not callable(self.handler):
             raise TypeError("Capability handler must be a trusted callable.")
-        if type(self.max_input_chars) is not int or not 1 <= self.max_input_chars <= 64_000:
-            raise ValueError("max_input_chars must be between 1 and 64000.")
-        if type(self.max_output_chars) is not int or not 1 <= self.max_output_chars <= 64_000:
-            raise ValueError("max_output_chars must be between 1 and 64000.")
+        if type(self.max_input_chars) is not int or not 1 <= self.max_input_chars <= 256_000:
+            raise ValueError("max_input_chars must be between 1 and 256000.")
+        if type(self.max_output_chars) is not int or not 1 <= self.max_output_chars <= 512_000:
+            raise ValueError("max_output_chars must be between 1 and 512000.")
 
         object.__setattr__(self, "permission", self.permission.strip().lower())
         object.__setattr__(self, "input_schema", self._freeze_schema(self.input_schema, "input_schema"))
