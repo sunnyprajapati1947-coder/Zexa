@@ -204,6 +204,20 @@ def make_laptop_handler():
                     return self._send(404, {"error": "no_active_pairing_offer"})
                 return self._send(200, {"ok": True, "offer": offer})
 
+            if parsed.path == "/v1/apps":
+                if parsed.query:
+                    return self._send(400, {"error": "query_not_supported"})
+                if not self._authorized("laptop.apps.launch"):
+                    return
+                if self.server.app_registry is None:
+                    return self._send(404, {"error": "app_launch_not_enabled"})
+                apps = self.server.app_registry.list_apps()
+                self._audit(
+                    "laptop_app_list", self.headers.get("X-Zexa-Client-ID", ""),
+                    "app.list", "allowed", {"app_count": len(apps)},
+                )
+                return self._send(200, {"ok": True, "result": {"apps": apps}})
+
             if parsed.path == "/v1/workspace/list":
                 try:
                     query = parse_qs(parsed.query, strict_parsing=True, keep_blank_values=True)
