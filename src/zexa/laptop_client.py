@@ -160,10 +160,7 @@ class PairingCredentialStore:
                 target.flush()
                 os.fsync(target.fileno())
             os.replace(temporary, self.path)
-            try:
-                os.chmod(self.path, 0o600)
-            except OSError:
-                pass
+            secure_owner_only(self.path)
         finally:
             try:
                 os.unlink(temporary)
