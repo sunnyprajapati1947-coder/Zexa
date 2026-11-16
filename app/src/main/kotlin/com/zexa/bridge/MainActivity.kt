@@ -1225,7 +1225,7 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("Create bounded task grant")
-            .setMessage("The grant lasts 5 minutes or 30 actions, whichever comes first. No coordinate taps, text entry, messages, purchases or deletion.")
+            .setMessage("The grant lasts 5 minutes or 30 actions, whichever comes first. It may open validated HTTP(S) URLs and perform selected navigation only. No coordinate taps, text entry, messages, purchases or deletion.")
             .setView(panel)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Approve this task grant", null)
