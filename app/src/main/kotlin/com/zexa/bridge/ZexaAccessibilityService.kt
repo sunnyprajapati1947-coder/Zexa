@@ -266,12 +266,27 @@ class ZexaAccessibilityService : AccessibilityService() {
             count++
             val bounds = Rect()
             node.getBoundsInScreen(bounds)
+            val className = node.className?.toString()?.take(160) ?: ""
+            val viewId = node.viewIdResourceName?.take(200) ?: ""
+            val text = node.text?.toString()?.take(500) ?: ""
+            val description = node.contentDescription?.toString()?.take(300) ?: ""
+            val hint = node.hintText?.toString()?.take(300) ?: ""
+            val redacted = ScreenRedactionRules.shouldRedact(
+                isPassword = node.isPassword,
+                isEditable = node.isEditable,
+                className = className,
+                viewId = viewId,
+                hint = hint,
+                text = text,
+                description = description,
+            )
             val item = JSONObject()
                 .put("index", count - 1)
-                .put("class", node.className?.toString()?.take(160) ?: "")
-                .put("view_id", node.viewIdResourceName?.take(200) ?: "")
-                .put("text", if (node.isPassword) "" else node.text?.toString()?.take(500) ?: "")
-                .put("description", if (node.isPassword) "" else node.contentDescription?.toString()?.take(300) ?: "")
+                .put("class", className)
+                .put("view_id", viewId)
+                .put("text", if (redacted) "" else text)
+                .put("description", if (redacted) "" else description)
+                .put("redacted", redacted)
                 .put("clickable", node.isClickable)
                 .put("editable", node.isEditable)
                 .put("password", node.isPassword)
