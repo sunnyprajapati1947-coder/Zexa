@@ -22,6 +22,13 @@ from .skills import Skill
 _NOTE_STATUSES = {"draft", "approved", "rejected", "archived"}
 _SKILL_STATUSES = {"review_required", "approved", "rejected"}
 _SKILL_NAME = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+_SEARCH_STOPWORDS = {
+    "what", "which", "who", "when", "where", "why", "how", "did", "does", "do",
+    "is", "are", "was", "were", "the", "a", "an", "and", "or", "to", "of",
+    "in", "on", "for", "about", "with", "from", "me", "my", "you", "your",
+    "we", "our", "please", "tell", "show", "explain", "summarize", "learn",
+    "learned", "knowledge", "zexa",
+}
 
 
 @dataclass(frozen=True)
@@ -245,7 +252,10 @@ class LearningStore:
             raise ValueError("Knowledge search query must contain 1–200 characters.")
         if not 1 <= limit <= 50:
             raise ValueError("Knowledge search limit must be between 1 and 50.")
-        terms = [part for part in re.findall(r"[A-Za-z0-9_\u0900-\u097f-]{2,}", query)[:8]]
+        terms = [
+            part for part in re.findall(r"[A-Za-z0-9_\u0900-\u097f-]{2,}", query)
+            if part.casefold() not in _SEARCH_STOPWORDS
+        ][:8]
         if not terms:
             raise ValueError("Knowledge search query has no searchable terms.")
         score_parts: list[str] = []
