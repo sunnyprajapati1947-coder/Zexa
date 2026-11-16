@@ -92,12 +92,6 @@ class LaptopWorkspaceTests(unittest.TestCase):
         controller = CapabilityController(
             policy, approvals, audit, build_laptop_capabilities(self.workspace)
         )
-        self.assertEqual(
-            controller.execute("laptop.workspace.write", {
-                "relative_path": "approved.txt", "content": "Approved", "overwrite": False
-            }) if False else "approval-required",
-            "approval-required",
-        )
         payload = {
             "relative_path": "approved.txt",
             "content": "Approved",
