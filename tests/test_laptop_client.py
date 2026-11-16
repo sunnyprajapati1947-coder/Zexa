@@ -134,6 +134,27 @@ class LaptopClientTests(unittest.TestCase):
             with self.subTest(host=host), self.assertRaises(ValueError):
                 LaptopAgentClient(host, 9443, "a" * 64, "phone-main")
 
+    def test_credential_store_rejects_symlinked_secret_and_parent(self):
+        if os.name == "nt":
+            self.skipTest("Symlink creation requires platform-specific Windows privileges.")
+        root = Path(self.temp.name)
+        actual = root / "actual.json"
+        actual.write_text('{"version":1,"pairs":[]}', encoding="utf-8")
+        secret_link = root / "secret-link.json"
+        secret_link.symlink_to(actual)
+        with self.assertRaises(PermissionError):
+            PairingCredentialStore(secret_link).get("127.0.0.1", 9443, "phone-main")
+
+        real_dir = root / "real"
+        real_dir.mkdir()
+        parent_link = root / "linked-parent"
+        parent_link.symlink_to(real_dir, target_is_directory=True)
+        linked_store = PairingCredentialStore(parent_link / "pairings.json")
+        linked_store.path.parent.mkdir(exist_ok=True)
+        (parent_link / "pairings.json").write_text('{"version":1,"pairs":[]}', encoding="utf-8")
+        with self.assertRaises(PermissionError):
+            linked_store.get("127.0.0.1", 9443, "phone-main")
+
     def test_credential_store_rejects_world_readable_secret_file(self):
         self.store.save(
             "127.0.0.1", 9443, "a" * 64, "phone-main",
