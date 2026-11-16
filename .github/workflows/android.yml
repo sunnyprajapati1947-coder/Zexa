@@ -45,6 +45,32 @@ jobs:
         with:
           gradle-version: "8.11.1"
           arguments: --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: Verify APK and native 16 KB page alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          LIB="$RUNNER_TEMP/libzexa_llama.so"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "$APK"
+          unzip -p "$APK" lib/arm64-v8a/libzexa_llama.so > "$LIB"
+          llvm-readelf -lW "$LIB" | awk '
+            $1 == "LOAD" {
+              align = $NF
+              if (align !~ /^0x[0-9a-fA-F]+$/ || strtonum(align) < 16384) {
+                print "FAIL: PT_LOAD alignment is below 16 KB: " align
+                failed = 1
+              }
+              count++
+            }
+            END {
+              if (count == 0) {
+                print "FAIL: no PT_LOAD segments found"
+                exit 1
+              }
+              if (failed) exit 1
+              print "PASS: all " count " PT_LOAD segments use at least 16 KB alignment"
+            }'
       - uses: actions/upload-artifact@v7
         with:
           name: zexa-bridge-debug-apk
