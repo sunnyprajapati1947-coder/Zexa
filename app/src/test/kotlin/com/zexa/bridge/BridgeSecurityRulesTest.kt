@@ -69,6 +69,24 @@ class BridgeSecurityRulesTest {
         assertFalse(BridgeSecurityRules.gestureDuration(2_001))
     }
 
+
+    @Test
+    fun actionPayloadsRequireExactFieldsAndTypes() {
+        assertTrue(BridgeSecurityRules.validActionPayload("tap", org.json.JSONObject("""{"x":1,"y":2}""")))
+        assertTrue(BridgeSecurityRules.validActionPayload("swipe", org.json.JSONObject("""{"x1":1,"y1":2,"x2":3,"y2":4,"duration_ms":450}""")))
+        assertTrue(BridgeSecurityRules.validActionPayload("back", org.json.JSONObject()))
+        assertTrue(BridgeSecurityRules.validActionPayload("input_text", org.json.JSONObject("""{"text":"hello"}""")))
+        assertTrue(BridgeSecurityRules.validActionPayload("launch_app", org.json.JSONObject("""{"package_name":"com.example.app"}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("tap", org.json.JSONObject("""{"x":1,"y":2,"extra":true}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("tap", org.json.JSONObject("""{"x":"1","y":2}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("tap", org.json.JSONObject("""{"x":true,"y":2}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("back", org.json.JSONObject("""{"extra":1}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("swipe", org.json.JSONObject("""{"x1":1,"y1":2,"x2":3,"y2":4,"duration_ms":450.5}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("input_text", org.json.JSONObject("""{"text":"   "}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("launch_app", org.json.JSONObject("""{"package_name":"../../bad"}""")))
+        assertFalse(BridgeSecurityRules.validActionPayload("run_shell", org.json.JSONObject()))
+    }
+
     @Test
     fun packageNameMustHaveValidSegments() {
         assertTrue(BridgeSecurityRules.packageName("com.zexa.bridge"))
