@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .audit import AuditLog
 from .laptop_apps import LaptopAppRegistry
+from .laptop_browser import open_browser_url
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
 from .laptop_pairing import LaptopPairingAuthority, secure_owner_only
 
@@ -287,6 +288,24 @@ def make_laptop_handler():
                 except PermissionError:
                     return self._send(403, {"error": "app_launch_scope_denied"})
                 except (ValueError, RuntimeError) as exc:
+                    return self._send(400, {"error": str(exc)[:200]})
+            if self.path == "/v1/browser/open":
+                try:
+                    payload = self._read_json(limit=4096)
+                    if set(payload) != {"url"}:
+                        raise ValueError("Invalid browser navigation fields.")
+                    if not self._authorized("laptop.browser.open", self._last_body):
+                        return
+                    result = open_browser_url(payload["url"])
+                    self._audit(
+                        "laptop_browser_navigation",
+                        self.headers.get("X-Zexa-Client-ID", ""),
+                        "browser.open", "opened", {"host": result["host"]},
+                    )
+                    return self._send(200, {"ok": True, "result": result})
+                except PermissionError:
+                    return self._send(403, {"error": "browser_navigation_scope_denied"})
+                except (ValueError, RuntimeError, TypeError) as exc:
                     return self._send(400, {"error": str(exc)[:200]})
             if self.path == "/v1/workspace/write":
                 try:
