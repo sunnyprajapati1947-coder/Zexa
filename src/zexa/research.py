@@ -151,7 +151,7 @@ class _PageTextParser(HTMLParser):
         elif tag == "title" and not self._ignored:
             self._in_title = True
         elif tag in {"p", "div", "br", "li", "h1", "h2", "h3", "tr"} and not self._ignored:
-            self.parts.append("\\n")
+            self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
         if self._ignored:
@@ -161,7 +161,7 @@ class _PageTextParser(HTMLParser):
         if tag == "title":
             self._in_title = False
         elif tag in {"p", "div", "br", "li", "h1", "h2", "h3", "tr"}:
-            self.parts.append("\\n")
+            self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
         if self._ignored:
@@ -258,12 +258,12 @@ def fetch_public_page(url: str, *, timeout: float = 10.0) -> FetchedPage:
         response = None
         try:
             request_text = (
-                f"GET {target} HTTP/1.1\\r\\n"
-                f"Host: {host}\\r\\n"
-                "User-Agent: Mozilla/5.0 (compatible; ZexaResearch/0.1)\\r\\n"
-                "Accept: text/html,text/plain;q=0.9\\r\\n"
-                "Accept-Encoding: identity\\r\\n"
-                "Connection: close\\r\\n\\r\\n"
+                f"GET {target} HTTP/1.1\r\n"
+                f"Host: {host}\r\n"
+                "User-Agent: Mozilla/5.0 (compatible; ZexaResearch/0.1)\r\n"
+                "Accept: text/html,text/plain;q=0.9\r\n"
+                "Accept-Encoding: identity\r\n"
+                "Connection: close\r\n\r\n"
             )
             connection.sendall(request_text.encode("ascii"))
             response = http.client.HTTPResponse(connection)
