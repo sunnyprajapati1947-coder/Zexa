@@ -89,7 +89,7 @@ Commands:
     zexa bridge action back '{}'
     zexa bridge action input_text '{"text":"Hello"}'
     zexa bridge grants
-    zexa bridge grant-action scroll <task-id> <grant-id> '{"x1":300,"y1":900,"x2":300,"y2":300,"duration_ms":400}'
+    zexa bridge grant-action scroll TASK_ID GRANT_ID '{"x1":300,"y1":900,"x2":300,"y2":300,"duration_ms":400}'
 
 The native Device screen can create and revoke bounded navigation grants. Grants are limited to swipe, scroll, back, home, and installed-app launch; they expire after five minutes and allow at most 30 actions. Coordinate taps, text entry, external URL opening, and consequential actions remain on exact-action approval. Grants are in-memory and are cleared on AccessibilityService interruption, disable, reconnect, or destruction.
 
