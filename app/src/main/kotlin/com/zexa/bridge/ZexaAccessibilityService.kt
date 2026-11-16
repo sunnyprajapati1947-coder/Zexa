@@ -20,10 +20,12 @@ import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
 
 class ZexaAccessibilityService : AccessibilityService() {
     @Volatile private var bridgeServer: BridgeServer? = null
     private val actionApprovals = ActionApprovalRegistry()
+    private val taskActionGrants = TaskActionGrantRegistry()
     private val actionResults = ConcurrentHashMap<String, JSONObject>()
     private val actionAudit by lazy {
         val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
@@ -40,6 +42,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         // A service restart invalidates in-memory approval tickets. Never revive
         // an approval that was waiting before the accessibility service reconnected.
         actionApprovals.clear()
+        taskActionGrants.clear()
         refreshBridge()
     }
 
@@ -50,6 +53,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
+        taskActionGrants.clear()
     }
 
     private fun markPendingApprovalsInterrupted() {
@@ -72,7 +76,60 @@ class ZexaAccessibilityService : AccessibilityService() {
             bridgeServer?.stop()
             bridgeServer = null
             actionApprovals.clear()
+            taskActionGrants.clear()
         }
+    }
+
+    fun createTaskActionGrant(taskId: String, actions: Set<String>, ttlMs: Long, maxActions: Int): TaskActionGrant {
+        require(BridgeSecurityRules.validTaskId(taskId)) { "Invalid task identifier." }
+        val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
+        val deviceId = prefs.getString("device_id", null) ?: UUID.randomUUID().toString().also {
+            prefs.edit().putString("device_id", it).apply()
+        }
+        val grant = taskActionGrants.create(
+            taskId = taskId,
+            deviceId = deviceId,
+            actions = actions,
+            nowElapsedMs = SystemClock.elapsedRealtime(),
+            nowEpochMs = System.currentTimeMillis(),
+            ttlMs = ttlMs,
+            maxActions = maxActions,
+        )
+        actionAudit.append(ActionAuditEntry("grant-" + grant.grantId.take(48), "task_grant", "created", System.currentTimeMillis()))
+        return grant
+    }
+
+    fun activeTaskActionGrants(): List<TaskActionGrant> =
+        taskActionGrants.list(SystemClock.elapsedRealtime())
+
+    fun revokeTaskActionGrant(grantId: String): Boolean {
+        val revoked = taskActionGrants.revoke(grantId)
+        if (revoked) actionAudit.append(ActionAuditEntry("grant-" + grantId.take(48), "task_grant", "revoked", System.currentTimeMillis()))
+        return revoked
+    }
+
+    @Synchronized
+    fun performGrantedAction(taskId: String, grantId: String, action: String, payload: JSONObject): JSONObject {
+        require(action in TaskActionGrantRegistry.GRANTABLE_ACTIONS) { "Action is not eligible for a task grant." }
+        require(BridgeSecurityRules.validActionPayload(action, payload)) { "Invalid payload for the requested Android action." }
+        val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
+        val deviceId = prefs.getString("device_id", null)
+            ?: return JSONObject().put("ok", false).put("status", "grant_unavailable")
+        val consumed = taskActionGrants.consume(
+            grantId, taskId, deviceId, action, SystemClock.elapsedRealtime()
+        ) ?: return JSONObject().put("ok", false).put("status", "grant_scope_mismatch_or_expired")
+        val result = try {
+            perform(action, payload).put("status", "completed")
+                .put("grant_id", grantId)
+                .put("remaining_actions", consumed.remainingActions)
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("status", "failed")
+                .put("grant_id", grantId)
+                .put("error", error.message ?: "Action failed")
+                .put("remaining_actions", consumed.remainingActions)
+        }
+        actionAudit.append(ActionAuditEntry("grant-" + grantId.take(48), action, result.optString("status", "failed"), System.currentTimeMillis()))
+        return result
     }
 
     fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
@@ -306,6 +363,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
+        taskActionGrants.clear()
         bridgeServer?.stop()
         bridgeServer = null
         instance = null
