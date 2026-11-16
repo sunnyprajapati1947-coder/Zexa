@@ -209,19 +209,12 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
             with self.subTest(action=action), self.assertRaises(ValueError):
                 bridge.perform_granted(action, payload, "research-1", "grant-123")
 
-    def test_task_grant_allows_validated_url_navigation(self):
+    def test_task_grant_rejects_url_navigation(self):
         bridge = self.make_bridge()
-        calls = []
-        bridge._request = lambda method, path, payload=None: (
-            calls.append((method, path, payload)) or {
-                "ok": True, "status": "completed", "grant_id": "grant-123", "remaining_actions": 2
-            }
-        )
-        result = bridge.perform_granted(
-            "open_url", {"url": "https://example.com/path"}, "research-1", "grant-123"
-        )
-        self.assertTrue(result["ok"])
-        self.assertEqual(calls[0][2]["action"], "open_url")
+        with self.assertRaises(ValueError):
+            bridge.perform_granted(
+                "open_url", {"url": "https://example.com/path"}, "research-1", "grant-123"
+            )
 
     def test_task_grant_rejects_invalid_ids(self):
         bridge = self.make_bridge()
