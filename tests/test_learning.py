@@ -174,6 +174,25 @@ class LearningServiceTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_fetch_page_saves_full_page_provenance_as_draft(self):
+        from zexa.research import FetchedPage
+        brain = FakeBrain()
+        service = LearningService(self.store, brain, FakeSearcher())
+        with patch(
+            "zexa.research.fetch_public_page",
+            return_value=FetchedPage(
+                "Study Guide", "https://example.com/guide",
+                "Extracted public page text.", "a" * 64,
+            ),
+        ):
+            note_id = service.fetch_page("https://example.com/guide")
+        note = self.store.get_note(note_id)
+        self.assertEqual(note.status, "draft")
+        self.assertEqual(note.title, "Study Guide")
+        self.assertEqual(note.content_sha256, "a" * 64)
+        self.assertEqual(note.sources[0]["url"], "https://example.com/guide")
+        self.assertIn("untrusted data", brain.messages[0]["content"])
+
     def test_online_research_saves_source_provenance_as_draft(self):
         brain = FakeBrain()
         service = LearningService(self.store, brain, FakeSearcher())
