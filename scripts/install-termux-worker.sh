@@ -31,7 +31,7 @@ mkdir -p "$SERVICE_DIR" "$HOME/.zexa"
 chmod 700 "$HOME/.zexa"
 
 if [ -e "$SERVICE_DIR/run" ]; then
-  backup="$SERVICE_DIR/run.zexa-backup.$(date +%s).$.bak"
+  backup="$SERVICE_DIR/run.zexa-backup.$(date +%s).$$.bak"
   cp -p "$SERVICE_DIR/run" "$backup"
   echo "Backed up existing worker entrypoint: $backup"
 fi
