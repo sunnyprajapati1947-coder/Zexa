@@ -10,7 +10,9 @@ internal object ScreenRedactionRules {
     private val sensitiveLabel = Regex(
         "(?i)\\b(?:password|passcode|passphrase|pin|otp|one[- ]?time(?: password| code)?|" +
             "verification code|security code|cvv|cvc|card number|credit card|debit card|" +
-            "account number|bank account|upi pin|aadhaar|aadhar|pan number|passport number|" +
+            "account number|bank account|routing number|iban|ifsc(?: code)?|swift(?: code)?|bic|" +
+            "upi pin|upi id|card expiry|expiry date|security answer|date of birth|dob|" +
+            "tax identification number|gstin|aadhaar|aadhar|pan number|passport number|" +
             "social security|ssn)\\b"
     )
     private val paymentNumber = Regex("(?<!\\d)(?:\\d[ -]?){12,19}(?!\\d)")
