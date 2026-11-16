@@ -412,7 +412,10 @@ class ZexaAccessibilityService : AccessibilityService() {
                     .put("right", bounds.right).put("bottom", bounds.bottom))
             nodes.put(item)
             val childOtpContext = sensitiveOtpContext || hasOtpLabelChild(node)
-            for (i in 0 until node.childCount) {
+            // Bound child retrieval as well as emitted nodes; hostile or malformed
+            // accessibility trees must not force unbounded traversal work.
+            val childLimit = minOf(node.childCount, 150 - count)
+            for (i in 0 until childLimit) {
                 val child = node.getChild(i)
                 try {
                     visit(child, depth + 1, childOtpContext)
