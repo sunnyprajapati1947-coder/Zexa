@@ -56,7 +56,7 @@ class ActionApprovalRegistry(
         require(pending.size < maxPending) { "Too many pending device-action approvals." }
 
         val id = idFactory()
-        require(id.isNotBlank() && id.length <= 64 && !pending.containsKey(id)) {
+        require(id.isNotBlank() && id.length <= 64 && !pending.containsKey(id) && !expired.containsKey(id)) {
             "Could not create a unique approval request."
         }
 
