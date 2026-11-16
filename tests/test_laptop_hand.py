@@ -42,6 +42,25 @@ class LaptopWorkspaceTests(unittest.TestCase):
         self.assertEqual(result["content"], "A useful lesson.")
         self.assertEqual(len(result["sha256"]), 64)
 
+    def test_redacts_common_secrets_before_returning_workspace_text(self):
+        source = (
+            "API_KEY=example-secret-value\\n"
+            "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456\\n"
+            "GitHub token: ghp_abcdefghijklmnopqrstuvwxyz123456\\n"
+            "AWS key: AKIA1234567890ABCDEF\\n"
+            "JWT: eyJabcdefghijk.eyJabcdefghijk.eyJabcdefghijk\\n"
+            "-----BEGIN PRIVATE KEY-----\\nprivate-key-material\\n-----END PRIVATE KEY-----"
+        )
+        (self.root / "config.md").write_text(source, encoding="utf-8")
+        result = self.workspace.read_text("config.md")
+        self.assertTrue(result["redacted"])
+        for secret in (
+            "example-secret-value", "abcdefghijklmnopqrstuvwxyz123456",
+            "AKIA1234567890ABCDEF", "private-key-material",
+        ):
+            self.assertNotIn(secret, result["content"])
+        self.assertIn("[REDACTED PRIVATE KEY]", result["content"])
+
     def test_rejects_binary_invalid_utf8_and_oversized_files(self):
         (self.root / "binary.txt").write_bytes(bytes([0xff, 0xfe]))
         (self.root / "large.txt").write_bytes(b"x" * 256_001)
