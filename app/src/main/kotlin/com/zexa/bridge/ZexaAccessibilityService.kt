@@ -120,7 +120,8 @@ class ZexaAccessibilityService : AccessibilityService() {
             grantId, taskId, deviceId, action, SystemClock.elapsedRealtime()
         ) ?: return JSONObject().put("ok", false).put("status", "grant_scope_mismatch_or_expired")
         val result = try {
-            perform(action, payload).put("status", "completed")
+            val execution = perform(action, payload)
+            execution.put("status", if (execution.optBoolean("ok", false)) "completed" else "failed")
                 .put("grant_id", grantId)
                 .put("remaining_actions", consumed.remainingActions)
         } catch (error: Exception) {
