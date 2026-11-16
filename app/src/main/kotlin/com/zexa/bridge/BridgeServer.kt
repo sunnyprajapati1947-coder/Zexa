@@ -135,13 +135,12 @@ class BridgeServer(
                 if (line.isEmpty()) break
                 headerCount++
                 require(headerCount <= 32) { "Too many request headers." }
-                val separator = line.indexOf(':')
-                if (separator <= 0) return respond(client, 400, JSONObject().put("error", "Malformed header"))
-                val name = line.substring(0, separator).trim().lowercase()
-                if (headers.containsKey(name)) {
+                val header = BridgeHttpHeader.parse(line)
+                    ?: return respond(client, 400, JSONObject().put("error", "Malformed header"))
+                if (headers.containsKey(header.name)) {
                     return respond(client, 400, JSONObject().put("error", "Duplicate header"))
                 }
-                headers[name] = line.substring(separator + 1).trim()
+                headers[header.name] = header.value
             }
             if (headers.containsKey("transfer-encoding")) {
                 return respond(client, 400, JSONObject().put("error", "Transfer-Encoding is not supported"))
