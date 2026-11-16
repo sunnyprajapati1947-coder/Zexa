@@ -8,6 +8,7 @@ fingerprint out of band before sending any pairing message.
 from __future__ import annotations
 
 import base64
+from contextlib import closing
 from dataclasses import dataclass
 import hashlib
 import hmac
@@ -135,7 +136,7 @@ class LaptopPairingAuthority:
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         if os.name != "nt":
             os.chmod(path.parent, 0o700)
-        with self._connect_storage() as db:
+        with closing(self._connect_storage()) as db, db:
             db.execute("""
                 CREATE TABLE IF NOT EXISTS paired_clients (
                     client_id TEXT PRIMARY KEY,
