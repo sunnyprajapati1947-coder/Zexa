@@ -37,6 +37,7 @@ _ALLOWED_PERMISSIONS = frozenset({
     "laptop.workspace.write",
     "laptop.apps.launch",
     "laptop.browser.open",
+    "laptop.browser.read",
 })
 _DEFAULT_PERMISSIONS = ("laptop.workspace.list", "laptop.workspace.read")
 
