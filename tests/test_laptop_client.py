@@ -123,6 +123,17 @@ class LaptopClientTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid public-page"):
             client.read_public_page("https://example.com")
 
+        invalid_trust = {
+            "title": "Example", "url": "https://example.com",
+            "text": "Untrusted text", "content_sha256": "c" * 64,
+            "content_trust": "trusted_instruction",
+        }
+        client._request = lambda *args, **kwargs: (
+            200, {"ok": True, "result": invalid_trust}
+        )
+        with self.assertRaisesRegex(RuntimeError, "invalid public-page"):
+            client.read_public_page("https://example.com")
+
     def test_existing_pairing_supplies_saved_tls_fingerprint(self):
         self.store.save(
             "127.0.0.1", 9443, "b" * 64, "phone-main",
