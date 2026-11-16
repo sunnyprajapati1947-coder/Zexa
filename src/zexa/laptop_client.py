@@ -41,10 +41,17 @@ class PairingCredentialStore:
     def _load(self) -> dict[str, dict]:
         if not self.path.exists():
             return {}
-        if self.path.is_symlink() or not self.path.is_file() or self.path.stat().st_size > 64_000:
-            raise PermissionError("Laptop pairing credential file is not a safe regular file.")
+        if (
+            self.path.parent.is_symlink() or not self.path.parent.is_dir()
+            or self.path.is_symlink() or not self.path.is_file()
+            or self.path.stat().st_size > 64_000
+        ):
+            raise PermissionError("Laptop pairing credential path is not a safe regular file.")
         if os.name != "nt" and stat.S_IMODE(self.path.stat().st_mode) & 0o077:
             raise PermissionError("Laptop pairing credential file permissions are too broad; restrict it to the current user.")
+        if os.name == "nt":
+            secure_owner_only(self.path.parent, directory=True)
+            secure_owner_only(self.path)
         if os.name == "nt":
             secure_owner_only(self.path)
         try:
