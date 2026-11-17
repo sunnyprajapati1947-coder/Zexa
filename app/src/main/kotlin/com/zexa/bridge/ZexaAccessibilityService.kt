@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 class ActionExecutionUnknownException(message: String) : IllegalStateException(message)
 
-class ZexaAccessibilityService : AccessibilityService() {
+class ZexaAccessibilityService : AccessibilityService(), BridgeServiceApi {
     @Volatile private var bridgeServer: BridgeServer? = null
     private val actionInterruptionGate = ActionInterruptionGate()
     private val actionApprovals = ActionApprovalRegistry()
@@ -143,16 +143,16 @@ class ZexaAccessibilityService : AccessibilityService() {
         return grant
     }
 
-    fun activeTaskActionGrants(): List<TaskActionGrant> =
+    override fun activeTaskActionGrants(): List<TaskActionGrant> =
         taskActionGrants.list(SystemClock.elapsedRealtime())
 
-    fun revokeTaskActionGrant(grantId: String): Boolean {
+    override fun revokeTaskActionGrant(grantId: String): Boolean {
         val revoked = taskActionGrants.revoke(grantId)
         if (revoked) actionAudit.append(ActionAuditEntry("grant-revoked-" + grantId.take(48), "task_grant", "revoked", System.currentTimeMillis()))
         return revoked
     }
 
-    fun performGrantedAction(taskId: String, grantId: String, action: String, payload: JSONObject): JSONObject {
+    override fun performGrantedAction(taskId: String, grantId: String, action: String, payload: JSONObject): JSONObject {
         val generation: Long
         val consumed: TaskActionGrant
         synchronized(this) {
@@ -201,7 +201,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     @Synchronized
-    fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
+    override fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
         recordExpiredApprovals()
         require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
         require(BridgeSecurityRules.validActionPayload(action, payload)) {
@@ -345,7 +345,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     @Synchronized
-    fun actionResult(requestId: String): JSONObject? {
+    override fun actionResult(requestId: String): JSONObject? {
         recordExpiredApprovals()
         actionResults[requestId]?.let { return JSONObject(it.toString()) }
         val pending = actionApprovals.list(SystemClock.elapsedRealtime())
@@ -371,12 +371,12 @@ class ZexaAccessibilityService : AccessibilityService() {
             getSharedPreferences("zexa_bridge", MODE_PRIVATE).all["screen_access_enabled"]
         )
 
-    fun statusJson(): JSONObject = JSONObject()
+    override fun statusJson(): JSONObject = JSONObject()
         .put("ok", true)
         .put("accessibility_enabled", true)
         .put("bridge_enabled", bridgeServer?.isRunning == true)
 
-    fun screenJson(): JSONObject = onServiceThread {
+    override fun screenJson(): JSONObject = onServiceThread {
         // Re-check permission on the service looper immediately before reading the
         // active window. The UI toggle also runs on this looper, so it cannot race
         // between this check and snapshot traversal.
