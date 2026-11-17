@@ -300,6 +300,7 @@ class BridgeServer(
             401 -> "Unauthorized"
             403 -> "Forbidden"
             405 -> "Method Not Allowed"
+            408 -> "Request Timeout"
             500 -> "Internal Server Error"
             503 -> "Service Unavailable"
             else -> "Not Found"
