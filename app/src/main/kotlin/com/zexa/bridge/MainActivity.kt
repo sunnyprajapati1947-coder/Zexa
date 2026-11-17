@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import java.security.SecureRandom
 
 class MainActivity : Activity() {
@@ -79,6 +80,15 @@ class MainActivity : Activity() {
 
     private fun toggleBridge() {
         val enabled = !preferences().getBoolean("bridge_enabled", false)
+        if (enabled && ZexaAccessibilityService.instance == null) {
+            Toast.makeText(
+                this,
+                "Enable Zexa Accessibility Bridge in Android Settings, then return here.",
+                Toast.LENGTH_LONG,
+            ).show()
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            return
+        }
         preferences().edit().putBoolean("bridge_enabled", enabled).apply()
         ZexaAccessibilityService.instance?.refreshBridge()
         refreshButton()
