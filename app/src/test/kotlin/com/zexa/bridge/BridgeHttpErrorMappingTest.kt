@@ -4,6 +4,7 @@ import org.json.JSONException
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.nio.charset.CharacterCodingException
+import java.net.SocketTimeoutException
 
 class BridgeHttpErrorMappingTest {
     @Test
@@ -11,6 +12,8 @@ class BridgeHttpErrorMappingTest {
         assertEquals(400, BridgeHttpErrorMapping.status(IllegalArgumentException("Invalid payload")))
         assertEquals(400, BridgeHttpErrorMapping.status(JSONException("bad json")))
         assertEquals(400, BridgeHttpErrorMapping.status(CharacterCodingException()))
+        assertEquals(408, BridgeHttpErrorMapping.status(SocketTimeoutException()))
+        assertEquals("Request timed out", BridgeHttpErrorMapping.message(SocketTimeoutException()))
     }
 
     @Test
