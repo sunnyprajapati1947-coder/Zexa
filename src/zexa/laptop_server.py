@@ -29,6 +29,8 @@ from .laptop_pairing import LaptopPairingAuthority, secure_owner_only
 
 MAX_PAIR_BODY = 16_384
 MAX_WRITE_BODY = MAX_WRITE_CHARS * 4 + 4096
+REQUEST_READ_TIMEOUT_SECONDS = 10.0
+CLIENT_IDLE_TIMEOUT_SECONDS = 5.0
 
 
 def certificate_fingerprint(cert_file: str | Path) -> str:
@@ -142,10 +144,12 @@ def make_laptop_handler():
 
         def setup(self):
             super().setup()
-            self.connection.settimeout(5.0)
+            self.connection.settimeout(CLIENT_IDLE_TIMEOUT_SECONDS)
             self.rfile.close()
             self._deadline_reader = DeadlineSocketReader(
-                self.connection, request_timeout=10.0, idle_timeout=5.0
+                self.connection,
+                request_timeout=REQUEST_READ_TIMEOUT_SECONDS,
+                idle_timeout=CLIENT_IDLE_TIMEOUT_SECONDS,
             )
             self.rfile = self._deadline_reader
 
