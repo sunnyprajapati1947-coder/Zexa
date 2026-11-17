@@ -1,6 +1,7 @@
 package com.zexa.bridge
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
@@ -25,6 +26,7 @@ class ActionInterruptionGateTest {
             gate.requireCurrent(queuedGeneration)
             fail("Expected stale queued action to be rejected.")
         } catch (expected: IllegalStateException) {
+            assertTrue(expected is ActionInterruptedException)
             assertEquals(
                 "Android accessibility service was interrupted before action dispatch.",
                 expected.message
