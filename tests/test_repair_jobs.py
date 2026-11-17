@@ -2,6 +2,9 @@ import json
 import unittest
 
 from zexa.repair_jobs import create_repair_check_handler
+from zexa.jobs import JobQueue, JobWorker
+import tempfile
+from pathlib import Path
 
 
 class FakeBrain:
@@ -50,6 +53,24 @@ class RepairJobTests(unittest.TestCase):
         result = json.loads(handler({}))
         self.assertEqual(result["repair_plan"]["findings"], [])
         self.assertEqual(len(notifications), 1)
+
+    def test_repair_check_runs_through_allowlisted_background_worker(self):
+        with tempfile.TemporaryDirectory() as temp:
+            queue = JobQueue(Path(temp) / "jobs.sqlite3")
+            job_id = queue.enqueue("repair_check", {})
+            handler = create_repair_check_handler(
+                diagnostics=lambda: {
+                    "summary": {"total": 0, "warnings": 0, "errors": 0, "ok": 0},
+                    "checks": [],
+                }
+            )
+            worker = JobWorker(queue, {"repair_check": handler})
+            self.assertEqual(worker.run_once(), "completed")
+            job = queue.list_jobs()[0]
+            self.assertEqual(job["id"], job_id)
+            self.assertEqual(job["status"], "completed")
+            result = json.loads(job["result"])
+            self.assertFalse(result["automatic_changes"])
 
     def test_brain_failure_keeps_deterministic_plan(self):
         class BrokenBrain:
