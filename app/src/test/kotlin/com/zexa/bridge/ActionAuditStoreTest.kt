@@ -91,7 +91,10 @@ class ActionAuditStoreTest {
     fun pendingRequestsBecomeInterruptedAfterProcessRestart() {
         store.append(ActionAuditEntry("req-2", "launch_app", "pending_approval", 100L))
         val restored = ActionAuditStore({ saved }, { saved = it })
-        restored.markPendingAsInterrupted(200L)
+        val interrupted = restored.markPendingAsInterrupted(200L)
+        assertEquals(
+            listOf(ActionAuditEntry("req-2", "launch_app", "interrupted", 200L)), interrupted,
+        )
         assertEquals(
             listOf(ActionAuditEntry("req-2", "launch_app", "interrupted", 200L)),
             restored.list(),
@@ -102,7 +105,10 @@ class ActionAuditStoreTest {
     fun inProgressApprovalsBecomeInterruptedAfterProcessRestart() {
         store.append(ActionAuditEntry("req-executing", "tap", "executing", 150L))
         val restored = ActionAuditStore({ saved }, { saved = it })
-        restored.markPendingAsInterrupted(250L)
+        val interrupted = restored.markPendingAsInterrupted(250L)
+        assertEquals(
+            listOf(ActionAuditEntry("req-executing", "tap", "interrupted", 250L)), interrupted,
+        )
         assertEquals(
             listOf(ActionAuditEntry("req-executing", "tap", "interrupted", 250L)),
             restored.list(),
@@ -111,7 +117,7 @@ class ActionAuditStoreTest {
     @Test
     fun terminalEntriesAreNotChangedDuringRecovery() {
         store.append(ActionAuditEntry("req-3", "home", "completed", 100L))
-        store.markPendingAsInterrupted(200L)
+        assertTrue(store.markPendingAsInterrupted(200L).isEmpty())
         assertEquals("completed", store.list().single().status)
     }
 
