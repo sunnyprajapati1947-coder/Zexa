@@ -14,6 +14,8 @@ from .agents import AgentOrchestrator
 from .config import get_config, load_env_file
 from .doctor import run_diagnostics
 from .repair import build_repair_plan
+from .repair_transaction import RepairTransaction
+from .approvals import ApprovalManager
 from .brain import build_brain_router
 from .intent import route_utterance
 from .jobs import JobQueue, JobWorker
@@ -54,6 +56,18 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("doctor", help="Run read-only Zexa setup and capability diagnostics")
     subparsers.add_parser("repair-plan", help="Create a safe, proposal-only repair plan from diagnostics")
+    repair_file_parser = subparsers.add_parser("repair-file", help="Preview, apply, or roll back one approved workspace text-file repair")
+    repair_file_sub = repair_file_parser.add_subparsers(dest="repair_file_command", required=True)
+    repair_preview = repair_file_sub.add_parser("preview", help="Preview replacement hashes without changing files")
+    repair_preview.add_argument("target", help="Existing workspace-relative UTF-8 text file")
+    repair_preview.add_argument("replacement", help="Workspace-relative UTF-8 replacement file")
+    repair_apply = repair_file_sub.add_parser("apply", help="Apply a replacement after typing APPROVE")
+    repair_apply.add_argument("target")
+    repair_apply.add_argument("replacement")
+    repair_rollback = repair_file_sub.add_parser("rollback", help="Restore a backup after typing APPROVE")
+    repair_rollback.add_argument("target")
+    repair_rollback.add_argument("backup")
+    repair_rollback.add_argument("applied_sha256")
 
     ask_parser = subparsers.add_parser("ask", help="Ask Zexa a question")
     ask_parser.add_argument("prompt", nargs="+", help="Question or instruction")
@@ -122,6 +136,72 @@ def main() -> None:
     bridge_action.add_argument("payload", help="Action payload as a JSON object")
 
     args = parser.parse_args()
+    if args.command == "repair-file":
+        workspace = os.getcwd()
+        manager = ApprovalManager()
+        transaction = RepairTransaction(workspace, manager)
+
+        def read_workspace_text(relative_path):
+            candidate = transaction.workspace / relative_path
+            if candidate.is_symlink():
+                raise ValueError("Symbolic-link files are not supported.")
+            resolved = candidate.resolve()
+            if not transaction._inside(resolved) or not resolved.is_file():
+                raise ValueError("File must be an existing regular file inside the workspace.")
+            if resolved.stat().st_size > 256 * 1024:
+                raise ValueError("File exceeds the 256 KiB limit.")
+            return resolved.read_text(encoding="utf-8")
+
+        if args.repair_file_command in {"preview", "apply"}:
+            replacement = read_workspace_text(args.replacement)
+            preview = transaction.preview(args.target, replacement)
+            if args.repair_file_command == "preview":
+                print(json.dumps(preview, ensure_ascii=False, indent=2))
+                return
+            print(json.dumps(preview, ensure_ascii=False, indent=2))
+            confirmation = input("Review the exact target and hashes. Type APPROVE to apply: ")
+            if confirmation != "APPROVE":
+                print("Repair cancelled; no files changed.")
+                return
+            payload = {
+                "path": preview["path"],
+                "original_sha256": preview["original_sha256"],
+                "replacement_sha256": preview["replacement_sha256"],
+            }
+            grant = manager.issue("repair.replace_file", payload, True)
+            result = transaction.apply(args.target, replacement, grant.token)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
+
+        current_text = read_workspace_text(args.target)
+        current_preview = transaction.preview(args.target, current_text)
+        backup_path = (transaction.workspace / args.backup).resolve()
+        if not transaction._inside(backup_path) or not backup_path.is_file() or backup_path.is_symlink():
+            raise ValueError("Backup must be an existing file inside the workspace.")
+        import hashlib
+        current_sha = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+        restore_sha = hashlib.sha256(backup_path.read_bytes()).hexdigest()
+        payload = {
+            "path": current_preview["path"],
+            "current_sha256": current_sha,
+            "restore_sha256": restore_sha,
+        }
+        print(json.dumps({
+            "action": "repair.rollback_file",
+            "path": current_preview["path"],
+            "current_sha256": current_sha,
+            "restore_sha256": restore_sha,
+            "approval_required": True,
+        }, ensure_ascii=False, indent=2))
+        confirmation = input("Review the exact target and hashes. Type APPROVE to roll back: ")
+        if confirmation != "APPROVE":
+            print("Rollback cancelled; no files changed.")
+            return
+        grant = manager.issue("repair.rollback_file", payload, True)
+        result = transaction.rollback(args.target, args.backup, args.applied_sha256, grant.token)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
     if args.command in {"doctor", "repair-plan"}:
         load_env_file()
         report = run_diagnostics()
