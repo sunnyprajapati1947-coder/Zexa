@@ -238,7 +238,10 @@ def _connect_public_https(host: str, timeout: float):
         raw = None
         try:
             raw = socket.create_connection((address, 443), timeout=timeout)
-            return ssl.create_default_context().wrap_socket(raw, server_hostname=host)
+            context = ssl.create_default_context()
+            # Public-page retrieval must never negotiate legacy TLS 1.0/1.1.
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            return context.wrap_socket(raw, server_hostname=host)
         except OSError as exc:
             last_error = exc
             if raw is not None:
