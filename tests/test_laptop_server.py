@@ -153,6 +153,23 @@ class LaptopServerTests(unittest.TestCase):
                 finally:
                     connection.close()
 
+    def test_rejects_non_ascii_content_length_bytes(self):
+        import socket
+
+        connection = socket.create_connection(("127.0.0.1", self.port), timeout=3)
+        try:
+            connection.sendall(
+                b"POST /v1/pair/complete HTTP/1.1\\r\\n"
+                b"Host: 127.0.0.1\\r\\n"
+                b"Content-Type: application/json\\r\\n"
+                b"Content-Length: \\xff\\r\\n"
+                b"Connection: close\\r\\n\\r\\n{}"
+            )
+            response = connection.makefile("rb").readline()
+            self.assertIn(b"400", response)
+        finally:
+            connection.close()
+
     def test_rejects_duplicate_content_type_headers(self):
         connection = HTTPConnection("127.0.0.1", self.port, timeout=3)
         try:
