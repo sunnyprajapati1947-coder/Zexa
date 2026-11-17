@@ -271,16 +271,14 @@ class BridgeServer(
                         return respond(client, 405, JSONObject().put("error", "Method not allowed"))
                     else -> return respond(client, 404, JSONObject().put("error", "Not found"))
                 }
-            } catch (error: org.json.JSONException) {
-                return respond(client, 400, JSONObject().put("error", "Malformed JSON request"))
-            } catch (_: java.nio.charset.CharacterCodingException) {
-                return respond(client, 400, JSONObject().put("error", "Request body must be valid UTF-8"))
-            } catch (error: IllegalArgumentException) {
-                return respond(client, 400, JSONObject().put("error", error.message ?: "Invalid request"))
-            } catch (_: Exception) {
-                // Do not misclassify service/runtime failures as client input errors
-                // or expose internal exception details over the local bridge.
-                return respond(client, 500, JSONObject().put("error", "Internal bridge error"))
+            } catch (error: Exception) {
+                // Malformed input is a client error; unexpected service/runtime failures
+                // are server errors and must not leak internal exception details.
+                return respond(
+                    client,
+                    BridgeHttpErrorMapping.status(error),
+                    JSONObject().put("error", BridgeHttpErrorMapping.message(error)),
+                )
             }
             respond(client, responseStatus, response)
         }
