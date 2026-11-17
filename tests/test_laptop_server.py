@@ -124,6 +124,34 @@ class LaptopServerTests(unittest.TestCase):
         status, _ = self.request("GET", "/v1/pair/offer")
         self.assertEqual(status, 200)
 
+    def test_rejects_duplicate_content_length_headers(self):
+        connection = HTTPConnection("127.0.0.1", self.port, timeout=3)
+        try:
+            connection.putrequest("POST", "/v1/pair/complete")
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Content-Length", "2")
+            connection.putheader("Content-Length", "2")
+            connection.endheaders(b"{}")
+            response = connection.getresponse()
+            self.assertEqual(response.status, 400)
+            self.assertIn("Content-Length", response.read().decode("utf-8"))
+        finally:
+            connection.close()
+
+    def test_rejects_duplicate_content_type_headers(self):
+        connection = HTTPConnection("127.0.0.1", self.port, timeout=3)
+        try:
+            connection.putrequest("POST", "/v1/pair/complete")
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Content-Length", "2")
+            connection.endheaders(b"{}")
+            response = connection.getresponse()
+            self.assertEqual(response.status, 400)
+            self.assertIn("Content-Type", response.read().decode("utf-8"))
+        finally:
+            connection.close()
+
     def test_pair_offer_never_exposes_one_time_code(self):
         status, result = self.request("GET", "/v1/pair/offer")
         self.assertEqual(status, 200)
