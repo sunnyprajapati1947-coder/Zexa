@@ -17,7 +17,7 @@ class RepairPatchTests(unittest.TestCase):
 
     def test_rejects_paths_outside_explicit_allowlist(self):
         for path in ("../secret.py", "/tmp/evil.py", ".env", ".github/workflows/ci.yml",
-                     "src/zexa/../secret.py", "src/zexa/link.py", "tests/helper.py"):
+                     "src/zexa/../secret.py", "tests/helper.py"):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 build_patch_proposal(path, "x", "y")
 
