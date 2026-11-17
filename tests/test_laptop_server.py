@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import os
+import socket
+import time
 import shutil
 import stat
 import sys
@@ -16,6 +18,7 @@ from urllib.parse import urlencode
 
 from zexa.audit import AuditLog
 from zexa.laptop_hand import LaptopWorkspace
+from zexa.http_deadline import DeadlineSocketReader
 from zexa.laptop_apps import LaptopAppRegistry
 from zexa.laptop_pairing import LaptopPairingAuthority
 from zexa.laptop_server import (
@@ -436,3 +439,39 @@ class LaptopServerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class DeadlineSocketReaderTests(unittest.TestCase):
+    def _assert_slow_trickle_expires(self, read_operation):
+        receiver, sender = socket.socketpair()
+        reader = DeadlineSocketReader(receiver, request_timeout=0.2, idle_timeout=1.0)
+        stop = threading.Event()
+
+        def trickle():
+            try:
+                while not stop.is_set():
+                    sender.sendall(b"x")
+                    time.sleep(0.04)
+            except OSError:
+                pass
+
+        thread = threading.Thread(target=trickle, daemon=True)
+        thread.start()
+        started = time.monotonic()
+        reader.begin_request()
+        try:
+            with self.assertRaises(socket.timeout):
+                read_operation(reader)
+            self.assertLess(time.monotonic() - started, 0.8)
+        finally:
+            reader.end_request()
+            reader.close()
+            stop.set()
+            sender.close()
+            receiver.close()
+            thread.join(timeout=1)
+
+    def test_request_line_slow_trickle_uses_one_total_deadline(self):
+        self._assert_slow_trickle_expires(lambda reader: reader.readline(4096))
+
+    def test_request_body_slow_trickle_uses_one_total_deadline(self):
+        self._assert_slow_trickle_expires(lambda reader: reader.read(64))
