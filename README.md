@@ -176,3 +176,6 @@ This is an independent implementation. Reference repositories and attribution ar
 ## Read-only setup diagnostics
 
 Run `zexa doctor` after installation to inspect the Python version, optional Termux commands, local llama.cpp availability, and whether brain/bridge configuration is present. The report shows only whether credentials are configured; it never prints secret values. This command is read-only: it does not install packages, edit files, contact services, start the bridge, or execute device actions. Missing optional capabilities are reported as informational items or warnings, not repaired automatically. Any future repair workflow must present a proposed change and require explicit approval before modifying the device or project.
+### Safe self-repair proposals
+
+Run `zexa repair-plan` to convert known diagnostic warnings and errors into a deterministic remediation checklist. It is proposal-only: it does not run shell commands, install packages, edit files, change settings, or contact external services. Unknown diagnostic IDs are ignored rather than interpreted as instructions. Each proposal is marked as requiring approval. For now, carry out setup steps manually; automatic patch application and rollback are not yet implemented.
