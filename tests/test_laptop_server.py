@@ -437,9 +437,6 @@ class LaptopServerTests(unittest.TestCase):
                 LaptopAgentServer(host, 9443, "missing.crt", "missing.key", self.workspace)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 class DeadlineSocketReaderTests(unittest.TestCase):
     def _assert_slow_trickle_expires(self, read_operation):
         receiver, sender = socket.socketpair()
@@ -475,3 +472,7 @@ class DeadlineSocketReaderTests(unittest.TestCase):
 
     def test_request_body_slow_trickle_uses_one_total_deadline(self):
         self._assert_slow_trickle_expires(lambda reader: reader.read(64))
+
+
+if __name__ == "__main__":
+    unittest.main()
