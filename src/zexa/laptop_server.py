@@ -20,6 +20,7 @@ import ssl
 from urllib.parse import parse_qs, urlsplit
 
 from .audit import AuditLog
+from .http_deadline import DeadlineSocketReader
 from .laptop_apps import LaptopAppRegistry
 from .laptop_browser import open_browser_url, read_public_page
 from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
@@ -142,6 +143,21 @@ def make_laptop_handler():
         def setup(self):
             super().setup()
             self.connection.settimeout(5.0)
+            self.rfile.close()
+            self._deadline_reader = DeadlineSocketReader(
+                self.connection, request_timeout=10.0, idle_timeout=5.0
+            )
+            self.rfile = self._deadline_reader
+
+        def handle_one_request(self):
+            # The request line, all headers, and an optional JSON body share
+            # one absolute deadline. Processing after the body is read is not
+            # charged against this read budget.
+            self._deadline_reader.begin_request()
+            try:
+                return super().handle_one_request()
+            finally:
+                self._deadline_reader.end_request()
 
         def log_message(self, _format, *_args):
             # Do not log file paths, request headers, authentication metadata, or content.
