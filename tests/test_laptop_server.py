@@ -139,7 +139,7 @@ class LaptopServerTests(unittest.TestCase):
             connection.close()
 
     def test_rejects_non_decimal_content_length_values(self):
-        for invalid_length in ("+2", "2_0", "-2", "２"):
+        for invalid_length in ("+2", "2_0", "-2", "0x2", "2e0"):
             with self.subTest(content_length=invalid_length):
                 connection = HTTPConnection("127.0.0.1", self.port, timeout=3)
                 try:
