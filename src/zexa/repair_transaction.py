@@ -139,8 +139,11 @@ class RepairTransaction:
                  applied_sha256: str, approval_token: str) -> dict:
         """Restore a transaction backup only if the live file is still unchanged."""
         target = self._target(relative_path)
-        backup = (self.workspace / backup_relative_path).resolve()
-        if not self._inside(backup) or not backup.is_file() or backup.is_symlink():
+        backup_candidate = self.workspace / backup_relative_path
+        if backup_candidate.is_symlink():
+            raise ValueError("Symbolic-link backups are not supported.")
+        backup = backup_candidate.resolve()
+        if not self._inside(backup) or not backup.is_file():
             raise ValueError("Backup must be an existing regular file inside the workspace.")
         if backup.stat().st_size > _MAX_FILE_BYTES:
             raise ValueError("Backup exceeds the 256 KiB limit.")
