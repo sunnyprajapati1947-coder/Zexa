@@ -30,9 +30,15 @@ class DeadlineSocketReader:
         self._deadline: float | None = None
         self._buffer = bytearray()
         self._closed = False
+        self._timed_out = False
+
+    @property
+    def timed_out(self) -> bool:
+        return self._timed_out
 
     def begin_request(self) -> None:
         self._deadline = time.monotonic() + self.request_timeout
+        self._timed_out = False
 
     def end_request(self) -> None:
         self._deadline = None
@@ -49,10 +55,15 @@ class DeadlineSocketReader:
         else:
             remaining = self._deadline - time.monotonic()
             if remaining <= 0:
+                self._timed_out = True
                 raise socket.timeout("Total HTTP request read deadline exceeded.")
             timeout = min(self.idle_timeout, remaining)
         self.connection.settimeout(timeout)
-        return self.connection.recv(size)
+        try:
+            return self.connection.recv(size)
+        except socket.timeout:
+            self._timed_out = True
+            raise
 
     def readline(self, size: int = -1) -> bytes:
         if size == 0:
