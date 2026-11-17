@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 import re
 import sys
 import time
@@ -234,18 +235,24 @@ def main() -> None:
         print(f"Notification job queued: #{job_id}")
         return
     if args.command == "repair-patch":
-        root = os.getcwd()
+        root = Path.cwd().resolve()
         def read_patch_text(relative_path):
-            candidate_path = os.path.join(root, relative_path)
-            current = os.path.abspath(candidate_path)
-            if os.path.islink(candidate_path):
-                raise ValueError("Symbolic-link patch files are not supported.")
-            if os.path.commonpath([root, current]) != root or not os.path.isfile(current):
+            candidate_path = root / relative_path
+            cursor = candidate_path
+            while cursor != root and root in cursor.parents:
+                if cursor.is_symlink():
+                    raise ValueError("Symbolic-link patch files and parent directories are not supported.")
+                cursor = cursor.parent
+            try:
+                current = candidate_path.resolve(strict=True)
+                current.relative_to(root)
+            except (OSError, ValueError) as exc:
+                raise ValueError("Patch files must be existing regular files inside the workspace.") from exc
+            if not current.is_file():
                 raise ValueError("Patch files must be existing regular files inside the workspace.")
-            if os.path.getsize(current) > 256 * 1024:
+            if current.stat().st_size > 256 * 1024:
                 raise ValueError("Patch file exceeds the 256 KiB limit.")
-            with open(current, "r", encoding="utf-8") as stream:
-                return stream.read()
+            return current.read_text(encoding="utf-8")
         original = read_patch_text(args.target)
         candidate = read_patch_text(args.candidate)
         proposal = build_patch_proposal(args.target, original, candidate)
