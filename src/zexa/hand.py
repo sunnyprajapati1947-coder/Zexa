@@ -33,7 +33,7 @@ class AccessibilityBridge:
         self,
         token: str,
         base_url: str = "http://127.0.0.1:8765",
-        timeout: int = 8,
+        timeout: int = 35,
     ) -> None:
         if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{64}", token):
             raise ValueError("Bridge token must be exactly 64 lowercase hexadecimal characters.")
@@ -46,7 +46,7 @@ class AccessibilityBridge:
             raise ValueError("Bridge URL must use port 8765 and have no path.")
         self.token = token
         self.base_url = base_url.rstrip("/")
-        self.timeout = max(1, min(int(timeout), 20))
+        self.timeout = max(1, min(int(timeout), 40))
 
     def _request(self, method: str, path: str, payload: dict | None = None) -> dict:
         body = None if payload is None else json.dumps(payload).encode("utf-8")
