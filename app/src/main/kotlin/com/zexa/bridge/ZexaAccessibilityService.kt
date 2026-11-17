@@ -346,6 +346,7 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     @Synchronized
+    @Synchronized
     fun actionResult(requestId: String): JSONObject? {
         recordExpiredApprovals()
         actionResults[requestId]?.let { return JSONObject(it.toString()) }
