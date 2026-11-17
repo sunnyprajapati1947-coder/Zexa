@@ -205,3 +205,12 @@ Queue a full read-only Doctor check and deterministic repair plan:
 Or leave the existing restricted Termux worker service running to process it in the background. The worker registers only the fixed `repair_check` handler alongside local notifications. The handler runs Doctor, builds proposals from known diagnostic IDs, and may ask the configured online/offline Brain to explain those proposals. Only the redacted proposal fields are sent to the Brain; model output is advisory text and is never interpreted as a command or patch. A local notification reports the number of proposals when Termux:API is available. The completed job stores the structured report and advisory in the local SQLite job history.
 
 The self-check never applies repairs, installs packages, invokes shell commands, changes phone settings, or edits files. AI unavailability does not block the deterministic Doctor/repair report. Review proposals separately; use the explicit `zexa repair-file` preview/apply/rollback workflow only for a replacement you have inspected and approved.
+### Bounded code-patch review
+
+A candidate patch can be reviewed without changing the working tree:
+
+    zexa repair-patch src/zexa/module.py /tmp/module-candidate.py
+
+The target must be an existing file under `src/zexa/*.py`, `tests/test_*.py`, or `README.md`. The candidate is read as UTF-8 text, limited to 256 KiB, and Python candidates must pass AST syntax parsing. Zexa prints a unified diff, hashes, and explicit validation flags. It does not execute candidate code or tests, write a patch, or modify the target. The candidate file itself must be inside the current workspace; use a workspace-relative path.
+
+After reviewing the diff, a separately approved `zexa repair-file apply TARGET CANDIDATE` operation can apply an inspected replacement with a backup. This review currently validates syntax and boundaries only; it does not prove correctness, security, or test success. Run the project's test suite in a disposable environment before deploying a code change.
