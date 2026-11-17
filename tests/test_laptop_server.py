@@ -3,17 +3,17 @@ from __future__ import annotations
 import base64
 import json
 import os
-import socket
-import time
 import shutil
+import socket
 import stat
 import sys
-from unittest.mock import patch
 import tempfile
 import threading
+import time
 import unittest
 from http.client import HTTPConnection
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import urlencode
 
 from zexa.audit import AuditLog
