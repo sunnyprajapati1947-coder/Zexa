@@ -92,6 +92,36 @@ class LaptopServerTests(unittest.TestCase):
         headers["X-Zexa-Client-ID"] = "phone-main"
         return headers
 
+    def test_server_closes_slow_request_line_at_total_deadline(self):
+        stop = threading.Event()
+        connection = socket.create_connection(("127.0.0.1", self.port), timeout=2)
+        connection.settimeout(1.0)
+
+        def trickle():
+            try:
+                while not stop.is_set():
+                    connection.sendall(b"G")
+                    time.sleep(0.04)
+            except OSError:
+                pass
+
+        with patch("zexa.laptop_server.REQUEST_READ_TIMEOUT_SECONDS", 0.2):
+            sender = threading.Thread(target=trickle, daemon=True)
+            sender.start()
+            started = time.monotonic()
+            try:
+                while connection.recv(1024):
+                    pass
+                self.assertLess(time.monotonic() - started, 0.8)
+            finally:
+                stop.set()
+                connection.close()
+                sender.join(timeout=1)
+
+        # The timed-out request must release its bounded worker slot.
+        status, _ = self.request("GET", "/v1/pair/offer")
+        self.assertEqual(status, 200)
+
     def test_pair_offer_never_exposes_one_time_code(self):
         status, result = self.request("GET", "/v1/pair/offer")
         self.assertEqual(status, 200)
