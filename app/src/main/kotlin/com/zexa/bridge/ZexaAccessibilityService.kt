@@ -112,7 +112,7 @@ class ZexaAccessibilityService : AccessibilityService() {
         val enabled = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
             .getBoolean("bridge_enabled", false)
         if (enabled) {
-            if (bridgeServer?.isRunning != true) {
+            if (bridgeServer?.isActive != true) {
                 invalidateBridgeSession()
                 val token = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
                     .getString("token", null) ?: return
