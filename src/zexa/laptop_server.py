@@ -176,6 +176,7 @@ def make_laptop_handler():
 
         def _send(self, status: int, payload: object) -> None:
             raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            self.close_connection = True
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(raw)))
@@ -186,11 +187,15 @@ def make_laptop_handler():
             self.wfile.write(raw)
 
         def _read_json(self, limit: int = MAX_PAIR_BODY) -> dict:
-            if self.headers.get("Transfer-Encoding"):
+            if self.headers.get_all("Transfer-Encoding"):
                 raise ValueError("Transfer-Encoding is not supported.")
-            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
-                raise ValueError("application/json is required.")
-            raw_length = self.headers.get("Content-Length", "")
+            content_types = self.headers.get_all("Content-Type", [])
+            if len(content_types) != 1 or content_types[0].split(";", 1)[0].strip().lower() != "application/json":
+                raise ValueError("Exactly one application/json Content-Type is required.")
+            content_lengths = self.headers.get_all("Content-Length", [])
+            if len(content_lengths) != 1:
+                raise ValueError("Exactly one Content-Length is required.")
+            raw_length = content_lengths[0]
             try:
                 length = int(raw_length)
             except ValueError as exc:
