@@ -13,6 +13,7 @@ from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
 from .agents import AgentOrchestrator
 from .config import get_config, load_env_file
 from .doctor import run_diagnostics
+from .repair import build_repair_plan
 from .brain import build_brain_router
 from .intent import route_utterance
 from .jobs import JobQueue, JobWorker
@@ -52,6 +53,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="zexa", description="Zexa — dual-brain phone-first assistant")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("doctor", help="Run read-only Zexa setup and capability diagnostics")
+    subparsers.add_parser("repair-plan", help="Create a safe, proposal-only repair plan from diagnostics")
 
     ask_parser = subparsers.add_parser("ask", help="Ask Zexa a question")
     ask_parser.add_argument("prompt", nargs="+", help="Question or instruction")
@@ -120,9 +122,11 @@ def main() -> None:
     bridge_action.add_argument("payload", help="Action payload as a JSON object")
 
     args = parser.parse_args()
-    if args.command == "doctor":
+    if args.command in {"doctor", "repair-plan"}:
         load_env_file()
         report = run_diagnostics()
+        if args.command == "repair-plan":
+            report = build_repair_plan(report)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return
 
