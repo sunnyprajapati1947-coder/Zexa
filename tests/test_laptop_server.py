@@ -159,11 +159,11 @@ class LaptopServerTests(unittest.TestCase):
         connection = socket.create_connection(("127.0.0.1", self.port), timeout=3)
         try:
             connection.sendall(
-                b"POST /v1/pair/complete HTTP/1.1\\r\\n"
-                b"Host: 127.0.0.1\\r\\n"
-                b"Content-Type: application/json\\r\\n"
-                b"Content-Length: \\xff\\r\\n"
-                b"Connection: close\\r\\n\\r\\n{}"
+                b"POST /v1/pair/complete HTTP/1.1\r\n"
+                b"Host: 127.0.0.1\r\n"
+                b"Content-Type: application/json\r\n"
+                b"Content-Length: \xff\r\n"
+                b"Connection: close\r\n\r\n{}"
             )
             response = connection.makefile("rb").readline()
             self.assertIn(b"400", response)
