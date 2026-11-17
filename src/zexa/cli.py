@@ -175,8 +175,11 @@ def main() -> None:
 
         current_text = read_workspace_text(args.target)
         current_preview = transaction.preview(args.target, current_text)
-        backup_path = (transaction.workspace / args.backup).resolve()
-        if not transaction._inside(backup_path) or not backup_path.is_file() or backup_path.is_symlink():
+        backup_candidate = transaction.workspace / args.backup
+        if backup_candidate.is_symlink():
+            raise ValueError("Symbolic-link backups are not supported.")
+        backup_path = backup_candidate.resolve()
+        if not transaction._inside(backup_path) or not backup_path.is_file():
             raise ValueError("Backup must be an existing file inside the workspace.")
         import hashlib
         current_sha = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
