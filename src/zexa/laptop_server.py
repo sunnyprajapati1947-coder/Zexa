@@ -196,10 +196,11 @@ def make_laptop_handler():
             if len(content_lengths) != 1:
                 raise ValueError("Exactly one Content-Length is required.")
             raw_length = content_lengths[0]
-            try:
-                length = int(raw_length)
-            except ValueError as exc:
-                raise ValueError("A valid Content-Length is required.") from exc
+            # RFC 9110 Content-Length is one or more ASCII decimal digits.
+            # int() alone is too permissive (for example, it accepts +2 and 1_0).
+            if not raw_length or not raw_length.isascii() or not raw_length.isdigit():
+                raise ValueError("A valid Content-Length is required.")
+            length = int(raw_length)
             if not 1 <= length <= limit:
                 raise ValueError("Request body is empty or too large.")
             raw = self.rfile.read(length)
