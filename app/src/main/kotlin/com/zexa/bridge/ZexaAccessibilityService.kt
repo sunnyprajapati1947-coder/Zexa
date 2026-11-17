@@ -70,7 +70,16 @@ class ZexaAccessibilityService : AccessibilityService() {
     }
 
     private fun markPendingApprovalsInterrupted() {
-        actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
+        val interrupted = actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
+        interrupted.forEach { entry ->
+            rememberActionResult(
+                entry.requestId,
+                JSONObject()
+                    .put("ok", false)
+                    .put("status", "interrupted")
+                    .put("request_id", entry.requestId),
+            )
+        }
     }
 
     /** Persist expiry before any caller observes a missing approval ticket. */
@@ -169,6 +178,11 @@ class ZexaAccessibilityService : AccessibilityService() {
                 else -> "failed"
             })
                 .put("grant_id", grantId)
+                .put("remaining_actions", consumed.remainingActions)
+        } catch (error: ActionInterruptedException) {
+            JSONObject().put("ok", false).put("status", "interrupted")
+                .put("grant_id", grantId)
+                .put("error", error.message ?: "Android action was interrupted.")
                 .put("remaining_actions", consumed.remainingActions)
         } catch (error: ActionExecutionUnknownException) {
             JSONObject().put("ok", false).put("status", "execution_unknown")
@@ -283,6 +297,12 @@ class ZexaAccessibilityService : AccessibilityService() {
                     else -> "failed"
                 })
                 .put("request_id", ticket.requestId)
+        } catch (error: ActionInterruptedException) {
+            JSONObject()
+                .put("ok", false)
+                .put("status", "interrupted")
+                .put("request_id", ticket.requestId)
+                .put("error", error.message ?: "Android action was interrupted.")
         } catch (error: ActionExecutionUnknownException) {
             JSONObject()
                 .put("ok", false)
