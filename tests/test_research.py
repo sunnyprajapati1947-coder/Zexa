@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from zexa.research import (
     DuckDuckGoSearch, SearchResult, _PageTextParser, _canonical_result_url,
@@ -92,6 +92,29 @@ class ResearchTests(unittest.TestCase):
             from zexa.research import _connect_public_https
             _connect_public_https("public.example", 3.0)
         connect.assert_not_called()
+
+    def test_public_https_connection_requires_tls_12(self):
+        import socket
+        import ssl
+
+        raw_socket = Mock()
+        wrapped_socket = Mock()
+        context = Mock()
+        context.wrap_socket.return_value = wrapped_socket
+        with (
+            patch(
+                "zexa.research.socket.getaddrinfo",
+                return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+            ),
+            patch("zexa.research.socket.create_connection", return_value=raw_socket),
+            patch("zexa.research.ssl.create_default_context", return_value=context),
+        ):
+            from zexa.research import _connect_public_https
+            result = _connect_public_https("public.example", 3.0)
+
+        self.assertIs(result, wrapped_socket)
+        self.assertEqual(context.minimum_version, ssl.TLSVersion.TLSv1_2)
+        context.wrap_socket.assert_called_once_with(raw_socket, server_hostname="public.example")
 
     def test_page_parser_omits_scripts_and_extracts_title_and_text(self):
         parser = _PageTextParser()
