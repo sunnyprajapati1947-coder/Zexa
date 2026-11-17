@@ -488,6 +488,7 @@ class DeadlineSocketReaderTests(unittest.TestCase):
         try:
             with self.assertRaises(socket.timeout):
                 read_operation(reader)
+            self.assertTrue(reader.timed_out)
             self.assertLess(time.monotonic() - started, 0.8)
         finally:
             reader.end_request()
