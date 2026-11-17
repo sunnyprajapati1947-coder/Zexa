@@ -173,3 +173,6 @@ GitHub Actions runs the unit-test suite and byte-compilation on Python 3.11, 3.1
 ## Project provenance
 
 This is an independent implementation. Reference repositories and attribution are documented in THIRD_PARTY_NOTICES.md. Upstream source code is not copied into this repository by default.
+## Read-only setup diagnostics
+
+Run `zexa doctor` after installation to inspect the Python version, optional Termux commands, local llama.cpp availability, and whether brain/bridge configuration is present. The report shows only whether credentials are configured; it never prints secret values. This command is read-only: it does not install packages, edit files, contact services, start the bridge, or execute device actions. Missing optional capabilities are reported as informational items or warnings, not repaired automatically. Any future repair workflow must present a proposed change and require explicit approval before modifying the device or project.
