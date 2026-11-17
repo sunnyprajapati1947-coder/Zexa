@@ -209,7 +209,7 @@ The self-check never applies repairs, installs packages, invokes shell commands,
 
 A candidate patch can be reviewed without changing the working tree:
 
-    zexa repair-patch src/zexa/module.py /tmp/module-candidate.py
+    zexa repair-patch src/zexa/module.py candidate.py
 
 The target must be an existing file under `src/zexa/*.py`, `tests/test_*.py`, or `README.md`. The candidate is read as UTF-8 text, limited to 256 KiB, and Python candidates must pass AST syntax parsing. Zexa prints a unified diff, hashes, and explicit validation flags. It does not execute candidate code or tests, write a patch, or modify the target. The candidate file itself must be inside the current workspace; use a workspace-relative path.
 
