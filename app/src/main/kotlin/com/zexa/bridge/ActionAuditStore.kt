@@ -48,17 +48,19 @@ class ActionAuditStore(
     }
 
     @Synchronized
-    fun markPendingAsInterrupted(nowMs: Long) {
+    fun markPendingAsInterrupted(nowMs: Long): List<ActionAuditEntry> {
         require(nowMs >= 0L)
         val entries = readEntries().toMutableList()
-        var changed = false
+        val interrupted = mutableListOf<ActionAuditEntry>()
         for (index in entries.indices) {
             if (entries[index].status in setOf("pending_approval", "executing")) {
-                entries[index] = entries[index].copy(status = "interrupted", timestampEpochMs = nowMs)
-                changed = true
+                val updated = entries[index].copy(status = "interrupted", timestampEpochMs = nowMs)
+                entries[index] = updated
+                interrupted.add(updated)
             }
         }
-        if (changed) writeEntries(entries)
+        if (interrupted.isNotEmpty()) writeEntries(entries)
+        return interrupted
     }
 
     @Synchronized
