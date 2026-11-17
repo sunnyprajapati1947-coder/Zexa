@@ -18,12 +18,11 @@ The optional Android companion in `app/` has a native workspace with Home, Chat,
 
 ## Build verification
 
-Current Human Hand branch head: `f7595d1fea8ad7ef8699f667648769f2eabaaecf`.
+Current Human Hand branch head: `3bebddb94d578e275791d2d3e4da3cd943b3d6a4`.
 
-- [Zexa CI #43994375384](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43994375384) passed on this head for Python 3.11, 3.12, 3.13, and 3.14, including source compilation, Termux installer syntax validation, and the cross-version laptop HTTP slow-trickle timeout regression tests.
-- [Android Bridge Build #43993491759](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43993491759) passed on commit `3a080a6fa5c987c80d8e0b8cf79eae0dc2234001`: Android JVM unit tests, debug APK assembly, APK zip alignment, native ELF 16 KB PT_LOAD alignment verification, and artifact upload. No Android app source files changed between that Android-verified commit and current head `f7595d1`.
-- An additional Android build for current head is running: [Android Bridge Build #43994375403](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43994375403).
-- The verified `zexa-bridge-debug-apk` artifact (artifact ID `14289795269`, approximately 6.5 MiB) is available from the [Android workflow run's Artifacts section](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43993491759). Artifact archive digest: `sha256:cfb6cac0bb7df48250527b7ac5f41978a834d5aa897c79b3c2a3c5e4320d588d`.
+- [Zexa CI #43995300681](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43995300681) passed on this exact head for Python 3.11, 3.12, 3.13, and 3.14, including source compilation, Termux installer syntax validation, and all unit tests (including the cross-version laptop HTTP slow-trickle timeout regression).
+- [Android Bridge Build #43995300660](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43995300660) passed on this exact head: Android JVM unit tests, debug APK assembly, APK zip alignment, native ELF 16 KB PT_LOAD alignment verification, and artifact upload.
+- The `zexa-bridge-debug-apk` artifact (ID `14289427801`, 6,854,596 bytes) is available from the [Android workflow run's Artifacts section](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43995300660). Archive digest: `sha256:7aa942654d4db0d258d1b2cdd6eecf4949617928bf3d409becdbbef048e1ccd8`; expires 2027-02-15.
 
 These results prove automated CI, APK assembly, and the configured alignment checks only. They do not prove installation or operation on a physical OPPO Android 16 device, nor real phone-to-laptop pairing over a LAN. Device acceptance tests remain outstanding for Qwen inference, memory persistence/export, voice, reminders, Accessibility approval and interruption behavior, laptop pairing/actions, process recovery, RAM, and thermals. Always verify checks against the current branch head; older successful runs do not validate newer code.
 
