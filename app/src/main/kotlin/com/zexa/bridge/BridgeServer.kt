@@ -186,12 +186,12 @@ class BridgeServer(
                     }
                     method == "POST" && path == "/v1/grants/revoke" -> {
                         val length = BridgeSecurityRules.contentLength(headers["content-length"])
-                            ?: error("Invalid request body length.")
+                            ?: throw IllegalArgumentException("Invalid request body length.")
                         val body = ByteArray(length)
                         var offset = 0
                         while (offset < length) {
                             val read = input.read(body, offset, length - offset)
-                            if (read < 0) error("Incomplete request body.")
+                            if (read < 0) throw IllegalArgumentException("Incomplete request body.")
                             offset += read
                         }
                         val json = JSONObject(BridgeHttpBody.decodeUtf8(body))
@@ -239,7 +239,7 @@ class BridgeServer(
                         }
                         val action = json.optString("action", "")
                         val payload = json.optJSONObject("payload")
-                            ?: error("Action payload must be a JSON object.")
+                            ?: throw IllegalArgumentException("Action payload must be a JSON object.")
                         val hasTaskId = json.has("task_id")
                         val hasGrantId = json.has("grant_id")
                         require(hasTaskId == hasGrantId) { "Task and grant identifiers must be supplied together." }
@@ -271,8 +271,14 @@ class BridgeServer(
                         return respond(client, 405, JSONObject().put("error", "Method not allowed"))
                     else -> return respond(client, 404, JSONObject().put("error", "Not found"))
                 }
-            } catch (error: Exception) {
+            } catch (error: org.json.JSONException) {
+                return respond(client, 400, JSONObject().put("error", "Malformed JSON request"))
+            } catch (error: IllegalArgumentException) {
                 return respond(client, 400, JSONObject().put("error", error.message ?: "Invalid request"))
+            } catch (_: Exception) {
+                // Do not misclassify service/runtime failures as client input errors
+                // or expose internal exception details over the local bridge.
+                return respond(client, 500, JSONObject().put("error", "Internal bridge error"))
             }
             respond(client, responseStatus, response)
         }
@@ -290,6 +296,7 @@ class BridgeServer(
             401 -> "Unauthorized"
             403 -> "Forbidden"
             405 -> "Method Not Allowed"
+            500 -> "Internal Server Error"
             503 -> "Service Unavailable"
             else -> "Not Found"
         }
