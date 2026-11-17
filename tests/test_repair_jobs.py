@@ -38,7 +38,7 @@ class RepairJobTests(unittest.TestCase):
         self.assertFalse(result["files_modified"])
         self.assertEqual(len(result["repair_plan"]["findings"]), 1)
         self.assertEqual(len(notifications), 1)
-        self.assertNotIn("GROQ_API_KEY", str(brain.messages))
+        self.assertNotIn("actual-secret-value", str(brain.messages))
 
     def test_no_findings_skips_brain_but_notifies(self):
         class MustNotRun:
