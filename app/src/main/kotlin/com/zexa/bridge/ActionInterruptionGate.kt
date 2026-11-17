@@ -4,6 +4,8 @@ package com.zexa.bridge
  * Invalidates service actions that were queued but have not started yet.
  * The generation is read on the Android service looper immediately before dispatch.
  */
+internal class ActionInterruptedException : IllegalStateException("Android accessibility service was interrupted before action dispatch.")
+
 class ActionInterruptionGate {
     @Volatile private var generation: Long = 0L
 
@@ -17,8 +19,6 @@ class ActionInterruptionGate {
     }
 
     fun requireCurrent(expectedGeneration: Long) {
-        check(generation == expectedGeneration) {
-            "Android accessibility service was interrupted before action dispatch."
-        }
+        if (generation != expectedGeneration) throw ActionInterruptedException()
     }
 }
