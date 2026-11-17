@@ -22,6 +22,10 @@ class BridgeServer(
     @Volatile private var server: ServerSocket? = null
     private val clientPool = BridgeClientPool(4)
 
+    /** True while startup is in progress or the bound listener is active. */
+    val isActive: Boolean
+        get() = running
+
     val isRunning: Boolean
         get() = running && ready && server?.isClosed == false
     private var thread: Thread? = null
