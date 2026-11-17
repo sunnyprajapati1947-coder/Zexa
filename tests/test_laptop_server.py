@@ -94,10 +94,8 @@ class LaptopServerTests(unittest.TestCase):
 
     def test_server_closes_slow_request_line_at_total_deadline(self):
         stop = threading.Event()
-        connection = socket.create_connection(("127.0.0.1", self.port), timeout=2)
-        connection.settimeout(1.0)
 
-        def trickle():
+        def trickle(connection):
             try:
                 while not stop.is_set():
                     connection.sendall(b"G")
@@ -105,8 +103,12 @@ class LaptopServerTests(unittest.TestCase):
             except OSError:
                 pass
 
+        # Patch before connect: the server may accept and construct its
+        # handler immediately after the TCP handshake completes.
         with patch("zexa.laptop_server.REQUEST_READ_TIMEOUT_SECONDS", 0.2):
-            sender = threading.Thread(target=trickle, daemon=True)
+            connection = socket.create_connection(("127.0.0.1", self.port), timeout=2)
+            connection.settimeout(1.0)
+            sender = threading.Thread(target=trickle, args=(connection,), daemon=True)
             sender.start()
             started = time.monotonic()
             try:
