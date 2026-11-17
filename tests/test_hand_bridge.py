@@ -57,6 +57,16 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         with self.assertRaisesRegex(TimeoutError, "approval expired"):
             bridge.perform("back", {}, approve=lambda action, payload: True)
 
+    def test_service_interruption_is_reported_to_approval_caller(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda method, path, payload=None: (
+            {"ok": True, "status": "pending_approval", "request_id": "request-interrupted"}
+            if method == "POST"
+            else {"ok": False, "status": "interrupted", "request_id": "request-interrupted"}
+        )
+        with self.assertRaisesRegex(InterruptedError, "service was interrupted"):
+            bridge.perform("back", {}, approve=lambda action, payload: True)
+
     def test_native_failure_is_not_reported_as_success(self):
         bridge = self.make_bridge()
         bridge._request = lambda *args, **kwargs: (
@@ -199,6 +209,15 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
         self.assertEqual(calls[0][1], "/v1/action")
         self.assertEqual(calls[0][2]["task_id"], "research-1")
         self.assertEqual(calls[0][2]["grant_id"], "grant-123")
+
+    def test_perform_granted_surfaces_service_interruption(self):
+        bridge = self.make_bridge()
+        bridge._request = lambda *args, **kwargs: {
+            "ok": False, "status": "interrupted", "grant_id": "grant-123"
+        }
+        with self.assertRaisesRegex(InterruptedError, "service was interrupted"):
+            bridge.perform_granted("scroll", {"x1": 10, "y1": 20, "x2": 30, "y2": 40},
+                                   "research-1", "grant-123")
 
     def test_perform_granted_surfaces_unknown_execution_without_retry(self):
         bridge = self.make_bridge()
