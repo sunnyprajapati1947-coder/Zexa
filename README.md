@@ -192,7 +192,7 @@ This is an independent implementation. Reference repositories and attribution ar
 Run `zexa doctor` after installation to inspect the Python version, optional Termux commands, local llama.cpp availability, and whether brain/bridge configuration is present. The report shows only whether credentials are configured; it never prints secret values. This command is read-only: it does not install packages, edit files, contact services, start the bridge, or execute device actions. Missing optional capabilities are reported as informational items or warnings, not repaired automatically. Any future repair workflow must present a proposed change and require explicit approval before modifying the device or project.
 ### Safe self-repair proposals
 
-Run `zexa repair-plan` to convert known diagnostic warnings and errors into a deterministic remediation checklist. It is proposal-only: it does not run shell commands, install packages, edit files, change settings, or contact external services. Unknown diagnostic IDs are ignored rather than interpreted as instructions. Each proposal is marked as requiring approval. For now, carry out setup steps manually; automatic patch application and rollback are not yet implemented.
+Run `zexa repair-plan` to convert known diagnostic warnings and errors into a deterministic remediation checklist. It is proposal-only: it does not run shell commands, install packages, edit files, change settings, or contact external services. Unknown diagnostic IDs are ignored rather than interpreted as instructions. Each proposal is marked as requiring approval. Setup steps still require manual review and execution. Bounded file replacement and rollback are available through the separately approval-gated `zexa repair-file` workflow described below.
 ### Approval-gated file repair and rollback
 
 The optional `zexa repair-file` workflow handles one existing UTF-8 text file inside the current workspace (maximum 256 KiB). First run `zexa repair-file preview path/to/file path/to/replacement.txt` to inspect the original and replacement hashes. Then run `zexa repair-file apply path/to/file path/to/replacement.txt`; it displays the exact preview and requires typing `APPROVE`. A private backup is written under `.zexa/repair-backups/` before the atomic replacement. No shell commands are run.
@@ -218,6 +218,17 @@ A candidate patch can be reviewed without changing the working tree:
 The target must be an existing file under `src/zexa/*.py`, `tests/test_*.py`, or `README.md`. The candidate is read as UTF-8 text, limited to 256 KiB, and Python candidates must pass AST syntax parsing. Zexa prints a unified diff, hashes, and explicit validation flags. It does not execute candidate code or tests, write a patch, or modify the target. The candidate file itself must be inside the current workspace; use a workspace-relative path.
 
 After reviewing the diff, a separately approved `zexa repair-file apply TARGET CANDIDATE` operation can apply an inspected replacement with a backup. This review currently validates syntax and boundaries only; it does not prove correctness, security, or test success. Run the project's test suite in a disposable environment before deploying a code change.
+
+### GitHub-hosted candidate validation
+
+Use the existing GitHub Actions CI as the isolated validation stage for a reviewed repair candidate:
+
+1. Create a dedicated branch such as `fix/repair-candidate`; do not push an unreviewed candidate directly to `main`.
+2. Commit the candidate patch and push that branch. The CI workflow runs compile checks and the unit-test suite on Python 3.11, 3.12, 3.13, and 3.14 for `fix/**` and `feature/**` branches.
+3. Open a pull request targeting `main`. CI runs again for the proposed merge; CodeQL and the dependency audit also run on pull requests to `main`.
+4. Review the diff, all workflow results, and any security findings. Merge only after a human approves the change.
+
+The workflows use read-only repository permissions and do not pass project secrets to pull-request jobs. CI tests do execute repository code (including tests) on an ephemeral GitHub-hosted runner, so treat that runner as a disposable validation environment—not as proof that arbitrary code is safe. No workflow applies a candidate to the phone, writes to the phone filesystem, or auto-merges a repair. After review, install or apply a change to a device only through a separate user-controlled process and the existing approval/backup/rollback safeguards.
 
 ### Dependency vulnerability audit
 
