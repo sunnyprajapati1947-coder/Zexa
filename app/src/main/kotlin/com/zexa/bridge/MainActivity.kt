@@ -79,8 +79,9 @@ class MainActivity : Activity() {
     }
 
     private fun toggleBridge() {
-        val enabled = !preferences().getBoolean("bridge_enabled", false)
-        if (enabled && ZexaAccessibilityService.instance == null) {
+        val currentlyRunning = ZexaAccessibilityService.instance?.isBridgeRunning() == true
+        val enable = !currentlyRunning
+        if (enable && ZexaAccessibilityService.instance == null) {
             Toast.makeText(
                 this,
                 "Enable Zexa Accessibility Bridge in Android Settings, then return here.",
@@ -89,14 +90,14 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             return
         }
-        preferences().edit().putBoolean("bridge_enabled", enabled).apply()
+        preferences().edit().putBoolean("bridge_enabled", enable).apply()
         ZexaAccessibilityService.instance?.refreshBridge()
         refreshButton()
     }
 
     private fun refreshButton() {
-        val enabled = preferences().getBoolean("bridge_enabled", false)
-        bridgeButton.text = if (enabled) "Stop local bridge" else "Start local bridge"
+        val running = ZexaAccessibilityService.instance?.isBridgeRunning() == true
+        bridgeButton.text = if (running) "Stop local bridge" else "Start local bridge"
     }
 
     override fun onResume() {
