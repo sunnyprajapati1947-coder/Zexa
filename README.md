@@ -179,3 +179,8 @@ Run `zexa doctor` after installation to inspect the Python version, optional Ter
 ### Safe self-repair proposals
 
 Run `zexa repair-plan` to convert known diagnostic warnings and errors into a deterministic remediation checklist. It is proposal-only: it does not run shell commands, install packages, edit files, change settings, or contact external services. Unknown diagnostic IDs are ignored rather than interpreted as instructions. Each proposal is marked as requiring approval. For now, carry out setup steps manually; automatic patch application and rollback are not yet implemented.
+### Approval-gated file repair and rollback
+
+The optional `zexa repair-file` workflow handles one existing UTF-8 text file inside the current workspace (maximum 256 KiB). First run `zexa repair-file preview path/to/file path/to/replacement.txt` to inspect the original and replacement hashes. Then run `zexa repair-file apply path/to/file path/to/replacement.txt`; it displays the exact preview and requires typing `APPROVE`. A private backup is written under `.zexa/repair-backups/` before the atomic replacement. No shell commands are run.
+
+To roll back, use the target path, backup path, and `applied_sha256` returned by the apply result: `zexa repair-file rollback path/to/file .zexa/repair-backups/BACKUP.bak APPLIED_SHA256`. Rollback also requires a fresh typed approval and refuses to overwrite a target that changed after the repair. Symlink targets/backups, paths outside the workspace, non-UTF-8 files, and oversized files are rejected. Review proposed content before approval; do not apply untrusted patches. This is a bounded file transaction, not unrestricted autonomous code repair.
