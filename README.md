@@ -176,6 +176,10 @@ Never commit .env, API keys, bridge tokens, or personal data.
 
 GitHub Actions runs the unit-test suite and byte-compilation on Python 3.11, 3.12, 3.13, and 3.14 for pushes and pull requests.
 
+## Automated security scanning
+
+GitHub CodeQL analyzes the Python code on pushes and pull requests to `main`, on a weekly schedule, and when manually dispatched. The workflow uses read-only repository access plus the permission required to publish security findings; it does not receive project secrets or execute repair proposals. Review any CodeQL alert before changing code. Static analysis complements, but does not replace, unit tests, dependency review, or real-device validation.
+
 ## Development checks
 
     python -m unittest discover -s tests -v
