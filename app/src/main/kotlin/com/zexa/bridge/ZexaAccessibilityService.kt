@@ -47,11 +47,10 @@ class ZexaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        markPendingApprovalsInterrupted()
-        // A service restart invalidates in-memory approval tickets. Never revive
-        // an approval that was waiting before the accessibility service reconnected.
-        actionApprovals.clear()
-        taskActionGrants.clear()
+        // Reconnection is a fresh authority boundary: invalidate callbacks that
+        // were queued before reconnect, close old bridge clients, and discard all
+        // one-use approvals/grants before optionally starting a new server session.
+        invalidateBridgeSession()
         refreshBridge()
     }
 
