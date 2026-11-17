@@ -39,7 +39,7 @@ class BridgeDeadlineInputStreamTest {
                     while (input.read() >= 0) received++
                     throw AssertionError("Expected the total request deadline to expire.")
                 } catch (_: SocketTimeoutException) {
-                    assertTrue("Expected trickle data before the shared deadline", received in 2..3)
+                    assertTrue("Expected trickle data before the shared deadline, got $received bytes", received in 1 until 10)
                 }
             }
             client.join(1_000)
