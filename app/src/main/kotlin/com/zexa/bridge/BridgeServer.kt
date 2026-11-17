@@ -225,12 +225,12 @@ class BridgeServer(
                     }
                     method == "POST" && path == "/v1/action" -> {
                         val length = BridgeSecurityRules.contentLength(headers["content-length"])
-                            ?: error("Invalid request body length.")
+                            ?: throw IllegalArgumentException("Invalid request body length.")
                         val body = ByteArray(length)
                         var offset = 0
                         while (offset < length) {
                             val read = input.read(body, offset, length - offset)
-                            if (read < 0) error("Incomplete request body.")
+                            if (read < 0) throw IllegalArgumentException("Incomplete request body.")
                             offset += read
                         }
                         val json = JSONObject(BridgeHttpBody.decodeUtf8(body))
@@ -273,6 +273,8 @@ class BridgeServer(
                 }
             } catch (error: org.json.JSONException) {
                 return respond(client, 400, JSONObject().put("error", "Malformed JSON request"))
+            } catch (_: java.nio.charset.CharacterCodingException) {
+                return respond(client, 400, JSONObject().put("error", "Request body must be valid UTF-8"))
             } catch (error: IllegalArgumentException) {
                 return respond(client, 400, JSONObject().put("error", error.message ?: "Invalid request"))
             } catch (_: Exception) {
