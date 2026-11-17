@@ -218,3 +218,7 @@ A candidate patch can be reviewed without changing the working tree:
 The target must be an existing file under `src/zexa/*.py`, `tests/test_*.py`, or `README.md`. The candidate is read as UTF-8 text, limited to 256 KiB, and Python candidates must pass AST syntax parsing. Zexa prints a unified diff, hashes, and explicit validation flags. It does not execute candidate code or tests, write a patch, or modify the target. The candidate file itself must be inside the current workspace; use a workspace-relative path.
 
 After reviewing the diff, a separately approved `zexa repair-file apply TARGET CANDIDATE` operation can apply an inspected replacement with a backup. This review currently validates syntax and boundaries only; it does not prove correctness, security, or test success. Run the project's test suite in a disposable environment before deploying a code change.
+
+### Dependency vulnerability audit
+
+GitHub Actions runs `pip-audit` on the installed Python project for pushes and pull requests to `main`, on a weekly schedule, and on manual dispatch. The workflow has read-only repository permissions and does not receive project secrets. It audits the installed Python environment for known published vulnerabilities; it does not prove the application is vulnerability-free, inspect Android dependencies, or replace code review and runtime testing.
