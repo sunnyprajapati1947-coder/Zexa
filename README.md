@@ -118,6 +118,16 @@ Run:
 
     zexa agent "Review this Python function and explain improvements"
 
+## Doctor-to-Brain self-repair assessment
+
+The background `repair_check` job connects the read-only Doctor, deterministic repair planner, configured Brain, and Termux notification channel. Queue a self-check with:
+
+    zexa repair-check
+    zexa jobs
+    zexa worker --once
+
+Or keep the existing Termux worker service running to process it in the background. The worker gives the Brain only known, redacted repair proposals; the Brain may explain them but cannot choose files, run commands, or apply patches. A notification reports the number of proposals. If the Brain is unavailable, the deterministic Doctor/repair report still completes. No automatic file changes are made by this background check. Review a proposal separately and use the explicit `zexa repair-file` preview/apply/rollback workflow for a single UTF-8 text file, with a backup and a fresh typed approval for each change.
+
 ## Durable background notifications
 
 Zexa includes a SQLite-backed job queue and a restricted worker. The first built-in job handler is local Android notifications; jobs contain data, not shell commands or generated code. Unknown job types fail closed. Failed handlers are retried up to their configured attempt limit.
