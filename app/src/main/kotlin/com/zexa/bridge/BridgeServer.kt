@@ -5,6 +5,7 @@ import java.io.BufferedInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
 
 class BridgeServer(
@@ -135,6 +136,8 @@ class BridgeServer(
             )
             val requestLine = try {
                 readHttpLine(input)
+            } catch (_: SocketTimeoutException) {
+                return respond(client, 408, JSONObject().put("error", "Request timed out"))
             } catch (_: Exception) {
                 return respond(client, 400, JSONObject().put("error", "Malformed request line"))
             } ?: return
@@ -159,6 +162,8 @@ class BridgeServer(
                     parsedHeaders[header.name] = header.value
                 }
                 parsedHeaders
+            } catch (_: SocketTimeoutException) {
+                return respond(client, 408, JSONObject().put("error", "Request timed out"))
             } catch (_: Exception) {
                 return respond(client, 400, JSONObject().put("error", "Malformed request headers"))
             }
