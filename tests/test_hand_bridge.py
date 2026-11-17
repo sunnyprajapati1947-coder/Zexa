@@ -265,6 +265,12 @@ class AccessibilityBridgeApprovalTests(unittest.TestCase):
 
 
 class AccessibilityBridgeConfigurationTests(unittest.TestCase):
+    def test_http_timeout_covers_android_service_thread_deadline(self):
+        default_bridge = AccessibilityBridge("b" * 64)
+        self.assertEqual(default_bridge.timeout, 35)
+        self.assertEqual(AccessibilityBridge("b" * 64, timeout=90).timeout, 40)
+        self.assertEqual(AccessibilityBridge("b" * 64, timeout=0).timeout, 1)
+
     def test_token_matches_android_64_character_lowercase_hex_contract(self):
         bridge = AccessibilityBridge("a" * 64)
         self.assertEqual(len(bridge.token), 64)
