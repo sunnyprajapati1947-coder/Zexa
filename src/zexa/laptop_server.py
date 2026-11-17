@@ -159,7 +159,14 @@ def make_laptop_handler():
             # charged against this read budget.
             self._deadline_reader.begin_request()
             try:
-                return super().handle_one_request()
+                result = super().handle_one_request()
+                # BaseHTTPRequestHandler's timeout handling differs across
+                # supported Python versions. Preserve the reader's timeout
+                # signal so a caught TimeoutError cannot start another request
+                # with a fresh deadline on the same slow connection.
+                if self._deadline_reader.timed_out:
+                    self.close_connection = True
+                return result
             finally:
                 self._deadline_reader.end_request()
 
