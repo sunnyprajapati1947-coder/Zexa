@@ -15,6 +15,7 @@ from .config import get_config, load_env_file
 from .doctor import run_diagnostics
 from .repair import build_repair_plan
 from .repair_transaction import RepairTransaction
+from .repair_jobs import create_repair_check_handler
 from .approvals import ApprovalManager
 from .brain import build_brain_router
 from .intent import route_utterance
@@ -56,6 +57,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("doctor", help="Run read-only Zexa setup and capability diagnostics")
     subparsers.add_parser("repair-plan", help="Create a safe, proposal-only repair plan from diagnostics")
+    subparsers.add_parser("repair-check", help="Queue a Doctor + Brain advisory self-check for the background worker")
     repair_file_parser = subparsers.add_parser("repair-file", help="Preview, apply, or roll back one approved workspace text-file repair")
     repair_file_sub = repair_file_parser.add_subparsers(dest="repair_file_command", required=True)
     repair_preview = repair_file_sub.add_parser("preview", help="Preview replacement hashes without changing files")
@@ -227,18 +229,38 @@ def main() -> None:
         )
         print(f"Notification job queued: #{job_id}")
         return
+    if args.command == "repair-check":
+        job_id = JobQueue().enqueue("repair_check", {})
+        print(f"Self-check queued: #{job_id}. Run zexa worker --once or keep the worker service running.")
+        return
     if args.command == "jobs":
         print(json.dumps(JobQueue().list_jobs(args.limit), ensure_ascii=False, indent=2))
         return
     if args.command == "worker":
         if not 1 <= args.poll_seconds <= 300:
             raise SystemExit("zexa: --poll-seconds must be between 1 and 300.")
+        load_env_file()
         queue = JobQueue()
         queue.recover_stale()
+        mode = os.getenv("ZEXA_BRAIN_MODE", "auto").strip().lower()
+        brain = None
+        try:
+            config = None
+            if mode != "offline" and os.getenv("GROQ_API_KEY", "").strip():
+                config = get_config()
+            elif mode == "online":
+                config = get_config()
+            brain = build_brain_router(config, mode)
+        except (RuntimeError, ValueError):
+            brain = None
         worker = JobWorker(queue, {
             "notification": lambda payload: (
                 TermuxAndroidHand().notify(payload["title"], payload["content"])
                 or "Notification delivered."
+            ),
+            "repair_check": create_repair_check_handler(
+                brain=brain,
+                notifier=lambda title, message: TermuxAndroidHand().notify(title, message),
             ),
         })
         if args.once:
