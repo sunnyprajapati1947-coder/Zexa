@@ -18,6 +18,8 @@ class BridgeServer(
     @Volatile private var server: ServerSocket? = null
     private var thread: Thread? = null
 
+    fun isRunning(): Boolean = running
+
     fun start() {
         if (running) return
         running = true
