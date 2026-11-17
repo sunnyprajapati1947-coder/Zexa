@@ -184,3 +184,14 @@ Run `zexa repair-plan` to convert known diagnostic warnings and errors into a de
 The optional `zexa repair-file` workflow handles one existing UTF-8 text file inside the current workspace (maximum 256 KiB). First run `zexa repair-file preview path/to/file path/to/replacement.txt` to inspect the original and replacement hashes. Then run `zexa repair-file apply path/to/file path/to/replacement.txt`; it displays the exact preview and requires typing `APPROVE`. A private backup is written under `.zexa/repair-backups/` before the atomic replacement. No shell commands are run.
 
 To roll back, use the target path, backup path, and `applied_sha256` returned by the apply result: `zexa repair-file rollback path/to/file .zexa/repair-backups/BACKUP.bak APPLIED_SHA256`. Rollback also requires a fresh typed approval and refuses to overwrite a target that changed after the repair. Symlink targets/backups, paths outside the workspace, non-UTF-8 files, and oversized files are rejected. Review proposed content before approval; do not apply untrusted patches. This is a bounded file transaction, not unrestricted autonomous code repair.
+### Background self-repair check (advisory only)
+
+Queue a full read-only Doctor check and deterministic repair plan:
+
+    zexa repair-check
+    zexa jobs
+    zexa worker --once
+
+Or leave the existing restricted Termux worker service running to process it in the background. The worker registers only the fixed `repair_check` handler alongside local notifications. The handler runs Doctor, builds proposals from known diagnostic IDs, and may ask the configured online/offline Brain to explain those proposals. Only the redacted proposal fields are sent to the Brain; model output is advisory text and is never interpreted as a command or patch. A local notification reports the number of proposals when Termux:API is available. The completed job stores the structured report and advisory in the local SQLite job history.
+
+The self-check never applies repairs, installs packages, invokes shell commands, changes phone settings, or edits files. AI unavailability does not block the deterministic Doctor/repair report. Review proposals separately; use the explicit `zexa repair-file` preview/apply/rollback workflow only for a replacement you have inspected and approved.
