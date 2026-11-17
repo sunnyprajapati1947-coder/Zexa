@@ -16,6 +16,7 @@ from .doctor import run_diagnostics
 from .repair import build_repair_plan
 from .repair_transaction import RepairTransaction
 from .repair_jobs import create_repair_check_handler
+from .repair_patch import build_patch_proposal
 from .approvals import ApprovalManager
 from .brain import build_brain_router
 from .intent import route_utterance
@@ -58,6 +59,9 @@ def main() -> None:
     subparsers.add_parser("doctor", help="Run read-only Zexa setup and capability diagnostics")
     subparsers.add_parser("repair-plan", help="Create a safe, proposal-only repair plan from diagnostics")
     subparsers.add_parser("repair-check", help="Queue a Doctor + Brain advisory self-check for the background worker")
+    patch_review = subparsers.add_parser("repair-patch", help="Review a bounded code patch candidate without applying it")
+    patch_review.add_argument("target", help="Allowlisted workspace-relative source or test file")
+    patch_review.add_argument("candidate", help="Workspace-relative UTF-8 candidate file")
     repair_file_parser = subparsers.add_parser("repair-file", help="Preview, apply, or roll back one approved workspace text-file repair")
     repair_file_sub = repair_file_parser.add_subparsers(dest="repair_file_command", required=True)
     repair_preview = repair_file_sub.add_parser("preview", help="Preview replacement hashes without changing files")
@@ -228,6 +232,24 @@ def main() -> None:
             run_at=run_at,
         )
         print(f"Notification job queued: #{job_id}")
+        return
+    if args.command == "repair-patch":
+        root = os.getcwd()
+        def read_patch_text(relative_path):
+            candidate_path = os.path.join(root, relative_path)
+            current = os.path.abspath(candidate_path)
+            if os.path.islink(candidate_path):
+                raise ValueError("Symbolic-link patch files are not supported.")
+            if os.path.commonpath([root, current]) != root or not os.path.isfile(current):
+                raise ValueError("Patch files must be existing regular files inside the workspace.")
+            if os.path.getsize(current) > 256 * 1024:
+                raise ValueError("Patch file exceeds the 256 KiB limit.")
+            with open(current, "r", encoding="utf-8") as stream:
+                return stream.read()
+        original = read_patch_text(args.target)
+        candidate = read_patch_text(args.candidate)
+        proposal = build_patch_proposal(args.target, original, candidate)
+        print(json.dumps(proposal, ensure_ascii=False, indent=2))
         return
     if args.command == "repair-check":
         job_id = JobQueue().enqueue("repair_check", {})
