@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets
 
 class BridgeServer(
     private val token: String,
-    private val service: ZexaAccessibilityService,
+    private val service: BridgeServiceApi,
 ) {
     init {
         require(BridgeSecurityRules.validBridgeToken(token)) {
