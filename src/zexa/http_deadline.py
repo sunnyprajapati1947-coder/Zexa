@@ -58,7 +58,7 @@ class DeadlineSocketReader:
         if size == 0:
             return b""
         while True:
-            newline = self._buffer.find(b"\\n")
+            newline = self._buffer.find(b"\n")
             if newline >= 0 and (size < 0 or newline + 1 <= size):
                 return self._take(newline + 1)
             if size >= 0 and len(self._buffer) >= size:
