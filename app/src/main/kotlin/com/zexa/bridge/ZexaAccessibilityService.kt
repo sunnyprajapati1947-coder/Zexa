@@ -29,7 +29,8 @@ class ZexaAccessibilityService : AccessibilityService() {
     fun refreshBridge() {
         val enabled = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
             .getBoolean("bridge_enabled", false)
-        if (enabled && bridgeServer == null) {
+        if (enabled && bridgeServer?.isRunning() != true) {
+            bridgeServer?.stop()
             val token = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
                 .getString("token", null) ?: return
             bridgeServer = BridgeServer(token, this).also { it.start() }
@@ -39,10 +40,12 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
     }
 
+    fun isBridgeRunning(): Boolean = bridgeServer?.isRunning() == true
+
     fun statusJson(): JSONObject = JSONObject()
         .put("ok", true)
         .put("accessibility_enabled", true)
-        .put("bridge_enabled", bridgeServer != null)
+        .put("bridge_enabled", isBridgeRunning())
 
     fun screenJson(): JSONObject {
         val root = rootInActiveWindow ?: return JSONObject()
