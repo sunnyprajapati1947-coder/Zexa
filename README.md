@@ -7,7 +7,7 @@
 - **Online brain:** Groq HTTPS chat client (src/zexa/groq.py).
 - **Offline brain:** optional local GGUF model through llama-cli (src/zexa/brain.py).
 - **Brain router:** auto, online, and offline modes. In auto, local fallback occurs only when Groq cannot be reached; authentication, quota, model, and API errors are not silently hidden.
-- **Human Hand foundation:** authenticated loopback client for an opt-in Android Accessibility Bridge (src/zexa/hand.py).
+- **Human Hand:** approval-gated laptop browser hand (src/zexa/desktop.py) plus authenticated loopback client for the opt-in Android Accessibility Bridge (src/zexa/hand.py).
 - **Existing modules:** skills, explicit local memory, task history, planner, safe tool router, Termux notifications, voice I/O, and explicit flashlight control.
 
 The native Android companion app and its user-enabled AccessibilityService are now included in `app/`, with an Android debug-build workflow. The Python bridge client is in `src/zexa/hand.py`. The bridge is restricted to loopback HTTP with a bearer token; screen snapshots are read-only and each action requires explicit CLI approval. Real-device installation, permission, lifecycle, and gesture verification are still required before describing the Human Hand as fully validated. No arbitrary shell command is exposed.
@@ -38,6 +38,23 @@ The brain router can be used by Python integrations:
     print(reply.brain, reply.text)
 
 The CLI `ask`, `voice`, `converse`, and `plan` commands now use the same brain router. Set `ZEXA_BRAIN_MODE=auto` (default), `online`, or `offline`. In `auto`, Groq is preferred when configured and local inference is used only when the network cannot reach Groq. If no Groq key is configured, `auto` can use a ready local model. Authentication, quota, and model errors are surfaced rather than silently hidden. `plan` and voice intent classification also use the selected brain.
+
+## Laptop Human Hand (initial capability)
+
+The cross-platform desktop adapter is available as a Python integration:
+
+    from zexa.desktop import DesktopHand
+
+    hand = DesktopHand()
+    print(hand.status())
+    hand.open_url(
+        "https://example.com",
+        approve=lambda action, payload: input(
+            f"Approve {action} for {payload['url']}? Type YES: "
+        ).strip() == "YES",
+    )
+
+The adapter validates HTTP/HTTPS URLs and requires a per-action approval callback. It opens URLs through the operating system's registered browser; it does not fetch pages, execute shell commands, capture screenshots, monitor the keyboard, or claim that an action succeeded unless the browser opener confirms it. This is the first desktop capability, not a complete visual desktop automation system. Desktop-specific UI inspection and additional allowlisted actions require separate security review and tests.
 
 ## Android Accessibility Bridge app
 
@@ -147,7 +164,7 @@ Never commit .env, API keys, bridge tokens, or personal data.
 
 ## Automated checks
 
-GitHub Actions runs the unit-test suite and byte-compilation on Python 3.11, 3.12, and 3.13 for pushes and pull requests.
+GitHub Actions runs the unit-test suite and byte-compilation on Python 3.11, 3.12, 3.13, and 3.14 for pushes and pull requests.
 
 ## Development checks
 
