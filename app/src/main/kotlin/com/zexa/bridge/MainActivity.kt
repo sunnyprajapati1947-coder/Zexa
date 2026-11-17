@@ -15,6 +15,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -55,6 +56,7 @@ class MainActivity : Activity() {
     private var reminderStatus: TextView? = null
     private var pendingReminderContainer: LinearLayout? = null
     private var actionApprovalContainer: LinearLayout? = null
+    private var taskGrantContainer: LinearLayout? = null
     private val chatGenerating: Boolean get() = ChatGenerationGate.isRunning
     private val chatGenerationCompletionListener: () -> Unit = {
         runOnUiThread {
@@ -1150,7 +1152,7 @@ class MainActivity : Activity() {
         fun refreshScreenAccessUi() {
             val allowed = preferences().getBoolean("screen_access_enabled", false)
             screenAccessStatus.text = if (allowed) {
-                "Screen data access is ON. The local bridge can read visible, non-password screen text."
+                "Screen data access is ON. The local bridge may read visible screen text and accessibility metadata. Common sensitive patterns are heuristically redacted, but detection is not guaranteed; review snapshots before sharing."
             } else {
                 "Screen data access is OFF. Visible screen text is not exposed to the local bridge."
             }
@@ -1172,7 +1174,14 @@ class MainActivity : Activity() {
                 Toast.makeText(this@MainActivity, "Token copied. Keep it private.", Toast.LENGTH_LONG).show()
             }
         })
-        addCard("SAFETY", "Every device action requires your confirmation", "Requests are shown with their exact action and payload. Nothing runs unless you choose Approve & execute. Requests expire after 60 seconds. Do not approve actions you do not recognize.")
+        addCard("SAFETY", "Sensitive actions require exact confirmation", "Coordinate taps and text entry always use exact-action approval. Low-risk navigation grants are optional, task-scoped, expire after 5 minutes and allow at most 30 actions. They never include taps or text entry.")
+        addHeading("Low-risk task access")
+        addCard("OPTIONAL TASK GRANT", "One approval for a bounded navigation task", "Choose a task ID and only the navigation actions it needs. The grant is local to this device, visible here, revocable, and automatically expires.")
+        addButton("Create task grant") { showCreateTaskGrantDialog() }
+        addButton("Refresh active grants") { refreshTaskGrantUi() }
+        taskGrantContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(taskGrantContainer)
+        refreshTaskGrantUi()
         addHeading("Pending action approvals")
         actionApprovalContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1181,6 +1190,105 @@ class MainActivity : Activity() {
         addButton("Refresh pending approvals") { refreshActionApprovalUi() }
         refreshActionApprovalUi()
         refreshBridgeUi()
+    }
+
+    private fun showCreateTaskGrantDialog() {
+        val service = ZexaAccessibilityService.instance
+        if (service == null) {
+            Toast.makeText(this, "Enable the Zexa Accessibility Bridge first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val taskInput = EditText(this).apply {
+            hint = "Task ID (e.g. research-session-1)"
+            maxLines = 1
+        }
+        panel.addView(taskInput)
+        val choices = linkedMapOf<String, CheckBox>()
+        listOf(
+            "swipe" to "Swipe navigation",
+            "scroll" to "Scroll",
+            "back" to "Back",
+            "home" to "Home",
+            "launch_app" to "Open installed app",
+        ).forEach { (action, label) ->
+            val check = CheckBox(this).apply {
+                text = label
+                isChecked = action in setOf("scroll", "back", "home")
+            }
+            choices[action] = check
+            panel.addView(check)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Create bounded task grant")
+            .setMessage("The grant lasts 5 minutes or 30 actions, whichever comes first. It covers selected navigation and installed-app launch only. URL opening requires a separate exact approval. No coordinate taps, text entry, messages, purchases or deletion.")
+            .setView(panel)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Approve this task grant", null)
+            .create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val taskId = taskInput.text?.toString()?.trim().orEmpty()
+                        val actions = choices.filterValues { it.isChecked }.keys.toSet()
+                        if (!BridgeSecurityRules.validTaskId(taskId) || actions.isEmpty()) {
+                            Toast.makeText(this, "Enter a valid task ID and select at least one action.", Toast.LENGTH_LONG).show()
+                            return@setOnClickListener
+                        }
+                        try {
+                            service.createTaskActionGrant(taskId, actions, 5 * 60_000L, 30)
+                            dialog.dismiss()
+                            refreshTaskGrantUi()
+                            Toast.makeText(this, "Bounded task grant created.", Toast.LENGTH_LONG).show()
+                        } catch (error: Exception) {
+                            Toast.makeText(this, error.message ?: "Could not create task grant.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+    private fun refreshTaskGrantUi() {
+        val container = taskGrantContainer ?: return
+        container.removeAllViews()
+        val grants = ZexaAccessibilityService.instance?.activeTaskActionGrants().orEmpty()
+        if (grants.isEmpty()) {
+            container.addView(TextView(this).apply {
+                text = "No active task grants."
+                setTextColor(0xFFD1D5DB.toInt())
+                setPadding(0, dp(8), 0, dp(8))
+            })
+            return
+        }
+        grants.forEach { grant ->
+            val details = TextView(this).apply {
+                text = "Task: ${grant.taskId}\nActions: ${grant.allowedActions.sorted().joinToString(", ")}\nRemaining: ${grant.remainingActions}/${grant.maxActions}\nExpires: ${grant.expiresAtEpochMs}"
+                textSize = 12f
+                setTextColor(0xFFE5E7EB.toInt())
+                setPadding(dp(8), dp(8), dp(8), dp(4))
+            }
+            container.addView(details)
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            actions.addView(Button(this@MainActivity).apply {
+                text = "Copy grant ID"
+                setOnClickListener {
+                    val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Zexa task grant ID", grant.grantId))
+                    Toast.makeText(this@MainActivity, "Grant ID copied. Keep it private.", Toast.LENGTH_LONG).show()
+                }
+            }, LinearLayout.LayoutParams(0, dp(44), 1f))
+            actions.addView(Button(this@MainActivity).apply {
+                text = "Revoke"
+                setOnClickListener {
+                    ZexaAccessibilityService.instance?.revokeTaskActionGrant(grant.grantId)
+                    refreshTaskGrantUi()
+                }
+            }, LinearLayout.LayoutParams(0, dp(44), 1f))
+            container.addView(actions)
+        }
     }
 
     private fun refreshActionApprovalUi() {

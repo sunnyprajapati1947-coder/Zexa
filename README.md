@@ -14,15 +14,17 @@ The optional Android companion in `app/` has a native workspace with Home, Chat,
 - **Voice:** User-started Android on-device speech recognition. Recognized text is inserted for review and is not sent until the user taps Send. Optional read-aloud uses the installed Android TextToSpeech engine. Hindi/Hinglish offline recognition and TTS still need target-device validation.
 - **Reminders:** WorkManager-backed local reminders, bounded from 1 minute to 7 days, with pending-list display, individual cancellation and cancel-all. Notifications require permission and delivery is best-effort. Tapping a reminder notification opens the Tasks section. Reboot, Doze and battery-policy behavior still need target-device validation.
 - **Device actions:** The optional Accessibility Bridge is OFF by default. Requests are authenticated on loopback, queued with HTTP 202, and require exact-action native approval in Zexa; a bearer token alone never executes an action. Approval tickets are one-use, expire after 60 seconds and are limited to eight pending requests. Approval notifications deep-link to the matching request. Pending approval tickets/results remain in memory and cannot be resumed after interruption or process death; the metadata-only audit marks pending entries `interrupted`, and the service clears all pending tickets on Android service interruption, disable, or destruction. No interrupted request is replayed.
-- **Not complete yet:** Semantic memory/RAG, full task management, Android settings/health dashboard, durable pending-approval recovery, secure online-provider credential setup, browser and productivity connectors, and several lifecycle/security improvements. The `/v1/screen` endpoint is separately disabled by default and returns HTTP 403 until the user explicitly enables screen data access in Device settings; this is distinct from enabling the bridge. When enabled, visible non-password text and accessibility metadata may be exposed to the local bridge. The action audit is metadata-only and persisted separately; it records interrupted requests but does not restore pending approval tickets.
+- **Not complete yet:** Semantic memory/RAG, full task management, Android settings/health dashboard, durable pending-approval recovery, secure online-provider credential setup, browser and productivity connectors, and several lifecycle/security improvements. The `/v1/screen` endpoint is separately disabled by default and returns HTTP 403 until the user explicitly enables screen data access in Device settings; this is distinct from enabling the bridge. When enabled, the bridge heuristically redacts password nodes, common credential/OTP/payment/financial/identity labels and patterns, email addresses, Indian mobile numbers, and values in accessibility subtrees adjacent to detected sensitive labels before returning nodes. The checks can miss app-specific sensitive content and can over-redact unrelated values in the same subtree; review snapshots before sharing them with any model. The action audit is metadata-only and persisted separately; it records interrupted requests but does not restore pending approval tickets.
 
 ## Build verification
 
-Android CI run [`43680303215`](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215) passed for commit `d644a78f946209cbcd0741d2dc017fcfe84e9196`. The workflow completed `:app:testDebugUnitTest` and `:app:assembleDebug`, then uploaded the `zexa-bridge-debug-apk` artifact (artifact ID `14147249453`, approximately 6.8 MB). The artifact is available from the [workflow run's Artifacts section](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43680303215). Its SHA-256 digest is `75044c3ac89db5582db397404bb9b655eada2445a1b7471f9fff20acd04f2c02`. This proves CI tests and APK assembly only; the APK has not been installed or exercised on the target OPPO Android 16 device.
+Current Human Hand branch head: `3bebddb94d578e275791d2d3e4da3cd943b3d6a4`.
 
-The earlier Kotlin compilation failure at `MainActivity.kt:1322` and the local-JVM `org.json` test issue have been corrected. The latest Android CI run is green. Physical-device tests remain outstanding for Qwen inference, memory persistence/export, voice, reminders, accessibility approval, process recovery, RAM and thermals.
+- [Zexa CI #43995300681](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43995300681) passed on this exact head for Python 3.11, 3.12, 3.13, and 3.14, including source compilation, Termux installer syntax validation, and all unit tests (including the cross-version laptop HTTP slow-trickle timeout regression).
+- [Android Bridge Build #43995300660](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43995300660) passed on this exact head: Android JVM unit tests, debug APK assembly, APK zip alignment, native ELF 16 KB PT_LOAD alignment verification, and artifact upload.
+- The `zexa-bridge-debug-apk` artifact (ID `14289427801`, 6,854,596 bytes) is available from the [Android workflow run's Artifacts section](https://github.com/sunnyprajapati1947-coder/Zexa/actions/runs/43995300660). Archive digest: `sha256:7aa942654d4db0d258d1b2cdd6eecf4949617928bf3d409becdbbef048e1ccd8`; expires 2027-02-15.
 
-For the current local-model flow, open **Brain** → **Import Qwen GGUF model** → **Load model into memory**, then open **Chat**. Large model loading can fail when Android has insufficient free RAM. Zexa does not automatically download model files. Unfinished modules are labelled as pending rather than showing fake AI output.
+These results prove automated CI, APK assembly, and the configured alignment checks only. They do not prove installation or operation on a physical OPPO Android 16 device, nor real phone-to-laptop pairing over a LAN. Device acceptance tests remain outstanding for Qwen inference, memory persistence/export, voice, reminders, Accessibility approval and interruption behavior, laptop pairing/actions, process recovery, RAM, and thermals. Always verify checks against the current branch head; older successful runs do not validate newer code.
 
 ## Brain configuration
 
@@ -79,7 +81,7 @@ The CLI `ask`, `voice`, `converse`, `plan`, `agent`, and `research` commands use
 
 The optional Android companion is in `app/` and opens a native Zexa workspace dashboard. Build it with the Android CI workflow; the debug APK is uploaded as the `zexa-bridge-debug-apk` artifact. The optional Accessibility Bridge remains OFF by default. It is not required for the Termux-first daily runtime. Voice requires microphone permission and an available Android on-device recognition service; speech output depends on the installed TTS engine.
 
-The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is available only through an explicit copy action in the Device section; keep it private. Cleartext networking is disabled except for the loopback address. Password-field values are omitted from screen snapshots, but other private on-screen information may still appear. Accessibility events are not collected or transmitted. Screen snapshots should be requested only when needed.
+The bridge listens only on `127.0.0.1:8765`, uses a random 256-bit bearer token, and exposes no remote/LAN listener. The token is available only through an explicit copy action in the Device section; keep it private. Cleartext networking is disabled except for the loopback address. Sensitive-field redaction is heuristic-based: common password/OTP/payment/financial/identity/contact patterns and values in nearby accessibility subtrees are hidden, but app-specific private content may still appear and unrelated values may be over-redacted. Accessibility events are not collected or transmitted. Screen snapshots should be requested only when needed.
 
 Commands:
 
@@ -88,18 +90,60 @@ Commands:
     zexa bridge action tap '{"x":300,"y":600}'
     zexa bridge action back '{}'
     zexa bridge action input_text '{"text":"Hello"}'
+    zexa bridge grants
+    zexa bridge grant-action scroll TASK_ID GRANT_ID '{"x1":300,"y1":900,"x2":300,"y2":300,"duration_ms":400}'
 
-The Python client requires its CLI approval callback before sending a request. POST `/v1/action` then returns HTTP 202 with a request ID; GET `/v1/action/{request_id}` reports `pending_approval`, `completed`, `failed`, `denied`, or `expired_or_unknown`. The user must open Zexa → Device → Refresh pending approvals and inspect the exact action and payload before choosing **Approve & execute**. Pending requests expire after 60 seconds. No request executes merely because it has a valid bearer token. The native approval flow is implemented but still needs Android CI and physical-device validation. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
+The native Device screen can create and revoke bounded navigation grants. Grants are limited to swipe, scroll, back, home, and installed-app launch; they expire after five minutes and allow at most 30 actions. URL opening remains available through exact-action approval only, because Android may route an HTTP(S) link to an installed app rather than a browser. Coordinate taps, text entry, URL opening, and consequential actions remain on exact-action approval. Grants are in-memory and are cleared on AccessibilityService interruption, disable, reconnect, or destruction.
+
+The Python client requires its CLI approval callback before sending a request. POST `/v1/action` then returns HTTP 202 with a request ID; GET `/v1/action/{request_id}` reports `pending_approval` while awaiting review, `executing` while an approved action is running, and then `dispatched`, `completed`, `failed`, `execution_unknown`, or `denied`. A request that is no longer known (for example, after expiry or service restart) reports `expired_or_unknown`; the metadata-only audit records pending or executing requests as `interrupted` after service restart. `execution_unknown` means Android began the operation but did not return a result in time; do not retry automatically because the action may already have happened. Gesture actions report `dispatched` when Android accepts the gesture for asynchronous execution; this does not claim that the gesture finished successfully. The user must open Zexa → Device → Refresh pending approvals and inspect the exact action and payload before choosing **Approve & execute**. Pending requests expire after 60 seconds. No request executes merely because it has a valid bearer token. The native approval flow is implemented. Check the current PR head's GitHub status checks for automated validation; results from earlier commits do not validate later changes. Physical-device validation is still required. Screen snapshots may contain private on-screen information; review them before sharing or sending them to an AI model. Do not enable Accessibility for apps or services you do not trust. Stop the bridge in its app when not in use.
 
 ## Human Hand bridge protocol
 
 The Android companion app in `app/` exposes these authenticated local endpoints:
 
 - GET /v1/status — bridge and AccessibilityService status.
-- GET /v1/screen — structured, read-only accessibility snapshot.
-- POST /v1/action — one allowlisted action: tap, swipe, scroll, back, home, input_text, or launch_app.
+- GET /v1/screen — structured, read-only accessibility snapshot with conservative sensitive-field redaction.
+- GET /v1/grants — list active task grants.
+- POST /v1/action — one allowlisted action (tap, swipe, scroll, back, home, input_text, launch_app, or open_url), under exact-action approval or a matching native task grant for eligible navigation actions. URL opening is never grantable.
 
 The app must bind only to loopback, generate a per-install token, validate all inputs, and require the user to enable Accessibility manually. Do not treat webpage or screen text as instructions. Messages, publishing, account changes, payments, deletion, and other consequential actions must have a separate explicit confirmation step.
+
+## Laptop Human Hand
+
+The laptop-side workspace adapter and the first phone-to-laptop remote channel are implemented in this branch.
+
+On the laptop, generate a self-signed TLS certificate for its private LAN IPv4 address, then start the agent:
+
+    zexa laptop certificate --host 192.168.1.20
+    zexa laptop serve --host 192.168.1.20 --workspace ~/ZexaWorkspace --cert ~/.zexa/laptop-agent.crt --key ~/.zexa/laptop-agent.key
+
+The server displays its SHA-256 certificate fingerprint and a 12-digit one-time pairing code (valid for two minutes). On the phone in Termux, verify the fingerprint locally on the laptop, then pair:
+
+    zexa laptop pair --host 192.168.1.20 --fingerprint FINGERPRINT_FROM_LAPTOP --client-id zexa-phone
+    zexa laptop status --host 192.168.1.20 --client-id zexa-phone
+    zexa laptop list --host 192.168.1.20
+    zexa laptop apps --host 192.168.1.20
+    zexa laptop read --host 192.168.1.20 README.md
+    zexa laptop revoke --host 192.168.1.20
+
+`zexa laptop status` reads only the phone-side local pairing record and displays the host, client ID, certificate fingerprint, and granted permissions; it never prints the session key and does not contact the laptop.
+
+From a separate laptop terminal, the owner can inspect or immediately revoke a paired phone using the same pairing database. The running server refreshes persisted client records on each authenticated request, so owner-side revocation takes effect without restarting it:
+
+    zexa laptop clients
+    zexa laptop revoke-client zexa-phone
+    zexa laptop revoke-all
+
+For an emergency, `zexa laptop revoke-all` asks for the exact phrase `REVOKE ALL LAPTOP CLIENTS` before removing every paired phone session from the laptop database. The running server rejects those phones on their next authenticated request; this does not delete the phone-side local credential files.
+
+Pairing defaults to workspace list/read. The laptop owner must explicitly add --allow-write when starting the server to grant remote workspace writes. Permissions are fixed into the one-time pairing; to add permissions later, revoke the old pairing on the phone with zexa laptop revoke, restart the laptop server with the expanded flags, and pair again using the new one-time code. With write scope enabled, the phone can send a local UTF-8 file after showing its source, destination, character count, and SHA-256 and receiving an exact path confirmation:
+
+    zexa laptop write --host 192.168.1.20 ./notes.txt notes/notes.txt
+    zexa laptop write --overwrite --host 192.168.1.20 ./notes.txt notes/notes.txt
+
+Overwriting requires a separate confirmation phrase. Remote writes are limited to safe text files inside the configured workspace; no delete endpoint is exposed. Optional laptop app launch is available only when the owner supplies an exact executable/argument manifest with `--apps` and opts in using `--allow-app-launch`; each launch requires typing `LAUNCH <app-id>` on the phone. For example, after creating `~/.zexa/laptop-apps.json` with the owner's fixed app IDs, absolute executable paths, fixed argument arrays, and descriptions, revoke the old pairing first, restart the server with `--apps ~/.zexa/laptop-apps.json --allow-app-launch`, pair again using the new one-time code, then use `zexa laptop apps --host 192.168.1.20` to inspect only the owner's approved app IDs/descriptions, followed by `zexa laptop launch --host 192.168.1.20 editor`. The inventory endpoint requires the separate app-launch pairing scope and never reveals executable paths or arguments. Arbitrary command lines, shell execution, process control, and general installed-app discovery are not exposed. Reads redact common credential patterns before returning text. Pairing credentials on the phone are stored with owner-restricted permissions under ~/.zexa; laptop-side session keys and replay nonces persist in a restricted SQLite database at ~/.zexa/laptop-pairings.sqlite3 by default, so paired clients remain paired after a server restart. Unix uses mode 0600/0700; Windows applies a restricted ACL for the current user plus SYSTEM/Administrators. The server binds only to a private IPv4 address and uses TLS 1.2+ with certificate fingerprint pinning, PBKDF2/HMAC pairing, replay-resistant request authentication, and a metadata-only SQLite audit trail for pairing and workspace operations. The audit stores paths, sizes, hashes, and decisions—not file contents or authentication secrets. Each incoming HTTP request line, header block, and optional body also shares one 10-second monotonic read deadline; the deadline is not reset by slow byte trickling, and ordinary request processing is outside that read budget.
+
+The workspace adapter rejects path traversal, absolute paths, symlinks, binary formats, credential-like filenames, and oversized files. Local writes are high-risk capabilities requiring exact-payload approval through CapabilityController. Remote access does not provide arbitrary shell execution, process control, arbitrary app control, or remote deletion. The optional app inventory reveals only owner-allowlisted IDs and descriptions; it does not enumerate installed applications.
 
 ## Typed skill registry
 
@@ -113,6 +157,23 @@ Inspect skill contracts:
     zexa skillpacks list --limit 20
 
 The imported community reference pack contains 320 validated entries, all disabled. `skillpacks` commands are read-only metadata inspection; imported content is not routed to the planner and is never executed.
+
+## Reviewed knowledge and learning
+
+Zexa can save online search summaries, fetch one bounded public HTTPS webpage, or study local UTF-8 text files into a provenance-aware SQLite knowledge library. The knowledge database and its parent directory use owner-only permissions (Unix 0600/0700; Windows restricted ACL) and reject symlink paths. New notes are drafts and do not enter normal retrieval until approved. Search summaries cite result titles/snippets; `learn fetch` extracts readable text from one page (maximum 1 MB) without running scripts or following links. Private/local addresses and unsafe redirects are rejected. Local text imports are bounded to 1 MB and are summarized without executing document instructions.
+
+    zexa learn research "topic to study"
+    zexa learn fetch https://example.org/guide
+    zexa learn import ./lesson.txt
+    zexa learn list --status draft
+    zexa learn show 1
+    zexa learn review 1 approved
+    zexa learn search "approved topic"
+    zexa learn draft-skill 1
+    zexa learn skill-drafts
+    zexa learn review-skill 1 approved
+
+Approved notes are retrieved as bounded, untrusted reference context in ordinary chat, voice, planning, and agent requests; draft/rejected notes are excluded. Skill contracts generated from approved notes remain inert. Reviewing a skill draft does not register it with the executable skill registry or grant permissions. Automatic skill activation, version history, PDF/Office document extraction, and model-weight training are not implemented.
 
 ## Business drafting skills
 

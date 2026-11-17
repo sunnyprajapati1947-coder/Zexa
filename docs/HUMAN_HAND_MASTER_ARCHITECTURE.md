@@ -1,0 +1,226 @@
+# Zexa Human Hand — Master Architecture and Delivery Plan
+
+**Status:** Architecture baseline; implementation is staged and must be verified per capability.  
+**Parent baseline:** `fix/reviewed-security-and-integrity` at `086d1eca5d296fb778a112639115e90f2e865c82`.  
+**Primary runtime:** Termux on the Android phone. The native Android companion is an optional, permission-gated device bridge.
+
+## 1. Product objective
+
+Zexa is a command-driven personal AI operator. The user gives a goal in natural Hindi, Hinglish, or English; Zexa plans the work, selects only installed and authorized capabilities, operates supported phone or paired-computer tools, reports progress, and returns evidence of what actually completed.
+
+The Human Hand is the execution layer. It must not be confused with the language model: Qwen or an online model proposes plans, while deterministic controllers, typed adapters, permission checks, and approval gates decide what can execute.
+
+"Human-like capability" is a product direction, not a claim of unrestricted access. Zexa can perform only actions exposed by supported operating-system APIs, installed adapters, user-granted permissions, and the relevant app's own security controls. It cannot bypass Android secure surfaces, device-owner restrictions, authentication, or physical-world requirements.
+
+## 2. Core architecture
+
+1. **Command interface** — Termux CLI first; optional voice input started by the user; optional Android companion UI and notifications.
+2. **Brain router** — local Qwen/llama.cpp for offline work; configured online providers and web research when internet is available. Provider choice and fallback must be visible. Network failure may trigger offline fallback; authentication, quota, policy, or malformed-output errors must not be silently hidden.
+3. **Planner/controller** — converts a user goal into a bounded typed task plan. The model may request registered capabilities but cannot invent handlers, permissions, risk levels, or approval results.
+4. **Capability registry** — the authoritative list of installed actions, JSON input/output schemas, permission scopes, risk classes, platform requirements, timeouts, resource budgets, and enabled state.
+5. **Human Hand adapters** — Android Accessibility Bridge, Termux/Android APIs, paired laptop agent, browser automation, and provider APIs. Each adapter has a narrow contract and its own health/status report.
+6. **Execution gateway** — validates arguments, checks permissions, requests action-bound approval, invokes trusted handlers, enforces timeouts/idempotency, and writes an audit event.
+7. **Task runtime** — durable task IDs, checkpoints, progress, cancellation, retry rules, deadlines, and restart recovery. Side-effecting actions are never blindly retried.
+8. **Memory and learning** — user-controlled facts, task summaries, approved knowledge notes, and reviewed skill definitions with provenance. Imported instructions and webpages remain untrusted data.
+9. **Observability** — notifications and a readable task history show the selected brain, device, capability, approval state, result, and any limitation.
+
+## 3. Human Hand capability map
+
+### A. Android phone hand
+
+**Implemented foundation on this branch:** opt-in AccessibilityService, authenticated loopback bridge, read-only screen snapshots with conservative password/OTP/payment/ID/contact redaction, allowlisted tap/swipe/scroll/back/home/text-entry/app-launch/validated-HTTP(S)-URL requests, native exact-action approval, and a bounded task-grant path for eligible navigation actions. The Android Device screen can create, list, copy the ID for, and revoke task grants; authenticated bridge clients can list active grants, execute eligible actions within a matching task/device/action scope, and revoke a grant. Python exposes task_grants(), perform_granted(), and revoke_task_grant(); Termux exposes `zexa bridge grants`, `zexa bridge grant-action`, and `zexa bridge grant-revoke`. Automated validation passed on exact branch head `3bebddb94d578e275791d2d3e4da3cd943b3d6a4`: Python 3.11–3.14 CI (including cross-version laptop HTTP slow-trickle timeout tests), Android JVM unit tests, debug APK assembly, APK zip alignment, and native ELF 16 KB PT_LOAD alignment. The current Android debug APK artifact is available from workflow run `43995300660` (artifact ID `14289427801`, SHA-256 `7aa942654d4db0d258d1b2cdd6eecf4949617928bf3d409becdbbef048e1ccd8`). Target-device acceptance testing remains outstanding; this is not a claim of full phone automation.
+
+Planned capability groups:
+
+- App navigation: launch an installed app and navigate supported visible UI controls.
+- Screen understanding: read a user-requested accessibility snapshot. The Android bridge now redacts password/credential labels, likely OTP values, payment-card patterns, common ID patterns, email addresses, and Indian mobile numbers before returning nodes. These are conservative heuristics, not a guarantee that every sensitive field on every app is detected; screen access remains opt-in and must be manually reviewed before use with a model.
+- Text and forms: prepare text, fill approved fields, show a preview, and require a fresh confirmation before submission.
+- Files and media: use Android document/provider APIs and Termux file tools within user-approved folders; never assume access to every app's private storage.
+- Device utilities: notifications, reminders, clipboard, speech input/output, and supported system intents through Termux:API or native APIs.
+- Background operation: use Termux:Services/Boot or Android WorkManager only for supported, visible, restartable jobs. Show service state and explain Android battery/Doze limits.
+
+### B. Laptop hand
+
+The phone may act as the command centre for a separately installed Zexa Laptop Hand on the user's own computer.
+
+Required design:
+
+- Pair a laptop deliberately using a short-lived pairing code and a clear device identity; allow revocation and token rotation.
+- Prefer an outbound authenticated connection or an explicitly paired local-network connection. Do not expose an unauthenticated public listener or require router port-forwarding.
+- Use encrypted transport, replay-resistant request IDs, strict request schemas, rate limits, and per-device capability grants.
+- Start with a restricted workspace: list/read/write files only under user-selected folders, open approved applications, and report task status.
+- Shell or developer commands must be previewed with their working directory and effects. Use a restricted command allowlist and per-command approval; do not provide unrestricted administrator/root execution.
+- Never read browser passwords, password-manager stores, private keys, session cookies, or other credentials. Do not bypass login, endpoint protection, OS permissions, or security prompts.
+- The laptop agent must have a visible running indicator, pause/stop control, local audit log, and a way to revoke the phone's pairing. The HTTP server also bounds each incoming request line, header block, and optional body with one 10-second monotonic read deadline (not a resettable per-byte timeout), while keeping normal handler processing outside that read budget.
+
+A limited laptop Human Hand prototype now exists in this branch: TLS-pinned private-IPv4 pairing, scoped workspace listing/reading, optional exact-confirmed text writes, owner-only persistent server-side pairing/replay storage, optional owner-allowlisted app launch, optional exact-confirmed opening of public HTTPS URLs in the laptop owner's visible default browser (`zexa laptop open-url`), and optional bounded public HTTPS page-text retrieval (`zexa laptop read-url`). Browser navigation and page reading have separate opt-in scopes (`laptop.browser.open` / `laptop.browser.read`) and server flags (`--allow-browser-open` / `--allow-browser-read`). Page reading reuses the bounded public-HTTPS fetcher: it verifies public DNS targets, revalidates redirects, limits responses to 1 MB and extracted text to 40,000 characters, accepts HTML/plain text only, and does not execute scripts. Audit records retain only host, text length and content digest, never page text or URL paths/query strings. This is public-page retrieval, not reading the active browser tab: it does not inspect browser profiles/cookies/passwords, click controls, fill forms, or submit transactions. Page content is untrusted reference data and must never become an instruction source. It is not yet production-ready; real phone-to-laptop LAN validation, visible laptop-side session controls, and platform-specific installation are still required.
+
+Laptop browser navigation is opt-in at pairing time: start the laptop agent with `--allow-browser-open`, pair again to grant `laptop.browser.open`, then use `zexa laptop open-url --host <private-ip> https://example.com`. The CLI displays the full destination and requires typing the exact `OPEN URL <normalized-url>` phrase before sending it. Cancelling sends no request. Public page reading is separately opt-in: start the laptop agent with `--allow-browser-read`, pair again to grant `laptop.browser.read`, then use `zexa laptop read-url --host <private-ip> https://example.com`. The CLI requires the exact `READ URL <normalized-url>` phrase. Returned page text is untrusted, bounded reference content; the fetcher rejects non-public targets and unsafe redirects.
+
+### C. Browser and internet hand
+
+- Separate read-only research from interactive browser control.
+- Research adapters use source URLs, titles, retrieval timestamps, content limits, redirect controls, and source citations.
+- The current laptop browser adapter opens only validated public HTTPS URLs in the owner's visible default browser after exact confirmation, and separately retrieves bounded text from public HTTPS pages under a dedicated opt-in read scope; it does not automate page interaction or inspect active browser tabs. A future interactive adapter must use an isolated profile without saved credentials by default.
+- Treat webpage text, downloaded files, QR codes, and screen content as untrusted input, never as instructions that can grant permissions or change the task.
+- Form submission, posting, messaging, purchases, account changes, and file uploads require a preview and fresh approval for the exact destination and content.
+
+### D. App and service connectors
+
+Prefer official, scoped APIs for email, calendar, cloud storage, CRM, and other services when available. Request minimum OAuth scopes, store tokens in the platform's protected credential store, support revocation, and keep send/publish/update operations behind exact-action approval. Do not claim a connector exists until it is implemented and tested.
+
+## 4. Learn and teach workflow
+
+When the user says "learn this", "study this", or "make a skill":
+
+1. Identify the requested subject and allowed source material.
+2. Read or research the supplied material; record source, version/date, and content hash where practical.
+3. Produce a concise knowledge note with facts, uncertainty, and source references.
+4. Test understanding using examples or a small evaluation set.
+5. If a repeatable workflow is requested, draft a typed skill contract: purpose, inputs, outputs, dependencies, permissions, risk, timeout, resource budget, and tests.
+6. Keep generated skill contracts disabled until the user reviews and approves both the source note and the skill draft; only then register the declarative prompt-only contract in the runtime.
+7. Version the note/skill and allow the user to inspect, edit, export, disable, or delete it.
+
+Learning means building retrievable knowledge and reviewed workflows. It does **not** mean silently changing model weights, executing arbitrary downloaded code, or allowing a webpage or imported skill to rewrite Zexa's security policy.
+
+### Implemented learning foundation (current branch)
+- `LearningStore` persists local knowledge notes and skill contracts in SQLite with source labels, HTTP(S) source references, content SHA-256 digests, timestamps, and explicit review states. Its database and parent directory use owner-only permissions and reject symlink paths.
+- `LearningService.research()` summarizes public search-result snippets with source provenance. `LearningService.fetch_page()` can fetch one public HTTPS page using verified public DNS targets, revalidated redirects, a 1 MB response limit, HTML script/style exclusion, and no page-script execution.
+- `LearningService.import_text_file()` studies UTF-8 local text files up to 1 MB and saves a draft summary; imported text is treated as untrusted data and never executed.
+- `LearningService.draft_skill()` requires an approved note, validates a typed skill contract, and stores it disabled with `review_required` status.
+- Termux CLI commands are available as `zexa learn research`, `fetch`, `import`, `list`, `show`, `search`, `review`, `draft-skill`, `skill-drafts`, and `review-skill`.
+- `LearningAwareBrain` retrieves relevant approved notes into ordinary chat, voice, planning, and agent requests as bounded untrusted reference context; draft/rejected notes are excluded. Reviewing a skill contract now makes it available to the runtime only while its source note remains approved. It runs through a fixed prompt-only brain handler with schema validation and the normal execution gateway; learned code, scripts, tools, network access, and external actions are never activated. Built-in skill names cannot be overridden. Version history, document formats beyond UTF-8 text, multi-page crawling, and model-weight training are not implemented by this foundation.
+
+## 5. Permission and approval model
+
+Every capability is registered with a trusted permission and risk class. The model cannot lower risk or approve its own actions.
+
+- **Read-only / low risk:** status checks and explicitly requested, scoped reads may run without a separate approval after the relevant permission has been granted.
+- **Reversible navigation:** opening an app or navigating a screen may use a clear user command and a visible action log. The bounded task-grant implementation supports swipe, scroll, back, home, installed-app launch, and validated HTTP(S) URL navigation, for up to 5 minutes and 30 actions by default. URL grants authorize opening the validated destination only; page interaction, form submission, and external commits remain outside grants and require exact-action approval.
+- **Data modification:** file writes, edits, clipboard changes, and form filling require a scoped workspace/target and a preview or confirmation according to the capability policy.
+- **External or consequential action:** sending a message/email, publishing, submitting a form, changing account settings, sharing files, purchases, or deleting data requires fresh confirmation bound to the exact action, destination, content/arguments, device, expiry, and one-time request ID.
+- **Forbidden:** credential theft, covert surveillance, permission bypass, hidden microphone/camera capture, stealth persistence, arbitrary remote command execution, and evasion of platform security controls.
+
+Approvals must be invalidated if any material argument, destination, content, device, or target changes. Denial, expiry, cancellation, timeout, and uncertain outcomes must fail closed. A retry after an uncertain external side effect requires checking the provider's state or asking the user; never resend blindly.
+
+## 6. Task lifecycle and reliability
+
+Use a durable state machine:
+
+`proposed → validated → awaiting_approval → queued → running → completed`
+
+Terminal alternatives: `denied`, `cancelled`, `failed`, `expired`, and `needs_user_input`.
+
+Each task records a stable task ID, parent task ID where applicable, requested goal, plan version, selected brain, target device, capability calls, approval references, timestamps, progress, bounded result summary, and redacted error category. Do not store secrets or full sensitive screen contents in ordinary logs.
+
+Every task has maximum steps, wall-clock deadline, model-token/resource budget, per-tool timeout, and cancellation checks. Long workflows checkpoint between steps. Resume only from a validated checkpoint; re-check permissions and approvals after restart.
+
+## 7. Internet and offline behaviour
+
+- **Offline:** local Qwen, local memory, local files in permitted folders, installed Termux tools, and the local Android bridge when running. Report unavailable online capabilities instead of pretending to search.
+- **Online:** configured provider, public research, and installed authenticated connectors. Display which provider/source was used.
+- **Hybrid:** use local planning and private-data handling where practical; send only the minimum required data to an online provider, with explicit disclosure and user choice for sensitive content.
+- Keep model download, provider credentials, and large file transfer separate from normal task execution. Never silently upload local documents or screen snapshots.
+
+## 8. Delivery phases and acceptance gates
+
+### Phase 0 — establish a trustworthy Human Hand baseline
+- Verify the current Android bridge protocol and Python client end to end.
+- Test exact-action approval, denial, expiry, replay, malformed payloads, token mismatch, service stop, process death, and permission revocation.
+- Verify that screen snapshots are explicit, bounded, and redacted before model use.
+- Confirm all current CLI device actions route through the trusted execution gateway.
+- Validate Qwen load settings on the target phone before enabling model load by default.
+
+**Gate:** automated tests pass and the target Android device passes a documented manual test matrix. No claim of full phone control before this gate.
+
+### Phase 1 — typed capability and task controller
+- Define one capability contract shared by planner, gateway, CLI, Android adapter, and future laptop adapter.
+- Add schema validation, per-capability permissions, bounded execution, cancellation, task progress, durable checkpoints, and redacted audit.
+- Add prompt-injection tests for webpages, screen text, files, and imported skills.
+
+**Gate:** unknown tools and malformed arguments are rejected; approvals are exact and one-use; interrupted tasks recover safely.
+
+### Phase 2 — laptop pairing and restricted hand
+- Implement the desktop agent for one supported OS first.
+- Complete pairing, revocation, device status, workspace allowlists, restricted file operations, visible local approvals, persistent pairing storage, and real-device validation.
+- Add integration tests and a real phone-to-laptop acceptance test on a user-owned device.
+
+**Gate:** no public unauthenticated listener, no arbitrary remote shell, and every write is scoped and auditable.
+
+### Phase 3 — browser hand and useful integrations
+- Add isolated browser read/navigation first, then reviewed form workflows.
+- Add official provider connectors one at a time with minimum scopes and explicit send/publish gates.
+
+**Gate:** source provenance, prompt-injection resistance, credential isolation, and exact-action confirmation are tested.
+
+### Phase 4 — learning, memory, and adaptive workflows
+- Add user-managed knowledge library, retrieval with citations, reviewed skill authoring, versioning, and evaluations.
+- Add bounded specialist collaboration only where it improves a measured task.
+
+**Gate:** learned skills are reproducible, inspectable, disabled by default, and pass regression tests before activation.
+
+## 9. Definition of done for any Human Hand feature
+
+A feature is not "done" because it appears in a catalogue or UI. It must have:
+
+- a real adapter and a typed capability definition;
+- least-privilege permission checks enforced outside the model;
+- exact approval for consequential side effects;
+- timeout, cancellation, retry/idempotency, and recovery behaviour;
+- unit tests plus controlled integration tests;
+- user-visible status and a useful audit result;
+- documented platform/version limitations;
+- evidence from CI and, where hardware is involved, a real-device test.
+
+## 10. Current implementation boundary
+
+At the current branch, Android Accessibility and Termux integrations exist as foundations; local Qwen and online brain routing exist; the loopback task API exposes a restricted health/jobs/notification surface. A TLS-pinned, private-IPv4 laptop Human Hand channel now supports explicit pairing, scoped workspace listing/reading, optional exact-confirmed text writes, and owner-allowlisted app launch. General browser automation, multi-page crawling, production app connectors, arbitrary laptop process control, remote app discovery, complete skill execution, and unrestricted autonomous computer control are not implemented. The roadmap must preserve this distinction in README, UI, and task reports.
+
+### Laptop workspace and remote pairing foundation
+- LaptopWorkspace constrains file listing, UTF-8 reads, and writes to one existing user-selected root directory.
+- Absolute paths, parent traversal, control characters, Windows-style path separators, symlinks, binary formats, credential-like filenames, and oversized files are rejected or excluded. Common credentials are redacted from text returned to the phone.
+- Reads are bounded to 256 KB; writes are bounded to 128,000 characters and use temporary files plus atomic replacement/no-clobber creation.
+- Trusted CapabilitySpec definitions expose list/read as low-risk and local write as high-risk; CapabilityController enforces explicit permissions and one-time exact-payload approval for local writes.
+- LaptopAgentServer binds only to a private IPv4 address and requires TLS 1.2+ with a locally displayed SHA-256 certificate fingerprint. Pairing uses a 12-digit one-time code, PBKDF2/HMAC challenge proof, explicit capability scopes, and replay-resistant request MACs with timestamps and nonces.
+- Remote pairing defaults to workspace list/read. Capability scopes are fixed into each pairing; expanding them requires revoking the existing pairing, restarting the laptop server with the new opt-in flags, and pairing again. The phone CLI previews source, destination, character count, and SHA-256 and requires an exact path confirmation for every write, with a distinct overwrite confirmation.
+- Phone-side session credentials are stored with owner-restricted permissions. Laptop-side paired-client keys and replay nonces persist in a restricted SQLite database (default ~/.zexa/laptop-pairings.sqlite3), survive server restarts, and are removed when a client or laptop owner revokes pairing. The running server refreshes persisted client state on authenticated requests so a separate laptop-owner CLI revoke takes effect immediately. Unix uses mode 0600/0700; Windows applies an ACL for the current user plus SYSTEM/Administrators and fails closed if icacls is unavailable.
+- LaptopAppRegistry loads a bounded owner-only manifest of absolute executable paths and fixed argument arrays; launch uses shell=False, requires the separate laptop.apps.launch pairing scope, and is confirmed with an exact app ID on the phone.
+- A metadata-only SQLite audit trail records pairing, workspace list/read/write, app launch, and revocation events without storing file contents or authentication secrets.
+- Remote deletion, arbitrary shell/process execution, arbitrary laptop process control, remote app discovery, and general browser automation are not exposed. Optional app launch is limited to an owner-authored fixed executable/argument manifest, requires a separate pairing permission, and requires exact confirmation on the phone.
+
+
+## 12. Security without blocking useful work
+
+Security is a set of proportionate controls, not a blanket lock on every action. Zexa must remain useful and responsive while protecting private data and consequential changes.
+
+### User-facing autonomy tiers
+
+- **Observe:** status, help, public research, and user-requested reads from already granted folders can proceed without repeated prompts. Sensitive screen fields remain redacted.
+- **Assist:** app launch, swipe, scroll, back, and home may run under a clearly visible, user-started task grant. The grant is scoped to one device, one task, an explicit allowlisted action set, a short expiry, and a bounded operation count; the user can revoke it at any time. Coordinate-based taps and text entry are excluded because their target/effect cannot be reliably classified from coordinates alone.
+- **Change:** writing or editing local files requires a scoped folder and a preview. A task grant may cover a batch of reversible edits within that folder, but must not expand to other folders or destructive operations.
+- **Commit externally:** sending, publishing, submitting, sharing, purchases, account/security changes, and deletion require a fresh confirmation showing the exact destination and content/effect. A task grant cannot silently approve these.
+- **Restricted:** credentials, hidden recording, permission bypass, stealth control, and arbitrary remote execution are not available capabilities.
+
+### Engineering rules
+
+- Prefer one clear approval at the start of a bounded low-risk task over repeated approval dialogs for each eligible navigation step. Do not broaden a task grant to coordinate taps, text entry, form submission, messages, purchases, deletion, account changes, or any external commit.
+- Approval must be revocable and scoped; expiry, device change, capability change, or material task change invalidates it.
+- Keep a visible activity indicator and concise audit history, but do not log private screen contents or text payloads by default.
+- When a capability is unavailable, explain the exact missing permission, adapter, or platform limitation and offer a supported alternative. Do not fail the whole task if an independent safe step can still complete.
+- Never claim a task completed until the adapter returns verifiable success. Report partial completion and skipped steps separately.
+- Security controls must be tested for both sides: unauthorized actions are blocked, while authorized routine tasks complete without unnecessary prompts.
+
+**Current implementation note:** exact-action approval remains the default. The bounded TaskActionGrantRegistry is now connected to the Android service, visible Device-screen create/list/copy/revoke controls, authenticated GET /v1/grants and grant-aware POST /v1/action routes, Python task_grants() / perform_granted() client methods, and Termux CLI bridge grants / grant-action commands. Grants are in-memory, device-bound, task-bound, action-bound, expire within 5 minutes, and have a maximum 30-action UI budget. They are cleared when the AccessibilityService is interrupted, disabled, reconnected, or destroyed. Coordinate taps, text entry, page interaction, and all consequential actions remain outside grants and require exact-action approval. A URL grant permits opening only the validated HTTP(S) destination. The integration must pass CI and a target-device test before being treated as production-ready.
+
+## 11. Current Human Hand implementation progress
+
+The shared capability controller is now present in `src/zexa/capabilities.py`. It owns trusted capability definitions, platform labels, permission names, risk levels, typed JSON input/output contracts, bounded payload sizes, and dispatch to application-registered handlers. It delegates authorization, one-use approvals, and audit events to the existing `ExecutionGateway`.
+
+Android action definitions are created by `src/zexa/android_capabilities.py`. The CLI's `bridge action` path now routes through this shared controller before calling the existing `AccessibilityBridge`. The command requires all of the following:
+
+1. The action is in the explicit `ZEXA_ALLOWED_ANDROID_ACTIONS` allowlist.
+2. The caller reviews and types `APPROVE` for the exact action and payload.
+3. The shared controller validates the registered capability, permission, risk, and one-use approval.
+4. The Android companion app independently confirms the exact action through its native approval flow.
+
+The capability controller is a foundation for future laptop and browser adapters; it does not itself implement laptop pairing, browser automation, or new Android gestures. Those adapters must register their own trusted contracts and pass platform-specific integration tests before they are advertised as available.

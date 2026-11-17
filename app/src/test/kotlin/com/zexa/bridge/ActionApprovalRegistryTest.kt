@@ -39,6 +39,43 @@ class ActionApprovalRegistryTest {
         assertTrue(registry.list(10_999L).isNotEmpty())
         assertTrue(registry.list(11_000L).isEmpty())
         assertNull(registry.approve("expires", 11_000L))
+        assertEquals("expires", registry.drainExpired().single().requestId)
+        assertTrue(registry.drainExpired().isEmpty())
+    }
+
+    @Test
+    fun atomicExpiryDrainCollectsBoundaryExpiryExactlyOnce() {
+        val registry = ActionApprovalRegistry(ttlMs = 1_000L, idFactory = { "atomic-expiry" })
+        registry.create("back", "{}", 2_000L, 100_000L)
+
+        assertEquals("atomic-expiry", registry.expireAndDrain(3_000L).single().requestId)
+        assertTrue(registry.expireAndDrain(3_001L).isEmpty())
+        assertNull(registry.approve("atomic-expiry", 3_002L))
+    }
+
+    @Test
+    fun expiredTicketsAreRetainedForAuditWhenListTriggersExpiry() {
+        val registry = ActionApprovalRegistry(ttlMs = 1_000L, idFactory = { "audit-expiry" })
+        registry.create("tap", "{}", 5_000L, 100_000L)
+
+        assertTrue(registry.list(6_000L).isEmpty())
+        assertEquals("audit-expiry", registry.drainExpired().single().requestId)
+        assertTrue(registry.drainExpired().isEmpty())
+    }
+
+    @Test
+    fun expiredRequestIdCannotBeReusedBeforeItsAuditRecordIsDrained() {
+        var candidateId = "reused"
+        val registry = ActionApprovalRegistry(ttlMs = 1_000L, idFactory = { candidateId })
+        registry.create("back", "{}", 1_000L, 100_000L)
+
+        assertTrue(registry.list(2_000L).isEmpty())
+        assertRejected { registry.create("home", "{}", 2_001L, 101_000L) }
+        assertEquals("reused", registry.drainExpired().single().requestId)
+
+        candidateId = "replacement"
+        val replacement = registry.create("home", "{}", 2_002L, 101_001L)
+        assertEquals("replacement", replacement.requestId)
     }
 
     @Test

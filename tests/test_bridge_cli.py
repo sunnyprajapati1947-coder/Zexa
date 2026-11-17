@@ -18,6 +18,9 @@ class FakeBridge:
     def screen(self):
         return {"ok": True, "nodes": []}
 
+    def revoke_task_grant(self, grant_id):
+        return grant_id == "grant-123"
+
     def perform(self, action, payload, approve=None):
         if approve is None or approve(action, payload) is not True:
             raise PermissionError("not approved")
@@ -56,6 +59,11 @@ class BridgeCliTests(unittest.TestCase):
             self.invoke(["status"])
             self.invoke(["screen"])
         self.assertEqual(output.call_count, 2)
+
+    def test_grant_revoke_uses_authenticated_bridge_client(self):
+        with patch("builtins.print") as output:
+            self.invoke(["grant-revoke", "grant-123"])
+        self.assertIn("revoked", str(output.call_args.args[0]))
 
     def test_action_requires_exact_confirmation(self):
         with patch("builtins.print") as output:

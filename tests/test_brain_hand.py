@@ -70,32 +70,40 @@ class BrainRouterTests(unittest.TestCase):
 class AccessibilityBridgeTests(unittest.TestCase):
     def test_rejects_non_loopback_urls(self):
         with self.assertRaisesRegex(ValueError, "loopback"):
-            AccessibilityBridge("a" * 32, "http://example.com:8765")
+            AccessibilityBridge("a" * 64, "http://example.com:8765")
 
     def test_requires_token(self):
         with self.assertRaises(ValueError):
             AccessibilityBridge("short")
 
     def test_action_requires_explicit_approval(self):
-        bridge = AccessibilityBridge("t" * 32)
+        bridge = AccessibilityBridge("a" * 64)
         with patch.object(bridge, "_request") as request:
             with self.assertRaises(PermissionError):
                 bridge.perform("tap", {"x": 10, "y": 20})
             request.assert_not_called()
 
     def test_rejects_unknown_actions(self):
-        bridge = AccessibilityBridge("t" * 32)
+        bridge = AccessibilityBridge("a" * 64)
         with self.assertRaisesRegex(ValueError, "allowlisted"):
             bridge.perform("run_shell", {"command": "whoami"}, lambda *_: True)
 
-    def test_approved_action_uses_fixed_endpoint(self):
-        bridge = AccessibilityBridge("t" * 32)
-        with patch.object(bridge, "_request", return_value={"ok": True}) as request:
+    def test_approved_action_uses_fixed_endpoint_and_waits_for_native_approval(self):
+        bridge = AccessibilityBridge("a" * 64)
+        responses = iter([
+            {"ok": True, "status": "pending_approval", "request_id": "native-request"},
+            {"ok": True, "status": "completed", "request_id": "native-request"},
+        ])
+        with patch.object(bridge, "_request", side_effect=lambda *args: next(responses)) as request:
             result = bridge.perform("back", {}, lambda *_: True)
-        self.assertEqual(result, {"ok": True})
-        request.assert_called_once_with(
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(result["ok"])
+        self.assertEqual(request.call_args_list[0].args, (
             "POST", "/v1/action", {"action": "back", "payload": {}}
-        )
+        ))
+        self.assertEqual(request.call_args_list[1].args, (
+            "GET", "/v1/action/native-request"
+        ))
 
 
 if __name__ == "__main__":

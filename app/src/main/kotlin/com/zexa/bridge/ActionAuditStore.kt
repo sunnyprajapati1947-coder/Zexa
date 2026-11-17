@@ -25,7 +25,7 @@ class ActionAuditStore(
     @Synchronized
     fun append(entry: ActionAuditEntry) {
         require(entry.requestId.isNotBlank() && entry.requestId.length <= 64)
-        require(entry.action in ActionApprovalRegistry.ALLOWED_ACTIONS)
+        require(entry.action in ALLOWED_ACTIONS)
         require(entry.status in ALLOWED_STATUSES)
         require(entry.timestampEpochMs >= 0L)
         val entries = readEntries().toMutableList()
@@ -48,17 +48,19 @@ class ActionAuditStore(
     }
 
     @Synchronized
-    fun markPendingAsInterrupted(nowMs: Long) {
+    fun markPendingAsInterrupted(nowMs: Long): List<ActionAuditEntry> {
         require(nowMs >= 0L)
         val entries = readEntries().toMutableList()
-        var changed = false
+        val interrupted = mutableListOf<ActionAuditEntry>()
         for (index in entries.indices) {
-            if (entries[index].status == "pending_approval") {
-                entries[index] = entries[index].copy(status = "interrupted", timestampEpochMs = nowMs)
-                changed = true
+            if (entries[index].status in setOf("pending_approval", "executing")) {
+                val updated = entries[index].copy(status = "interrupted", timestampEpochMs = nowMs)
+                entries[index] = updated
+                interrupted.add(updated)
             }
         }
-        if (changed) writeEntries(entries)
+        if (interrupted.isNotEmpty()) writeEntries(entries)
+        return interrupted
     }
 
     @Synchronized
@@ -76,7 +78,7 @@ class ActionAuditStore(
                     val status = item.optString("status")
                     val timestamp = item.optLong("timestamp_epoch_ms", -1L)
                     if (id.isNotBlank() && id.length <= 64 &&
-                        action in ActionApprovalRegistry.ALLOWED_ACTIONS &&
+                        action in ALLOWED_ACTIONS &&
                         status in ALLOWED_STATUSES && timestamp >= 0L
                     ) add(ActionAuditEntry(id, action, status, timestamp))
                 }
@@ -88,6 +90,7 @@ class ActionAuditStore(
 
     companion object {
         const val MAX_ENTRIES = 100
-        val ALLOWED_STATUSES = setOf("pending_approval", "completed", "failed", "denied", "interrupted")
+        val ALLOWED_ACTIONS = ActionApprovalRegistry.ALLOWED_ACTIONS + "task_grant"
+        val ALLOWED_STATUSES = setOf("pending_approval", "executing", "dispatched", "completed", "failed", "execution_unknown", "denied", "interrupted", "expired", "created", "revoked")
     }
 }

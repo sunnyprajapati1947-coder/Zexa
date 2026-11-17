@@ -26,6 +26,7 @@ class ActionApprovalRegistry(
     )
 
     private val pending = LinkedHashMap<String, Entry>()
+    private val expired = LinkedHashMap<String, PendingDeviceAction>()
     private var lastObservedElapsedMs = 0L
 
     init {
@@ -55,7 +56,7 @@ class ActionApprovalRegistry(
         require(pending.size < maxPending) { "Too many pending device-action approvals." }
 
         val id = idFactory()
-        require(id.isNotBlank() && id.length <= 64 && !pending.containsKey(id)) {
+        require(id.isNotBlank() && id.length <= 64 && !pending.containsKey(id) && !expired.containsKey(id)) {
             "Could not create a unique approval request."
         }
 
@@ -92,8 +93,23 @@ class ActionApprovalRegistry(
         return pending.remove(requestId)?.ticket
     }
 
+    /** Atomically expires due tickets and returns each newly expired ticket once. */
     @Synchronized
-    fun clear() = pending.clear()
+    fun expireAndDrain(nowElapsedMs: Long): List<PendingDeviceAction> {
+        val effectiveNowMs = observeTime(nowElapsedMs)
+        expire(effectiveNowMs)
+        return expired.values.toList().also { expired.clear() }
+    }
+
+    /** Returns each expired ticket once, including tickets expired by list/create/approve/deny. */
+    @Synchronized
+    fun drainExpired(): List<PendingDeviceAction> = expired.values.toList().also { expired.clear() }
+
+    @Synchronized
+    fun clear() {
+        pending.clear()
+        expired.clear()
+    }
 
     private fun observeTime(nowElapsedMs: Long): Long {
         require(nowElapsedMs >= 0L) {
@@ -108,7 +124,11 @@ class ActionApprovalRegistry(
     private fun expire(nowElapsedMs: Long) {
         val iterator = pending.values.iterator()
         while (iterator.hasNext()) {
-            if (iterator.next().deadlineElapsedMs <= nowElapsedMs) iterator.remove()
+            val entry = iterator.next()
+            if (entry.deadlineElapsedMs <= nowElapsedMs) {
+                expired[entry.ticket.requestId] = entry.ticket
+                iterator.remove()
+            }
         }
     }
 
@@ -117,6 +137,6 @@ class ActionApprovalRegistry(
         const val MAX_TTL_MS = 120_000L
         const val MAX_PENDING = 8
         const val MAX_PAYLOAD_CHARS = 16_000
-        val ALLOWED_ACTIONS = setOf("tap", "swipe", "scroll", "back", "home", "input_text", "launch_app")
+        val ALLOWED_ACTIONS = setOf("tap", "swipe", "scroll", "back", "home", "input_text", "launch_app", "open_url")
     }
 }

@@ -2,9 +2,9 @@ name: Zexa CI
 
 on:
   push:
-    branches: [main, "fix/**", "feature/**"]
+    branches: [main, "fix/**", "feature/**", "feat/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "fix/**"]
   workflow_dispatch:
 
 permissions:

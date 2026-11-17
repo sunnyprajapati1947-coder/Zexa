@@ -2,7 +2,7 @@ name: Android Bridge Build
 
 on:
   push:
-    branches: [main, "feature/**", "fix/**"]
+    branches: [main, "feature/**", "feat/**", "fix/**"]
     paths:
       - "app/**"
       - "*.gradle.kts"
@@ -10,7 +10,7 @@ on:
       - "gradle.properties"
       - ".github/workflows/android.yml"
   pull_request:
-    branches: [main, "feature/**"]
+    branches: [main, "feature/**", "feat/**", "fix/**"]
     paths:
       - "app/**"
       - "*.gradle.kts"
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: android-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: android-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:

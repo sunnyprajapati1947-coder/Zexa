@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import getpass
+import hashlib
 import json
 import os
 import re
@@ -11,6 +13,8 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from .android import AndroidCapabilityProbe, TermuxAndroidHand, TermuxVoice
+from .android_capabilities import ANDROID_ACTIONS, ANDROID_GRANTABLE_ACTIONS, build_android_capabilities
+from .capabilities import CapabilityController
 from .agents import AgentOrchestrator
 from .config import get_config, get_groq_config, get_xai_config, load_env_file
 from .approvals import ApprovalManager
@@ -23,6 +27,12 @@ from .execution import (
 )
 from .brain import build_brain_router
 from .intent import route_utterance
+from .learning import LearningAwareBrain, LearningService, LearningStore
+from .laptop_client import LaptopAgentClient
+from .laptop_apps import LaptopAppRegistry
+from .laptop_hand import MAX_WRITE_CHARS, LaptopWorkspace
+from .laptop_server import LaptopAgentServer, certificate_fingerprint, generate_laptop_certificate
+from .laptop_pairing import LaptopPairingAuthority, secure_owner_only
 from .jobs import JobQueue, JobWorker
 from .hand import AccessibilityBridge
 from .memory import MemoryStore
@@ -32,6 +42,25 @@ from .skills import default_registry
 from .skillpacks import load_imported_manifest
 from .tasks import TaskStore
 from .tools import default_router
+
+
+def _register_approved_learning_skills(registry, knowledge_path=None) -> list[str]:
+    """Register reviewed prompt-only skills without overriding built-in handlers."""
+    path = Path(
+        knowledge_path or (Path.home() / ".zexa" / "knowledge.sqlite3")
+    ).expanduser()
+    if not path.exists():
+        return []
+    store = LearningStore(path)
+    registered = {skill.name for skill in registry.all()}
+    added = []
+    for skill in store.approved_skills():
+        if skill.name in registered:
+            continue
+        registry.register(skill)
+        registered.add(skill.name)
+        added.append(skill.name)
+    return added
 
 
 SYSTEM_PROMPT = (
@@ -71,6 +100,138 @@ def main() -> None:
     research_parser = subparsers.add_parser("research", help="Search public web snippets and summarize with source references")
     research_parser.add_argument("--limit", type=int, default=5)
     research_parser.add_argument("query", nargs="+", help="Research question")
+
+    learn_parser = subparsers.add_parser("learn", help="Study web or local text into reviewed knowledge")
+    learn_sub = learn_parser.add_subparsers(dest="learn_command", required=True)
+    learn_research = learn_sub.add_parser("research", help="Research a topic online and save a draft note")
+    learn_research.add_argument("--limit", type=int, default=5)
+    learn_research.add_argument("query", nargs="+")
+    learn_fetch = learn_sub.add_parser("fetch", help="Fetch one public HTTPS page and summarize it into a draft note")
+    learn_fetch.add_argument("url")
+    learn_import = learn_sub.add_parser("import", help="Summarize a local UTF-8 text file into a draft note")
+    learn_import.add_argument("path")
+    learn_list = learn_sub.add_parser("list", help="List knowledge notes")
+    learn_list.add_argument("--status", choices=["draft", "approved", "rejected", "archived"])
+    learn_list.add_argument("--limit", type=int, default=50)
+    learn_show = learn_sub.add_parser("show", help="Show one knowledge note")
+    learn_show.add_argument("note_id", type=int)
+    learn_search = learn_sub.add_parser("search", help="Search approved knowledge notes")
+    learn_search.add_argument("query", nargs="+")
+    learn_review = learn_sub.add_parser("review", help="Approve, reject, or archive a knowledge note")
+    learn_review.add_argument("note_id", type=int)
+    learn_review.add_argument("decision", choices=["approved", "rejected", "archived"])
+    learn_skill = learn_sub.add_parser("draft-skill", help="Draft an inert skill from an approved note")
+    learn_skill.add_argument("note_id", type=int)
+    learn_sub.add_parser("skill-drafts", help="List generated skill drafts")
+    learn_skill_review = learn_sub.add_parser("review-skill", help="Review a generated skill contract; approval does not enable execution")
+    learn_skill_review.add_argument("draft_id", type=int)
+    learn_skill_review.add_argument("decision", choices=["approved", "rejected"])
+
+    laptop_parser = subparsers.add_parser("laptop", help="Pair with and use a scoped laptop Human Hand")
+    laptop_sub = laptop_parser.add_subparsers(dest="laptop_command", required=True)
+    laptop_cert = laptop_sub.add_parser("certificate", help="Generate a self-signed TLS certificate for the laptop agent")
+    laptop_cert.add_argument("--host", required=True, help="Laptop's private LAN IPv4 address")
+    laptop_cert.add_argument("--cert", default=str(Path.home() / ".zexa" / "laptop-agent.crt"))
+    laptop_cert.add_argument("--key", default=str(Path.home() / ".zexa" / "laptop-agent.key"))
+    laptop_serve = laptop_sub.add_parser("serve", help="Run the TLS laptop agent on a private IPv4 address")
+    laptop_serve.add_argument("--host", required=True, help="Laptop's private LAN IPv4 address")
+    laptop_serve.add_argument("--port", type=int, default=9443)
+    laptop_serve.add_argument("--workspace", required=True, help="Existing directory to expose")
+    laptop_serve.add_argument("--cert", required=True, help="PEM TLS certificate file")
+    laptop_serve.add_argument("--key", required=True, help="PEM TLS private key file")
+    laptop_serve.add_argument(
+        "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
+        help="Owner-only SQLite file for persistent paired clients and replay protection",
+    )
+    laptop_serve.add_argument(
+        "--allow-write", action="store_true",
+        help="Allow paired phones to request workspace writes after exact phone-side confirmation",
+    )
+    laptop_serve.add_argument(
+        "--apps", help="Owner-authored JSON manifest of exact laptop app executables and fixed arguments",
+    )
+    laptop_serve.add_argument(
+        "--allow-app-launch", action="store_true",
+        help="Allow paired phones to launch only apps in the supplied owner manifest",
+    )
+    laptop_serve.add_argument(
+        "--allow-browser-open", action="store_true",
+        help="Allow paired phones to open exact-confirmed public HTTPS URLs in the visible laptop browser",
+    )
+    laptop_serve.add_argument(
+        "--allow-browser-read", action="store_true",
+        help="Allow paired phones to fetch bounded public HTTPS page text without browser-profile access",
+    )
+    laptop_pair = laptop_sub.add_parser("pair", help="Pair this phone using the code shown by the laptop")
+    laptop_pair.add_argument("--host", required=True)
+    laptop_pair.add_argument("--port", type=int, default=9443)
+    laptop_pair.add_argument("--fingerprint", required=True, help="SHA-256 certificate fingerprint confirmed on the laptop")
+    laptop_pair.add_argument("--client-id", default="zexa-phone")
+    laptop_status = laptop_sub.add_parser("status", help="Show local laptop pairing status and granted permissions without exposing credentials")
+    laptop_status.add_argument("--host", required=True)
+    laptop_status.add_argument("--port", type=int, default=9443)
+    laptop_status.add_argument("--client-id", default="zexa-phone")
+    laptop_list = laptop_sub.add_parser("list", help="List the paired laptop workspace")
+    laptop_list.add_argument("--host", required=True)
+    laptop_list.add_argument("--port", type=int, default=9443)
+    laptop_list.add_argument("--client-id", default="zexa-phone")
+    laptop_list.add_argument("--dir", default=".")
+    laptop_read = laptop_sub.add_parser("read", help="Read one UTF-8 text file from the paired laptop workspace")
+    laptop_read.add_argument("--host", required=True)
+    laptop_read.add_argument("--port", type=int, default=9443)
+    laptop_read.add_argument("--client-id", default="zexa-phone")
+    laptop_read.add_argument("path")
+    laptop_write = laptop_sub.add_parser("write", help="Write a local UTF-8 text file to the paired laptop after exact confirmation")
+    laptop_write.add_argument("--host", required=True)
+    laptop_write.add_argument("--port", type=int, default=9443)
+    laptop_write.add_argument("--client-id", default="zexa-phone")
+    laptop_write.add_argument("--overwrite", action="store_true")
+    laptop_write.add_argument("source")
+    laptop_write.add_argument("destination")
+    laptop_revoke = laptop_sub.add_parser("revoke", help="Revoke remote pairing and delete the local credential")
+    laptop_revoke.add_argument("--host", required=True)
+    laptop_revoke.add_argument("--port", type=int, default=9443)
+    laptop_revoke.add_argument("--client-id", default="zexa-phone")
+    laptop_apps = laptop_sub.add_parser("apps", help="List laptop apps explicitly allowlisted by the owner")
+    laptop_apps.add_argument("--host", required=True)
+    laptop_apps.add_argument("--port", type=int, default=9443)
+    laptop_apps.add_argument("--client-id", default="zexa-phone")
+    laptop_launch = laptop_sub.add_parser("launch", help="Launch one owner-allowlisted laptop app after exact confirmation")
+    laptop_launch.add_argument("--host", required=True)
+    laptop_launch.add_argument("--port", type=int, default=9443)
+    laptop_launch.add_argument("--client-id", default="zexa-phone")
+    laptop_launch.add_argument("app_id")
+    laptop_open_url = laptop_sub.add_parser(
+        "open-url", help="Open one public HTTPS URL in the paired laptop's visible browser after exact confirmation",
+    )
+    laptop_open_url.add_argument("--host", required=True)
+    laptop_open_url.add_argument("--port", type=int, default=9443)
+    laptop_open_url.add_argument("--client-id", default="zexa-phone")
+    laptop_open_url.add_argument("url")
+    laptop_read_url = laptop_sub.add_parser(
+        "read-url", help="Read bounded text from one public HTTPS page via the paired laptop",
+    )
+    laptop_read_url.add_argument("--host", required=True)
+    laptop_read_url.add_argument("--port", type=int, default=9443)
+    laptop_read_url.add_argument("--client-id", default="zexa-phone")
+    laptop_read_url.add_argument("url")
+    laptop_clients = laptop_sub.add_parser("clients", help="List paired phones on this laptop")
+    laptop_clients.add_argument(
+        "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
+    )
+    laptop_revoke_client = laptop_sub.add_parser(
+        "revoke-client", help="Revoke one paired phone immediately from the laptop owner side",
+    )
+    laptop_revoke_client.add_argument("client_id")
+    laptop_revoke_client.add_argument(
+        "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
+    )
+    laptop_revoke_all = laptop_sub.add_parser(
+        "revoke-all", help="Emergency: revoke every paired phone from this laptop",
+    )
+    laptop_revoke_all.add_argument(
+        "--pairings", default=str(Path.home() / ".zexa" / "laptop-pairings.sqlite3"),
+    )
 
     skill_parser = subparsers.add_parser("skill", help="Run one registered skill through the execution gateway")
     skill_sub = skill_parser.add_subparsers(dest="skill_command", required=True)
@@ -150,13 +311,242 @@ def main() -> None:
     bridge_sub = bridge_parser.add_subparsers(dest="bridge_command", required=True)
     bridge_sub.add_parser("status", help="Read bridge status")
     bridge_sub.add_parser("screen", help="Read the current accessibility snapshot")
+    bridge_sub.add_parser("grants", help="List active user-approved navigation task grants")
+    bridge_grant_revoke = bridge_sub.add_parser("grant-revoke", help="Revoke one active navigation task grant")
+    bridge_grant_revoke.add_argument("grant_id")
+    bridge_granted_action = bridge_sub.add_parser(
+        "grant-action", help="Run one navigation action inside an existing native task grant"
+    )
+    bridge_granted_action.add_argument("action", choices=sorted(ANDROID_GRANTABLE_ACTIONS))
+    bridge_granted_action.add_argument("task_id")
+    bridge_granted_action.add_argument("grant_id")
+    bridge_granted_action.add_argument("payload", help="Action payload as a JSON object")
     bridge_action = bridge_sub.add_parser("action", help="Perform one approved Android action")
-    bridge_action.add_argument("action", choices=["tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"])
+    bridge_action.add_argument("action", choices=sorted(ANDROID_ACTIONS))
     bridge_action.add_argument("payload", help="Action payload as a JSON object")
 
     args = parser.parse_args()
     load_env_file(Path(os.getenv("ZEXA_ENV_FILE", str(Path.cwd() / ".env"))))
+
+    if args.command == "laptop":
+        if args.laptop_command == "certificate":
+            fingerprint = generate_laptop_certificate(args.host, args.cert, args.key)
+            print("TLS certificate created.")
+            print(f"Certificate: {Path(args.cert).expanduser()}")
+            print(f"Private key: {Path(args.key).expanduser()} (owner-only permissions)")
+            print(f"SHA-256 fingerprint: {fingerprint}")
+            print("Confirm this fingerprint locally on the laptop before entering it on the phone.")
+            return
+        if args.laptop_command == "serve":
+            workspace = LaptopWorkspace(args.workspace)
+            if args.allow_app_launch and not args.apps:
+                raise ValueError("--allow-app-launch requires an owner-authored --apps manifest.")
+            app_registry = LaptopAppRegistry(args.apps) if args.apps else None
+            server = LaptopAgentServer(
+                args.host, args.port, args.cert, args.key, workspace,
+                pairing_path=args.pairings, app_registry=app_registry,
+            )
+            permissions = ["laptop.workspace.list", "laptop.workspace.read"]
+            if args.allow_write:
+                permissions.append("laptop.workspace.write")
+            if args.allow_app_launch:
+                permissions.append("laptop.apps.launch")
+            if args.allow_browser_open:
+                permissions.append("laptop.browser.open")
+            if args.allow_browser_read:
+                permissions.append("laptop.browser.read")
+            offer = server.begin_pairing(permissions=permissions)
+            fingerprint = certificate_fingerprint(args.cert)
+            print("Zexa laptop Human Hand server started (TLS 1.2+, private IPv4 only).")
+            print(f"Persistent pairing store: {Path(args.pairings).expanduser()} (owner-only permissions)")
+            print(f"Address: https://{args.host}:{args.port}")
+            print(f"TLS SHA-256 fingerprint: {fingerprint}")
+            print(f"One-time pairing code: {offer.pairing_code}")
+            print(f"Pairing expires in: {offer.expires_in_seconds} seconds")
+            print("Remote permissions: " + ", ".join(offer.permissions))
+            if args.allow_write:
+                print("Remote workspace writes are enabled; every write must be confirmed on the phone.")
+            if args.allow_app_launch:
+                print("Remote app launch is enabled only for the owner's fixed allowlist; each launch needs exact phone confirmation.")
+            if args.allow_browser_open:
+                print("Browser navigation is enabled only for exact-confirmed public HTTPS URLs and opens visibly on this laptop.")
+            if args.allow_browser_read:
+                print("Public page reading is enabled for bounded HTTPS text only; page content is untrusted and browser profiles are never accessed.")
+            if not args.allow_write and not args.allow_app_launch and not args.allow_browser_open and not args.allow_browser_read:
+                print("Remote access is read-only: workspace list/read only; no shell or app control.")
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                print("\nLaptop Human Hand server stopped.")
+            finally:
+                server.close()
+            return
+        if args.laptop_command in {"clients", "revoke-client", "revoke-all"}:
+            authority = LaptopPairingAuthority(storage_path=args.pairings)
+            if args.laptop_command == "clients":
+                print(json.dumps(authority.list_clients(), ensure_ascii=False, indent=2))
+                return
+            if args.laptop_command == "revoke-all":
+                phrase = "REVOKE ALL LAPTOP CLIENTS"
+                if input(f"Type {phrase} to revoke every paired phone: ").strip() != phrase:
+                    print("Cancelled; no laptop pairing was changed.")
+                    return
+                revoked_count = authority.revoke_all_clients()
+                if revoked_count:
+                    audit_path = Path.home() / ".zexa" / "laptop_audit.sqlite3"
+                    if audit_path.is_symlink():
+                        raise PermissionError("Laptop audit database must not be a symbolic link.")
+                    audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    secure_owner_only(audit_path.parent, directory=True)
+                    audit = AuditLog(audit_path)
+                    secure_owner_only(audit_path)
+                    audit.record(
+                        "laptop_pairing_revoke_all", actor="laptop_owner",
+                        action="pairing.revoke_all", decision="revoked",
+                        details={"client_count": revoked_count, "source": "local_owner_cli"},
+                    )
+                print(f"Revoked {revoked_count} paired phone(s); the running laptop server will reject them on their next request.")
+                return
+            revoked = authority.revoke_client(args.client_id)
+            if revoked:
+                audit_path = Path.home() / ".zexa" / "laptop_audit.sqlite3"
+                if audit_path.is_symlink():
+                    raise PermissionError("Laptop audit database must not be a symbolic link.")
+                audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                secure_owner_only(audit_path.parent, directory=True)
+                audit = AuditLog(audit_path)
+                secure_owner_only(audit_path)
+                audit.record(
+                    "laptop_pairing_revoke", actor="laptop_owner",
+                    action="pairing.revoke", decision="revoked",
+                    details={"client_id": args.client_id, "source": "local_owner_cli"},
+                )
+                print(f"Pairing revoked for {args.client_id}; the running laptop server will reject it on the next request.")
+            else:
+                print(f"No pairing found for {args.client_id}.")
+            return
+        if args.laptop_command == "pair":
+            code = getpass.getpass("Enter the 12-digit pairing code shown locally on the laptop: ")
+            client = LaptopAgentClient(
+                args.host, args.port, args.fingerprint, args.client_id,
+            )
+            result = client.pair(code)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            print("Pairing key stored in the private local Zexa credential file.")
+            return
+        client = LaptopAgentClient(
+            args.host, args.port, None, args.client_id,
+        )
+        if args.laptop_command == "status":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None:
+                print(json.dumps({
+                    "paired": False, "host": client.host, "port": client.port,
+                    "client_id": client.client_id,
+                }, ensure_ascii=False, indent=2))
+            else:
+                print(json.dumps({
+                    "paired": True, "host": client.host, "port": client.port,
+                    "client_id": client.client_id,
+                    "fingerprint": pairing["fingerprint"],
+                    "permissions": sorted(pairing["permissions"]),
+                }, ensure_ascii=False, indent=2))
+            return
+        if args.laptop_command == "apps":
+            print(json.dumps(client.list_apps(), ensure_ascii=False, indent=2))
+        elif args.laptop_command == "list":
+            print(json.dumps(client.list_directory(args.dir), ensure_ascii=False, indent=2))
+        elif args.laptop_command == "read":
+            print(json.dumps(client.read_text(args.path), ensure_ascii=False, indent=2))
+        elif args.laptop_command == "write":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None or "laptop.workspace.write" not in pairing["permissions"]:
+                raise PermissionError(
+                    "This laptop pairing is read-only. Restart the laptop server with --allow-write and pair again."
+                )
+            source_path = Path(args.source).expanduser()
+            if not source_path.is_file():
+                raise FileNotFoundError("Local source text file does not exist.")
+            with source_path.open("rb") as source_file:
+                raw = source_file.read(MAX_WRITE_CHARS * 4 + 1)
+            if not raw or len(raw) > MAX_WRITE_CHARS * 4:
+                raise ValueError("Local source file must contain 1 byte to 512 KB.")
+            try:
+                content = raw.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError("Laptop Human Hand writes UTF-8 text files only.") from exc
+            if len(content) > MAX_WRITE_CHARS:
+                raise ValueError("Local source file exceeds the 128000-character write limit.")
+            phrase = ("OVERWRITE " if args.overwrite else "WRITE ") + args.destination
+            print(f"Source: {source_path}")
+            print(f"Laptop destination: {args.destination}")
+            print(f"Characters: {len(content)}")
+            print(f"SHA-256: {hashlib.sha256(raw).hexdigest()}")
+            if args.overwrite:
+                print("This will replace an existing workspace file.")
+            confirmation = input(f"Type exactly '{phrase}' to approve this remote write: ")
+            if confirmation != phrase:
+                print("Remote write cancelled; no data was sent.")
+                return
+            result = client.write_text(
+                args.destination, content, overwrite=args.overwrite, user_confirmed=True
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.laptop_command == "revoke":
+            if client.revoke_pairing():
+                print("Remote laptop pairing revoked and local credential deleted.")
+            else:
+                print("Laptop had no active pairing; local credential deleted.")
+        elif args.laptop_command == "launch":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None or "laptop.apps.launch" not in pairing["permissions"]:
+                raise PermissionError(
+                    "This phone pairing lacks laptop app-launch permission. Revoke it, restart the laptop server with --allow-app-launch, and pair again."
+                )
+            phrase = "LAUNCH " + args.app_id
+            print(f"Requested laptop application: {args.app_id}")
+            confirmation = input(f"Type exactly '{phrase}' to approve: ")
+            if confirmation != phrase:
+                print("Laptop app launch cancelled.")
+                return
+            result = client.launch_app(args.app_id, user_confirmed=True)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.laptop_command == "open-url":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None or "laptop.browser.open" not in pairing["permissions"]:
+                raise PermissionError(
+                    "This phone pairing lacks laptop browser permission. Restart the laptop server with --allow-browser-open and pair again."
+                )
+            from .laptop_browser import validate_browser_url
+            normalized_url = validate_browser_url(args.url)
+            phrase = "OPEN URL " + normalized_url
+            print(f"Requested visible laptop browser destination: {normalized_url}")
+            confirmation = input(f"Type exactly '{phrase}' to approve: ")
+            if confirmation != phrase:
+                print("Laptop browser navigation cancelled.")
+                return
+            result = client.open_browser_url(normalized_url, user_confirmed=True)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif args.laptop_command == "read-url":
+            pairing = client.store.get(client.host, client.port, client.client_id)
+            if pairing is None or "laptop.browser.read" not in pairing["permissions"]:
+                raise PermissionError(
+                    "This phone pairing lacks laptop page-read permission. Restart the laptop server with --allow-browser-read and pair again."
+                )
+            from .laptop_browser import validate_browser_url
+            normalized_url = validate_browser_url(args.url)
+            phrase = "READ URL " + normalized_url
+            print(f"Requested public page text read: {normalized_url}")
+            confirmation = input(f"Type exactly '{phrase}' to approve: ")
+            if confirmation != phrase:
+                print("Public page read cancelled; no request was sent.")
+                return
+            result = client.read_public_page(normalized_url)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
     registry = default_registry()
+    _register_approved_learning_skills(registry)
     router = default_router()
 
     if args.command == "schedule-skill":
@@ -363,6 +753,33 @@ def main() -> None:
                 result = bridge.status()
             elif args.bridge_command == "screen":
                 result = bridge.screen()
+            elif args.bridge_command == "grants":
+                result = {"ok": True, "grants": bridge.task_grants()}
+            elif args.bridge_command == "grant-revoke":
+                revoked = bridge.revoke_task_grant(args.grant_id)
+                result = {"ok": revoked, "status": "revoked" if revoked else "not_found", "grant_id": args.grant_id}
+            elif args.bridge_command == "grant-action":
+                try:
+                    payload = json.loads(args.payload)
+                except json.JSONDecodeError as exc:
+                    raise ValueError("Bridge action payload must be valid JSON.") from exc
+                if not isinstance(payload, dict):
+                    raise ValueError("Bridge action payload must be a JSON object.")
+                active_grant = next(
+                    (
+                        item for item in bridge.task_grants()
+                        if item["grant_id"] == args.grant_id and item["task_id"] == args.task_id
+                    ),
+                    None,
+                )
+                if active_grant is None:
+                    raise PermissionError("No active native task grant matches this task ID and grant ID.")
+                if args.action not in active_grant["allowed_actions"]:
+                    raise PermissionError("This action is outside the selected task grant's approved action set.")
+                print(f"Using existing native task grant: {args.task_id}")
+                print(f"Requested Android action: {args.action}")
+                print("Exact payload:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
+                result = bridge.perform_granted(args.action, payload, args.task_id, args.grant_id)
             else:
                 try:
                     payload = json.loads(args.payload)
@@ -375,23 +792,9 @@ def main() -> None:
                     for item in os.getenv("ZEXA_ALLOWED_ANDROID_ACTIONS", "").split(",")
                     if item.strip()
                 }
-                known_actions = {"tap", "swipe", "scroll", "back", "home", "input_text", "launch_app"}
+                known_actions = set(ANDROID_ACTIONS)
                 if not allowed_actions <= known_actions:
                     raise ValueError("ZEXA_ALLOWED_ANDROID_ACTIONS contains an unknown action.")
-                permission_names = {f"android.{name}" for name in allowed_actions}
-                capabilities = {
-                    f"android.{name}": (f"android.{name}", "high")
-                    for name in allowed_actions
-                }
-                audit_path = Path(
-                    os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
-                ).expanduser()
-                gateway = ExecutionGateway(
-                    PermissionPolicy(permission_names),
-                    ApprovalManager(ttl_seconds=60),
-                    AuditLog(audit_path),
-                    capabilities=capabilities,
-                )
                 action_name = f"android.{args.action}"
                 print(f"Requested Android action: {args.action}")
                 print("Exact payload:", json.dumps(payload, ensure_ascii=False, sort_keys=True))
@@ -400,22 +803,29 @@ def main() -> None:
                         f"{args.action} is not enabled. Add it to ZEXA_ALLOWED_ANDROID_ACTIONS "
                         "only if you want to allow this capability."
                     )
+                permission_names = {f"android.{name}" for name in allowed_actions}
+                capability_specs = build_android_capabilities(bridge, allowed_actions)
+                audit_path = Path(
+                    os.getenv("ZEXA_AUDIT_DB", str(Path.home() / ".zexa" / "audit.sqlite3"))
+                ).expanduser()
+                controller = CapabilityController(
+                    PermissionPolicy(permission_names),
+                    ApprovalManager(ttl_seconds=60),
+                    AuditLog(audit_path),
+                    capability_specs,
+                )
                 confirmation = input("Review the exact action and payload above. Type APPROVE to continue: ")
                 if confirmation != "APPROVE":
                     print("Android action cancelled.")
                     return
-                approval = gateway.issue_approval(
-                    action=action_name, payload=payload, user_confirmed=True,
+                approval_payload = {"payload": payload}
+                approval = controller.issue_approval(
+                    action_name, approval_payload, user_confirmed=True,
                 )
-                result = gateway.execute(
-                    action=action_name,
-                    permission=action_name,
-                    risk_level="high",
-                    payload=payload,
+                result = controller.execute(
+                    action_name,
+                    approval_payload,
                     approval_token=approval.token,
-                    handler=lambda approved_payload: bridge.perform(
-                        args.action, approved_payload, approve=lambda *_: True,
-                    ),
                 )
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
@@ -437,7 +847,77 @@ def main() -> None:
             mode,
             xai_config=xai_config,
         )
+        knowledge_path = Path.home() / ".zexa" / "knowledge.sqlite3"
+        conversation_brain = (
+            LearningAwareBrain(brain, LearningStore(knowledge_path))
+            if knowledge_path.is_file() else brain
+        )
         config = groq_config  # Keep legacy planner/voice call signatures compatible.
+        if args.command == "learn":
+            store = LearningStore()
+            if args.learn_command == "research":
+                note_id = LearningService(store, brain).research(" ".join(args.query), args.limit)
+                print(f"Research saved as draft knowledge note #{note_id}. Review it with: zexa learn show {note_id}")
+            elif args.learn_command == "fetch":
+                note_id = LearningService(store, brain).fetch_page(args.url)
+                print(f"Public webpage saved as draft knowledge note #{note_id}. Review it with: zexa learn show {note_id}")
+            elif args.learn_command == "import":
+                note_id = LearningService(store, brain).import_text_file(args.path)
+                print(f"Local study notes saved as draft knowledge note #{note_id}.")
+            elif args.learn_command == "list":
+                print(json.dumps([
+                    {
+                        "note_id": note.note_id, "title": note.title,
+                        "source_type": note.source_type, "source_label": note.source_label,
+                        "status": note.status, "updated_at": note.updated_at,
+                    }
+                    for note in store.list_notes(args.limit, args.status)
+                ], ensure_ascii=False, indent=2))
+            elif args.learn_command == "show":
+                note = store.get_note(args.note_id)
+                if note is None:
+                    print("Knowledge note not found.")
+                else:
+                    print(json.dumps({
+                        "note_id": note.note_id, "title": note.title, "body": note.body,
+                        "sources": list(note.sources), "source_type": note.source_type,
+                        "source_label": note.source_label, "content_sha256": note.content_sha256,
+                        "status": note.status, "created_at": note.created_at,
+                        "updated_at": note.updated_at,
+                    }, ensure_ascii=False, indent=2))
+            elif args.learn_command == "search":
+                print(json.dumps([
+                    {"note_id": note.note_id, "title": note.title, "body": note.body}
+                    for note in store.search_notes(" ".join(args.query))
+                ], ensure_ascii=False, indent=2))
+            elif args.learn_command == "review":
+                if not store.review_note(args.note_id, args.decision):
+                    print("Knowledge note not found.")
+                else:
+                    print(f"Knowledge note #{args.note_id} marked {args.decision}.")
+            elif args.learn_command == "draft-skill":
+                draft_id = LearningService(store, brain).draft_skill(args.note_id)
+                print(f"Skill contract saved as review-required draft #{draft_id}; it remains non-executable.")
+            elif args.learn_command == "skill-drafts":
+                print(json.dumps([
+                    {
+                        "draft_id": item.draft_id, "note_id": item.note_id,
+                        "name": item.name, "description": item.description,
+                        "risk_level": item.risk_level, "status": item.status,
+                    }
+                    for item in store.list_skill_drafts()
+                ], ensure_ascii=False, indent=2))
+            elif args.learn_command == "review-skill":
+                if not store.review_skill_draft(args.draft_id, args.decision):
+                    print("Skill draft not found.")
+                else:
+                    print(
+                        f"Skill draft #{args.draft_id} marked {args.decision}. "
+                        "Approved skills with approved source notes are now available to zexa skill list/run. "
+                        "They use a prompt-only brain handler; no learned code, tools, or external actions are activated."
+                    )
+            return
+
         if args.command == "skill" and args.skill_command == "run":
             try:
                 payload = json.loads(args.payload)
@@ -495,14 +975,14 @@ Sources:")
                     print(f"[{index}] {item.title} — {item.url}")
             return
         if args.command == "agent":
-            results = AgentOrchestrator(brain, registry).run(" ".join(args.goal))
+            results = AgentOrchestrator(conversation_brain, registry).run(" ".join(args.goal))
             print(json.dumps(results, ensure_ascii=False, indent=2))
             return
         if args.command == "voice":
             voice = TermuxVoice()
             transcript = voice.listen()
             print(f"You: {transcript}")
-            answer = brain.chat(
+            answer = conversation_brain.chat(
                 [
                     {"role": "system", "content": SYSTEM_PROMPT + " For voice replies, answer naturally and concisely in the user's language."},
                     {"role": "user", "content": transcript},
@@ -552,7 +1032,7 @@ Sources:")
                         print(f"Zexa: {answer}")
                         voice.speak(answer)
                         continue
-                    routed = route_utterance(config, messages[1:], transcript, brain=brain)
+                    routed = route_utterance(config, messages[1:], transcript, brain=conversation_brain)
                     intent = routed["intent"]
                     answer = routed["reply"]
                     if intent == "noise" or not answer:
@@ -570,10 +1050,10 @@ Sources:")
                 print("\nZexa: Voice conversation ended.")
             return
         if args.command == "plan":
-            print(json.dumps(create_plan(config, registry, " ".join(args.goal), brain=brain), indent=2))
+            print(json.dumps(create_plan(config, registry, " ".join(args.goal), brain=conversation_brain), indent=2))
             print("\nPlan only: no tools or external actions were executed.")
             return
-        answer = brain.chat(
+        answer = conversation_brain.chat(
             [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": " ".join(args.prompt)},

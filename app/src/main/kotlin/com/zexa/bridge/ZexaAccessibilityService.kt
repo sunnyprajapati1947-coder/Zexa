@@ -9,6 +9,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -19,12 +21,21 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
+import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
-class ZexaAccessibilityService : AccessibilityService() {
+class ActionExecutionUnknownException(message: String) : IllegalStateException(message)
+
+class ZexaAccessibilityService : AccessibilityService(), BridgeServiceApi {
     @Volatile private var bridgeServer: BridgeServer? = null
+    private val actionInterruptionGate = ActionInterruptionGate()
     private val actionApprovals = ActionApprovalRegistry()
-    private val actionResults = ConcurrentHashMap<String, JSONObject>()
+    private val taskActionGrants = TaskActionGrantRegistry()
+    // All reads and writes are guarded by the service monitor; insertion order gives FIFO eviction.
+    private val actionResults = LinkedHashMap<String, JSONObject>()
     private val actionAudit by lazy {
         val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
         ActionAuditStore(
@@ -36,7 +47,10 @@ class ZexaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        markPendingApprovalsInterrupted()
+        // Reconnection is a fresh authority boundary: invalidate callbacks that
+        // were queued before reconnect, close old bridge clients, and discard all
+        // one-use approvals/grants before optionally starting a new server session.
+        invalidateBridgeSession()
         refreshBridge()
     }
 
@@ -44,13 +58,52 @@ class ZexaAccessibilityService : AccessibilityService() {
         // Intentionally do not collect, store, or transmit events.
     }
 
+    @Synchronized
     override fun onInterrupt() {
+        // Invalidate work queued for the service looper before clearing one-use authority.
+        // Approval/grant handlers never hold this monitor while waiting for that looper.
+        actionInterruptionGate.invalidate()
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
+        taskActionGrants.clear()
     }
 
     private fun markPendingApprovalsInterrupted() {
-        actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
+        val interrupted = actionAudit.markPendingAsInterrupted(System.currentTimeMillis())
+        interrupted.forEach { entry ->
+            rememberActionResult(
+                entry.requestId,
+                JSONObject()
+                    .put("ok", false)
+                    .put("status", "interrupted")
+                    .put("request_id", entry.requestId),
+            )
+        }
+    }
+
+    /** Persist expiry before any caller observes a missing approval ticket. */
+    @Synchronized
+    private fun recordExpiredApprovals() {
+        actionApprovals.expireAndDrain(SystemClock.elapsedRealtime()).forEach { ticket ->
+            val result = JSONObject()
+                .put("ok", false)
+                .put("status", "expired")
+                .put("request_id", ticket.requestId)
+            rememberActionResult(ticket.requestId, result)
+            actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "expired", System.currentTimeMillis()))
+        }
+    }
+
+    @Synchronized
+    private fun invalidateBridgeSession() {
+        // Stop is a session boundary: close active sockets and prevent any
+        // approval/grant action queued on the service looper from starting later.
+        actionInterruptionGate.invalidate()
+        markPendingApprovalsInterrupted()
+        actionApprovals.clear()
+        taskActionGrants.clear()
+        bridgeServer?.stop()
+        bridgeServer = null
     }
 
     @Synchronized
@@ -58,22 +111,102 @@ class ZexaAccessibilityService : AccessibilityService() {
         val enabled = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
             .getBoolean("bridge_enabled", false)
         if (enabled) {
-            if (bridgeServer?.isRunning != true) {
-                bridgeServer?.stop()
+            if (bridgeServer?.isActive != true) {
+                invalidateBridgeSession()
                 val token = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
                     .getString("token", null) ?: return
                 bridgeServer = BridgeServer(token, this).also { it.start() }
             }
         } else {
-            markPendingApprovalsInterrupted()
-            bridgeServer?.stop()
-            bridgeServer = null
-            actionApprovals.clear()
+            invalidateBridgeSession()
         }
     }
 
-    fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
+    @Synchronized
+    fun createTaskActionGrant(taskId: String, actions: Set<String>, ttlMs: Long, maxActions: Int): TaskActionGrant {
+        require(bridgeServer?.isRunning == true) { "Enable the authenticated local bridge before creating a task grant." }
+        require(BridgeSecurityRules.validTaskId(taskId)) { "Invalid task identifier." }
+        val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
+        val deviceId = prefs.getString("device_id", null) ?: UUID.randomUUID().toString().also {
+            prefs.edit().putString("device_id", it).apply()
+        }
+        val grant = taskActionGrants.create(
+            taskId = taskId,
+            deviceId = deviceId,
+            actions = actions,
+            nowElapsedMs = SystemClock.elapsedRealtime(),
+            nowEpochMs = System.currentTimeMillis(),
+            ttlMs = ttlMs,
+            maxActions = maxActions,
+        )
+        actionAudit.append(ActionAuditEntry("grant-created-" + grant.grantId.take(48), "task_grant", "created", System.currentTimeMillis()))
+        return grant
+    }
+
+    override fun activeTaskActionGrants(): List<TaskActionGrant> =
+        taskActionGrants.list(SystemClock.elapsedRealtime())
+
+    override fun revokeTaskActionGrant(grantId: String): Boolean {
+        val revoked = taskActionGrants.revoke(grantId)
+        if (revoked) actionAudit.append(ActionAuditEntry("grant-revoked-" + grantId.take(48), "task_grant", "revoked", System.currentTimeMillis()))
+        return revoked
+    }
+
+    override fun performGrantedAction(taskId: String, grantId: String, action: String, payload: JSONObject): JSONObject {
+        val generation: Long
+        val consumed: TaskActionGrant
+        synchronized(this) {
+            require(action in TaskActionGrantRegistry.GRANTABLE_ACTIONS) { "Action is not eligible for a task grant." }
+            require(BridgeSecurityRules.validActionPayload(action, payload)) { "Invalid payload for the requested Android action." }
+            val prefs = getSharedPreferences("zexa_bridge", MODE_PRIVATE)
+            val deviceId = prefs.getString("device_id", null)
+                ?: return JSONObject().put("ok", false).put("status", "grant_unavailable")
+            consumed = taskActionGrants.consume(
+                grantId, taskId, deviceId, action, SystemClock.elapsedRealtime()
+            ) ?: return JSONObject().put("ok", false).put("status", "grant_scope_mismatch_or_expired")
+            generation = actionInterruptionGate.current()
+        }
+        val result = try {
+            val execution = onServiceThread {
+                actionInterruptionGate.requireCurrent(generation)
+                performOnServiceThread(action, payload)
+            }
+            execution.put("status", when {
+                execution.optString("status") == "dispatched" -> "dispatched"
+                execution.optBoolean("ok", false) -> "completed"
+                else -> "failed"
+            })
+                .put("grant_id", grantId)
+                .put("remaining_actions", consumed.remainingActions)
+        } catch (error: ActionInterruptedException) {
+            JSONObject().put("ok", false).put("status", "interrupted")
+                .put("grant_id", grantId)
+                .put("error", error.message ?: "Android action was interrupted.")
+                .put("remaining_actions", consumed.remainingActions)
+        } catch (error: ActionExecutionUnknownException) {
+            JSONObject().put("ok", false).put("status", "execution_unknown")
+                .put("grant_id", grantId)
+                .put("error", error.message ?: "Execution result is unknown; do not retry automatically.")
+                .put("remaining_actions", consumed.remainingActions)
+        } catch (error: Exception) {
+            JSONObject().put("ok", false).put("status", "failed")
+                .put("grant_id", grantId)
+                .put("error", error.message ?: "Action failed")
+                .put("remaining_actions", consumed.remainingActions)
+        }
+        synchronized(this) {
+            actionAudit.append(ActionAuditEntry("grant-action-" + grantId.take(28) + "-" + UUID.randomUUID().toString().take(12), action, result.optString("status", "failed"), System.currentTimeMillis()))
+        }
+        return result
+    }
+
+    @Synchronized
+    override fun queueActionForApproval(action: String, payload: JSONObject): JSONObject {
+        recordExpiredApprovals()
         require(action in ActionApprovalRegistry.ALLOWED_ACTIONS) { "Device action is not allowlisted." }
+        require(BridgeSecurityRules.validActionPayload(action, payload)) {
+            "Invalid payload for the requested Android action."
+        }
         val ticket = actionApprovals.create(action, payload.toString(), SystemClock.elapsedRealtime(), System.currentTimeMillis())
         actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "pending_approval", ticket.createdAtEpochMs))
         notifyApprovalNeeded(ticket)
@@ -126,21 +259,55 @@ class ZexaAccessibilityService : AccessibilityService() {
         }
     }
 
-    fun pendingActionApprovals(): List<PendingDeviceAction> =
-        actionApprovals.list(SystemClock.elapsedRealtime())
+    fun pendingActionApprovals(): List<PendingDeviceAction> {
+        recordExpiredApprovals()
+        return actionApprovals.list(SystemClock.elapsedRealtime())
+    }
 
-    fun isActionPending(requestId: String): Boolean =
-        actionApprovals.list(SystemClock.elapsedRealtime()).any { it.requestId == requestId }
+    fun isActionPending(requestId: String): Boolean {
+        recordExpiredApprovals()
+        return actionApprovals.list(SystemClock.elapsedRealtime()).any { it.requestId == requestId }
+    }
 
-    @Synchronized
     fun approveAction(requestId: String): JSONObject {
-        val ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
-            ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
-        val result = try {
-            val execution = perform(ticket.action, JSONObject(ticket.payloadJson))
-            execution
-                .put("status", if (execution.optBoolean("ok", false)) "completed" else "failed")
+        val ticket: PendingDeviceAction
+        val generation: Long
+        synchronized(this) {
+            recordExpiredApprovals()
+            ticket = actionApprovals.approve(requestId, SystemClock.elapsedRealtime())
+                ?: return JSONObject().put("ok", false).put("status", "expired_or_not_pending")
+            generation = actionInterruptionGate.current()
+            val executing = JSONObject()
+                .put("ok", true)
+                .put("status", "executing")
                 .put("request_id", ticket.requestId)
+            rememberActionResult(ticket.requestId, executing)
+            actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, "executing", System.currentTimeMillis()))
+        }
+        val result = try {
+            val execution = onServiceThread {
+                actionInterruptionGate.requireCurrent(generation)
+                performOnServiceThread(ticket.action, JSONObject(ticket.payloadJson))
+            }
+            execution
+                .put("status", when {
+                    execution.optString("status") == "dispatched" -> "dispatched"
+                    execution.optBoolean("ok", false) -> "completed"
+                    else -> "failed"
+                })
+                .put("request_id", ticket.requestId)
+        } catch (error: ActionInterruptedException) {
+            JSONObject()
+                .put("ok", false)
+                .put("status", "interrupted")
+                .put("request_id", ticket.requestId)
+                .put("error", error.message ?: "Android action was interrupted.")
+        } catch (error: ActionExecutionUnknownException) {
+            JSONObject()
+                .put("ok", false)
+                .put("status", "execution_unknown")
+                .put("request_id", ticket.requestId)
+                .put("error", error.message ?: "Execution result is unknown; do not retry automatically.")
         } catch (error: Exception) {
             JSONObject()
                 .put("ok", false)
@@ -148,12 +315,16 @@ class ZexaAccessibilityService : AccessibilityService() {
                 .put("request_id", ticket.requestId)
                 .put("error", error.message ?: "Action failed")
         }
-        rememberActionResult(ticket.requestId, result)
-        actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, result.optString("status", "failed"), System.currentTimeMillis()))
+        synchronized(this) {
+            rememberActionResult(ticket.requestId, result)
+            actionAudit.append(ActionAuditEntry(ticket.requestId, ticket.action, result.optString("status", "failed"), System.currentTimeMillis()))
+        }
         return result
     }
 
+    @Synchronized
     fun denyAction(requestId: String): JSONObject {
+        recordExpiredApprovals()
         val ticket = actionApprovals.deny(requestId, SystemClock.elapsedRealtime())
         val denied = ticket != null
         val result = JSONObject()
@@ -167,16 +338,30 @@ class ZexaAccessibilityService : AccessibilityService() {
         return result
     }
 
-    fun actionAuditHistory(): List<ActionAuditEntry> = actionAudit.list()
+    @Synchronized
+    fun actionAuditHistory(): List<ActionAuditEntry> {
+        recordExpiredApprovals()
+        return actionAudit.list()
+    }
 
-    fun actionResult(requestId: String): JSONObject? =
-        actionResults[requestId]?.let { JSONObject(it.toString()) }
+    @Synchronized
+    override fun actionResult(requestId: String): JSONObject? {
+        recordExpiredApprovals()
+        actionResults[requestId]?.let { return JSONObject(it.toString()) }
+        val pending = actionApprovals.list(SystemClock.elapsedRealtime())
+            .firstOrNull { it.requestId == requestId }
+            ?: return null
+        return JSONObject()
+            .put("ok", true)
+            .put("status", "pending_approval")
+            .put("request_id", pending.requestId)
+    }
 
     @Synchronized
     private fun rememberActionResult(requestId: String, result: JSONObject) {
         actionResults[requestId] = JSONObject(result.toString())
         while (actionResults.size > MAX_ACTION_RESULTS) {
-            val oldest = actionResults.keys().nextElement()
+            val oldest = actionResults.entries.iterator().next().key
             actionResults.remove(oldest)
         }
     }
@@ -186,50 +371,149 @@ class ZexaAccessibilityService : AccessibilityService() {
             getSharedPreferences("zexa_bridge", MODE_PRIVATE).all["screen_access_enabled"]
         )
 
-    fun statusJson(): JSONObject = JSONObject()
+    override fun statusJson(): JSONObject = JSONObject()
         .put("ok", true)
         .put("accessibility_enabled", true)
         .put("bridge_enabled", bridgeServer?.isRunning == true)
 
-    fun screenJson(): JSONObject {
-        val root = rootInActiveWindow ?: return JSONObject()
-            .put("ok", true).put("package", "").put("nodes", JSONArray())
-        val nodes = JSONArray()
-        var count = 0
-        fun visit(node: AccessibilityNodeInfo?, depth: Int) {
-            if (node == null || depth > 12 || count >= 150) return
-            count++
-            val bounds = Rect()
-            node.getBoundsInScreen(bounds)
-            val item = JSONObject()
-                .put("index", count - 1)
-                .put("class", node.className?.toString()?.take(160) ?: "")
-                .put("view_id", node.viewIdResourceName?.take(200) ?: "")
-                .put("text", if (node.isPassword) "" else node.text?.toString()?.take(500) ?: "")
-                .put("description", if (node.isPassword) "" else node.contentDescription?.toString()?.take(300) ?: "")
-                .put("clickable", node.isClickable)
-                .put("editable", node.isEditable)
-                .put("password", node.isPassword)
-                .put("bounds", JSONObject()
-                    .put("left", bounds.left).put("top", bounds.top)
-                    .put("right", bounds.right).put("bottom", bounds.bottom))
-            nodes.put(item)
-            for (i in 0 until node.childCount) {
-                val child = node.getChild(i)
-                visit(child, depth + 1)
-                child?.recycle()
-            }
+    override fun screenJson(): JSONObject = onServiceThread {
+        // Re-check permission on the service looper immediately before reading the
+        // active window. The UI toggle also runs on this looper, so it cannot race
+        // between this check and snapshot traversal.
+        if (!isScreenAccessEnabled()) {
+            JSONObject()
+                .put("ok", false)
+                .put("screen_access_disabled", true)
+                .put("error", "Screen access is disabled in Zexa settings.")
+        } else {
+            buildScreenSnapshot()
         }
-        visit(root, 0)
-        val result = JSONObject()
-            .put("ok", true)
-            .put("package", root.packageName?.toString() ?: "")
-            .put("nodes", nodes)
-        root.recycle()
-        return result
     }
 
-    fun perform(action: String, payload: JSONObject): JSONObject {
+    private fun buildScreenSnapshot(): JSONObject {
+        val root = rootInActiveWindow ?: return JSONObject()
+            .put("ok", true).put("package", "").put("nodes", JSONArray())
+        // Capture package metadata before traversal; the root can become stale
+        // while the active app changes windows.
+        val packageName = try {
+            root.packageName?.toString() ?: ""
+        } catch (_: RuntimeException) {
+            ""
+        }
+        val nodes = JSONArray()
+        var count = 0
+        fun hasSensitiveLabelChild(parent: AccessibilityNodeInfo): Boolean {
+            val childCount = try {
+                parent.childCount
+            } catch (_: RuntimeException) {
+                return false
+            }
+            for (index in 0 until minOf(childCount, 150)) {
+                val child = try {
+                    parent.getChild(index)
+                } catch (_: RuntimeException) {
+                    null
+                } ?: continue
+                val hasLabel = try {
+                    ScreenRedactionRules.isSensitiveLabel(
+                        className = child.className?.toString()?.take(160) ?: "",
+                        viewId = child.viewIdResourceName?.take(200) ?: "",
+                        hint = child.hintText?.toString()?.take(300) ?: "",
+                        text = child.text?.toString()?.take(500) ?: "",
+                        description = child.contentDescription?.toString()?.take(300) ?: "",
+                    )
+                } catch (_: RuntimeException) {
+                    false
+                } finally {
+                    child.recycle()
+                }
+                if (hasLabel) return true
+            }
+            return false
+        }
+        fun visit(node: AccessibilityNodeInfo?, depth: Int, sensitiveContext: Boolean = false) {
+            if (node == null || depth > 12 || count >= 150) return
+            count++
+            try {
+                val bounds = Rect()
+                node.getBoundsInScreen(bounds)
+                val className = node.className?.toString()?.take(160) ?: ""
+                val viewId = node.viewIdResourceName?.take(200) ?: ""
+                val text = node.text?.toString()?.take(500) ?: ""
+                val description = node.contentDescription?.toString()?.take(300) ?: ""
+                val hint = node.hintText?.toString()?.take(300) ?: ""
+                // A parent may itself carry a combined label/value string while a
+                // child exposes the sensitive field label. Redact the parent as well
+                // as descendants whenever a sensitive child label is detected.
+                val childSensitiveContext = sensitiveContext || hasSensitiveLabelChild(node)
+                val redacted = ScreenRedactionRules.shouldRedact(
+                    isPassword = node.isPassword,
+                    isEditable = node.isEditable,
+                    className = className,
+                    viewId = viewId,
+                    hint = hint,
+                    text = text,
+                    description = description,
+                    sensitiveContext = childSensitiveContext,
+                )
+                val item = JSONObject()
+                    .put("index", count - 1)
+                    .put("class", className)
+                    .put("view_id", viewId)
+                    .put("text", if (redacted) "" else text)
+                    .put("description", if (redacted) "" else description)
+                    .put("redacted", redacted)
+                    .put("clickable", node.isClickable)
+                    .put("editable", node.isEditable)
+                    .put("password", node.isPassword)
+                    .put("bounds", JSONObject()
+                        .put("left", bounds.left).put("top", bounds.top)
+                        .put("right", bounds.right).put("bottom", bounds.bottom))
+                nodes.put(item)
+                // Bound child retrieval as well as emitted nodes; hostile or malformed
+                // accessibility trees must not force unbounded traversal work.
+                val childCount = try {
+                    node.childCount
+                } catch (_: RuntimeException) {
+                    0
+                }
+                val childLimit = minOf(childCount, 150 - count)
+                for (i in 0 until childLimit) {
+                    val child = try {
+                        node.getChild(i)
+                    } catch (_: RuntimeException) {
+                        null
+                    }
+                    try {
+                        visit(child, depth + 1, childSensitiveContext)
+                    } finally {
+                        child?.recycle()
+                    }
+                }
+            } catch (_: RuntimeException) {
+                // Accessibility nodes can become stale while an app updates its
+                // window. Skip that node; its owner still recycles the reference.
+                return
+            }
+        }
+        return try {
+            visit(root, 0)
+            JSONObject()
+                .put("ok", true)
+                .put("package", packageName)
+                .put("nodes", nodes)
+        } finally {
+            root.recycle()
+        }
+    }
+
+    fun perform(action: String, payload: JSONObject): JSONObject =
+        onServiceThread { performOnServiceThread(action, payload) }
+
+    private fun performOnServiceThread(action: String, payload: JSONObject): JSONObject {
+        require(BridgeSecurityRules.validActionPayload(action, payload)) {
+            "Invalid payload for the requested Android action."
+        }
         return when (action) {
             "tap" -> {
                 val x = payload.optDouble("x", Double.NaN)
@@ -258,13 +542,24 @@ class ZexaAccessibilityService : AccessibilityService() {
                 val text = payload.optString("text", "")
                 require(text.isNotBlank() && text.length <= 500)
                 val root = rootInActiveWindow ?: error("No active input window.")
-                val target = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-                root.recycle()
-                require(target != null && target.isEditable && !target.isPassword)
-                val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
-                val ok = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-                target.recycle()
-                JSONObject().put("ok", ok)
+                val target = try {
+                    root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                        ?: error("No focused input field.")
+                } finally {
+                    root.recycle()
+                }
+                try {
+                    require(target.isEditable && !target.isPassword) {
+                        "Focused field is not an eligible non-password input."
+                    }
+                    val args = Bundle().apply {
+                        putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+                    }
+                    val ok = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                    JSONObject().put("ok", ok)
+                } finally {
+                    target.recycle()
+                }
             }
             "launch_app" -> {
                 val packageName = payload.optString("package_name", "")
@@ -275,20 +570,99 @@ class ZexaAccessibilityService : AccessibilityService() {
                 startActivity(launch)
                 JSONObject().put("ok", true)
             }
+            "open_url" -> {
+                val url = payload.optString("url", "")
+                require(BridgeSecurityRules.safeWebUrl(url))
+                val view = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(view)
+                JSONObject().put("ok", true)
+            }
             else -> error("Action is not allowlisted.")
         }
+    }
+
+    /**
+     * AccessibilityService APIs and AccessibilityNodeInfo traversal are executed
+     * on the Android main/service looper even when an HTTP client calls the
+     * bridge from a worker thread.
+     */
+    private fun <T> onServiceThread(block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) return block()
+        val completed = CountDownLatch(1)
+        val outcome = AtomicReference<Result<T>?>(null)
+        val gate = Any()
+        var cancelledBeforeStart = false
+        var started = false
+        val handler = Handler(Looper.getMainLooper())
+        if (!handler.post {
+                synchronized(gate) {
+                    if (cancelledBeforeStart) {
+                        completed.countDown()
+                        return@post
+                    }
+                    started = true
+                }
+                outcome.set(runCatching(block))
+                completed.countDown()
+            }
+        ) {
+            error("Could not schedule work on the Android service thread.")
+        }
+        try {
+            if (!completed.await(10, TimeUnit.SECONDS)) {
+                synchronized(gate) {
+                    if (!started) {
+                        cancelledBeforeStart = true
+                        error("Android service thread did not start the requested operation in time.")
+                    }
+                }
+                if (!completed.await(20, TimeUnit.SECONDS)) {
+                    throw ActionExecutionUnknownException(
+                        "Android operation started but did not report a result in time; do not retry automatically."
+                    )
+                }
+            }
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
+            // If the caller is interrupted before the main-thread callback starts,
+            // cancel that queued callback so it cannot perform an action after the
+            // caller has already received an interruption failure.
+            val operationStarted = synchronized(gate) {
+                if (!started) {
+                    cancelledBeforeStart = true
+                    false
+                } else {
+                    true
+                }
+            }
+            if (operationStarted) {
+                throw ActionExecutionUnknownException(
+                    "Android operation started before the wait was interrupted; its result is unknown. Do not retry automatically."
+                )
+            }
+            throw IllegalStateException("Interrupted while waiting for the Android service thread.", interrupted)
+        }
+        return outcome.get()?.getOrThrow()
+            ?: error("Android service thread returned no operation result.")
     }
 
     private fun dispatch(path: Path, duration: Long): JSONObject {
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
             .build()
-        return JSONObject().put("ok", dispatchGesture(gesture, null, null))
+        val accepted = dispatchGesture(gesture, null, null)
+        return JSONObject()
+            .put("ok", accepted)
+            .put("status", if (accepted) "dispatched" else "failed")
     }
 
+    @Synchronized
     override fun onDestroy() {
+        actionInterruptionGate.invalidate()
         markPendingApprovalsInterrupted()
         actionApprovals.clear()
+        taskActionGrants.clear()
         bridgeServer?.stop()
         bridgeServer = null
         instance = null
