@@ -138,6 +138,21 @@ class LaptopServerTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_rejects_non_decimal_content_length_values(self):
+        for invalid_length in ("+2", "2_0", "-2", "２"):
+            with self.subTest(content_length=invalid_length):
+                connection = HTTPConnection("127.0.0.1", self.port, timeout=3)
+                try:
+                    connection.putrequest("POST", "/v1/pair/complete")
+                    connection.putheader("Content-Type", "application/json")
+                    connection.putheader("Content-Length", invalid_length)
+                    connection.endheaders(b"{}")
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 400)
+                    self.assertIn("Content-Length", response.read().decode("utf-8"))
+                finally:
+                    connection.close()
+
     def test_rejects_duplicate_content_type_headers(self):
         connection = HTTPConnection("127.0.0.1", self.port, timeout=3)
         try:
